@@ -1,0 +1,53 @@
+services:
+  whatsapp-engine:
+    build: ./whatsapp-engine
+    container_name: wa-engine
+    restart: unless-stopped
+    ports:
+      - "${WA_PORT:-5001}:5001"
+    volumes:
+      - wa_engine_auth:/app/auth_info_baileys
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    container_name: wa-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8050}:8000"
+    environment:
+      - WHATSAPP_ENGINE_URL=http://whatsapp-engine:5001
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-me-in-production}
+      - DEBUG=True
+    volumes:
+      - wa_backend_data:/app/data
+    depends_on:
+      whatsapp-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    container_name: wa-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3050}:3000"
+    environment:
+      - BACKEND_INTERNAL_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  wa_engine_auth:
+  wa_backend_data:
