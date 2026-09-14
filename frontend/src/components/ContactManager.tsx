@@ -29,7 +29,9 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
-import { Contact, ContactService } from '@/lib/api';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import { Contact, TagCount, ContactService } from '@/lib/api';
 
 interface ContactManagerProps {
   selectedIds: number[];
@@ -38,6 +40,8 @@ interface ContactManagerProps {
 
 export default function ContactManager({ selectedIds, onSelectionChange }: ContactManagerProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [tagsList, setTagsList] = useState<TagCount[]>([]);
+  const [selectedTag, setSelectedTag] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [openAdd, setOpenAdd] = useState<boolean>(false);
@@ -56,8 +60,10 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      const res = await ContactService.list(search);
+      const res = await ContactService.list(search, selectedTag);
       setContacts(res.data);
+      const tagRes = await ContactService.getTags();
+      setTagsList(tagRes.data);
     } catch (err: any) {
       console.error('Error fetching contacts:', err);
     } finally {
@@ -67,7 +73,7 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
 
   useEffect(() => {
     fetchContacts();
-  }, [search]);
+  }, [search, selectedTag]);
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
@@ -83,6 +89,12 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
     } else {
       onSelectionChange([...selectedIds, id]);
     }
+  };
+
+  const handleSelectTagAudience = () => {
+    const idsInTag = contacts.map((c) => c.id);
+    const merged = Array.from(new Set([...selectedIds, ...idsInTag]));
+    onSelectionChange(merged);
   };
 
   const handleCreateContact = async () => {
@@ -138,13 +150,13 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
-        <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2.5, gap: 2 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2, gap: 2 }}>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               কন্টাক্ট তালিকা ({contacts.length})
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              মেসেজ পাঠানোর জন্য কন্টাক্ট সিলেক্ট করুন বা নতুন কন্টাক্ট যোগ করুন।
+              ট্যাগ ফিল্টার করুন বা প্রাপক নির্বাচন করে বাল্ক মেসেজ পাঠান।
             </Typography>
           </Box>
 
@@ -166,6 +178,50 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
           </Stack>
         </Stack>
 
+        {/* Tag Filters Row */}
+        {tagsList.length > 0 && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+              <FilterListIcon fontSize="small" sx={{ color: 'text.secondary', mr: 0.5 }} />
+              <Typography variant="caption" sx={{ fontWeight: 700, mr: 1 }}>
+                ট্যাগ অনুযায়ী অডিয়েন্স:
+              </Typography>
+              <Chip
+                label="সব কন্টাক্ট"
+                size="small"
+                clickable
+                color={selectedTag === '' ? 'primary' : 'default'}
+                variant={selectedTag === '' ? 'filled' : 'outlined'}
+                onClick={() => setSelectedTag('')}
+              />
+              {tagsList.map((t) => (
+                <Chip
+                  key={t.tag}
+                  label={`${t.tag} (${t.count})`}
+                  size="small"
+                  clickable
+                  color={selectedTag === t.tag ? 'primary' : 'default'}
+                  variant={selectedTag === t.tag ? 'filled' : 'outlined'}
+                  onClick={() => setSelectedTag(t.tag)}
+                />
+              ))}
+
+              {selectedTag && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="secondary"
+                  startIcon={<CheckBoxIcon />}
+                  onClick={handleSelectTagAudience}
+                  sx={{ ml: 'auto !nowrap' }}
+                >
+                  {selectedTag} গ্রুপের সবাইকে সিলেক্ট করুন ({contacts.length})
+                </Button>
+              )}
+            </Stack>
+          </Box>
+        )}
+
         <Box sx={{ mb: 2 }}>
           <TextField
             fullWidth
@@ -180,12 +236,20 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
         </Box>
 
         {selectedIds.length > 0 && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            বর্তমানে <b>{selectedIds.length}</b> জন কন্টাক্ট সিলেক্ট করা হয়েছে। আপনি চাইলে নিচে বাল্ক মেসেজ সেকশন থেকে এদের কাছে মেসেজ পাঠাতে পারেন।
+          <Alert
+            severity="info"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => onSelectionChange([])}>
+                সিলেকশন মুছুন
+              </Button>
+            }
+          >
+            বর্তমানে <b>{selectedIds.length}</b> জন কন্টাক্ট সিলেক্ট করা হয়েছে।
           </Alert>
         )}
 
-        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5, maxHeight: 420 }}>
+        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5, maxHeight: 380 }}>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: '#f8fafc' }}>

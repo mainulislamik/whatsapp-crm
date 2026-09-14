@@ -32,6 +32,7 @@ class MessageTemplate(models.Model):
 class Campaign(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
+        ('SCHEDULED', 'Scheduled'),
         ('RUNNING', 'Running'),
         ('COMPLETED', 'Completed'),
         ('CANCELLED', 'Cancelled'),
@@ -45,6 +46,16 @@ class Campaign(models.Model):
     failed_count = models.IntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     delay_seconds = models.IntegerField(default=5)
+    
+    # Media Attachment Support
+    media_base64 = models.TextField(null=True, blank=True)
+    media_type = models.CharField(max_length=20, null=True, blank=True) # 'image' or 'document'
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    mime_type = models.CharField(max_length=100, null=True, blank=True)
+
+    # Scheduling Support
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -66,6 +77,7 @@ class CampaignLog(models.Model):
     contact_name = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50)
     message = models.TextField()
+    has_media = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     error_message = models.TextField(blank=True, null=True)
     sent_at = models.DateTimeField(null=True, blank=True)

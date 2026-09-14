@@ -13,7 +13,8 @@ const {
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const PORT = process.env.PORT || 5001;
 const AUTH_DIR = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
@@ -31,7 +32,7 @@ let connectedUser = null;
 async function connectToWhatsApp() {
   connectionStatus = 'CONNECTING';
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  const { version, isLatest } = await fetchLatestBaileysVersion();
+  const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
     version,
@@ -121,12 +122,12 @@ app.get('/qr', (req, res) => {
   });
 });
 
-// Send single message
+// Send message (text, image, or document)
 app.post('/send', async (req, res) => {
   try {
-    const { to, text } = req.body;
-    if (!to || !text) {
-      return res.status(400).json({ error: 'Both "to" (phone number) and "text" are required' });
+    const { to, text, mediaBase64, mediaType, fileName, mimeType } = req.body;
+    if (!to) {
+      return res.status(400).json({ error: '"to" (phone number) is required' });
     }
 
     if (connectionStatus !== 'CONNECTED' || !sock) {
@@ -134,7 +135,33 @@ app.post('/send', async (req, res) => {
     }
 
     const jid = formatJID(to);
-    const result = await sock.sendMessage(jid, { text });
+    let messagePayload = {};
+
+    if (mediaBase64) {
+      const buffer = Buffer.from(mediaBase64, 'base64');
+      if (mediaType === 'image') {
+        messagePayload = {
+          image: buffer,
+          caption: text || '',
+          mimetype: mimeType || 'image/jpeg'
+        };
+      } else {
+        // Document / PDF
+        messagePayload = {
+          document: buffer,
+          mimetype: mimeType || 'application/pdf',
+          fileName: fileName || 'document.pdf',
+          caption: text || ''
+        };
+      }
+    } else {
+      if (!text) {
+        return res.status(400).json({ error: 'Either "text" or "mediaBase64" is required' });
+      }
+      messagePayload = { text };
+    }
+
+    const result = await sock.sendMessage(jid, messagePayload);
 
     res.json({
       success: true,
