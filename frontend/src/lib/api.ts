@@ -189,6 +189,14 @@ export const LeadService = {
       exists: boolean;
       phone: string;
       jid?: string;
+      name?: string | null;
+      pushName?: string | null;
+      businessProfile?: {
+        address?: string;
+        description?: string;
+        category?: string;
+        website?: string[];
+      } | null;
       profilePictureUrl?: string | null;
       about?: string | null;
       message?: string;

@@ -758,18 +758,22 @@ async def create_lead(payload: LeadCreate):
     is_on_wa = bool(wa_info.get("exists", False))
     pic_url = wa_info.get("profilePictureUrl") or ""
     about_text = wa_info.get("about") or ""
+    wa_name = wa_info.get("name") or wa_info.get("pushName") or ""
+    biz_prof = wa_info.get("businessProfile") or {}
+    auto_addr = payload.address or biz_prof.get("address") or ""
 
     def _save():
         lead = Lead.objects.create(
             phone=phone_clean,
             shop_name=shop_name_clean,
-            owner_name=payload.owner_name.strip() if payload.owner_name else "",
+            owner_name=payload.owner_name.strip() if payload.owner_name else (wa_name if wa_name else ""),
             category=payload.category or "General",
             shop_type=payload.shop_type or "Retail",
             is_on_whatsapp=is_on_wa,
+            whatsapp_name=wa_name,
             whatsapp_profile_pic=pic_url,
             whatsapp_about=about_text,
-            address=payload.address or "",
+            address=auto_addr,
             notes=payload.notes or "",
             status=payload.status or "NEW"
         )
@@ -781,6 +785,7 @@ async def create_lead(payload: LeadCreate):
             "category": lead.category,
             "shop_type": lead.shop_type,
             "is_on_whatsapp": lead.is_on_whatsapp,
+            "whatsapp_name": lead.whatsapp_name,
             "whatsapp_profile_pic": lead.whatsapp_profile_pic,
             "whatsapp_about": lead.whatsapp_about,
             "status": lead.status,

@@ -8,7 +8,8 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  getBinaryNodeChild
 } = require('@whiskeysockets/baileys');
 
 const app = express();
@@ -28,6 +29,37 @@ let lastQr = null;
 let lastQrDataUrl = null;
 let connectionStatus = 'DISCONNECTED'; // DISCONNECTED, CONNECTING, SCAN_QR, CONNECTED
 let connectedUser = null;
+
+// Synced contacts and sender pushNames store
+const contactsStore = new Map();
+
+function saveContact(c) {
+  if (!c || !c.id) return;
+  const rawId = c.id;
+  const numOnly = rawId.split('@')[0];
+  let localNum = numOnly;
+  if (numOnly.startsWith('8801')) {
+    localNum = '0' + numOnly.slice(2);
+  }
+  const existing = contactsStore.get(rawId) || {};
+  const merged = { ...existing, ...c };
+  contactsStore.set(rawId, merged);
+  contactsStore.set(numOnly, merged);
+  contactsStore.set(localNum, merged);
+}
+
+function findContactInStore(phone) {
+  const cleaned = String(phone).replace(/\D/g, '');
+  let localNum = cleaned;
+  let intlNum = cleaned;
+  if (cleaned.startsWith('01') && cleaned.length === 11) {
+    intlNum = '88' + cleaned;
+  } else if (cleaned.startsWith('8801') && cleaned.length === 13) {
+    localNum = '0' + cleaned.slice(2);
+  }
+  const jid = `${intlNum}@s.whatsapp.net`;
+  return contactsStore.get(jid) || contactsStore.get(intlNum) || contactsStore.get(localNum) || null;
+}
 
 async function connectToWhatsApp() {
   connectionStatus = 'CONNECTING';
@@ -85,6 +117,42 @@ async function connectToWhatsApp() {
       lastQrDataUrl = null;
       connectedUser = sock.user;
       console.log('WhatsApp connection opened successfully for user:', connectedUser?.id);
+    }
+  });
+
+  // Handle sync of history (contacts and recent messages)
+  sock.ev.on('messaging-history.set', ({ chats, contacts, messages }) => {
+    if (Array.isArray(contacts)) {
+      contacts.forEach(saveContact);
+    }
+    if (Array.isArray(messages)) {
+      messages.forEach(m => {
+        const sender = m.key?.remoteJid;
+        if (sender && m.pushName) {
+          saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
+        }
+      });
+    }
+  });
+
+  // Handle contact sync events
+  sock.ev.on('contacts.upsert', (contacts) => {
+    if (Array.isArray(contacts)) contacts.forEach(saveContact);
+  });
+
+  sock.ev.on('contacts.update', (updates) => {
+    if (Array.isArray(updates)) updates.forEach(saveContact);
+  });
+
+  // Handle incoming / new messages to capture sender pushNames
+  sock.ev.on('messages.upsert', ({ messages }) => {
+    if (Array.isArray(messages)) {
+      messages.forEach(m => {
+        const sender = m.key?.remoteJid;
+        if (sender && m.pushName) {
+          saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
+        }
+      });
     }
   });
 }
@@ -157,11 +225,65 @@ app.get('/check-contact', async (req, res) => {
       about = statusRes?.status || null;
     } catch (err) {}
 
+    // 1. Check in-memory synced contacts store
+    const stored = findContactInStore(phone);
+    let contactName = stored?.name || stored?.notify || stored?.verifiedName || stored?.pushName || null;
+
+    // 2. Query Business Profile
+    let businessProfile = null;
+    try {
+      businessProfile = await sock.getBusinessProfile(match.jid);
+    } catch (err) {}
+
+    // 3. Raw WhatsApp IQ query for business profile & verified name
+    try {
+      const bizRes = await sock.query({
+        tag: 'iq',
+        attrs: {
+          to: 's.whatsapp.net',
+          type: 'get',
+          xmlns: 'w:biz'
+        },
+        content: [
+          {
+            tag: 'business_profile',
+            attrs: { v: '244' },
+            content: [{ tag: 'profile', attrs: { jid: match.jid } }]
+          }
+        ]
+      });
+      const profileNode = getBinaryNodeChild(bizRes, 'business_profile');
+      const profiles = getBinaryNodeChild(profileNode, 'profile');
+      if (profiles) {
+        // 1. Check biz_identity_info display_name (official / SMB WhatsApp Business name)
+        const bizIdentityNode = getBinaryNodeChild(profiles, 'biz_identity_info');
+        if (bizIdentityNode?.attrs?.display_name && !contactName) {
+          contactName = bizIdentityNode.attrs.display_name;
+        }
+
+        // 2. Check vname / name / tag
+        if (!contactName) {
+          const vnameNode = getBinaryNodeChild(profiles, 'vname') || 
+                            getBinaryNodeChild(profiles, 'name') || 
+                            getBinaryNodeChild(profiles, 'tag');
+          if (vnameNode && vnameNode.content) {
+            const vnameStr = vnameNode.content.toString();
+            if (vnameStr) {
+              contactName = vnameStr;
+            }
+          }
+        }
+      }
+    } catch (err) {}
+
     return res.json({
       connected: true,
       exists: true,
       phone,
       jid: match.jid,
+      name: contactName || null,
+      pushName: contactName || null,
+      businessProfile: businessProfile || null,
       profilePictureUrl,
       about
     });

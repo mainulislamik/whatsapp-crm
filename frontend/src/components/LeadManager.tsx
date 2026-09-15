@@ -81,8 +81,10 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     scanned: boolean;
     connected: boolean;
     exists: boolean;
+    name?: string | null;
     profilePictureUrl?: string | null;
     about?: string | null;
+    businessProfile?: any;
   } | null>(null);
 
   // Live Duplicate Check State
@@ -153,13 +155,42 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     setScanningWa(true);
     try {
       const res = await LeadService.scanWhatsApp(p);
+      const data = res.data;
+      const foundName = data.name || data.pushName || null;
+
       setWaScanResult({
         scanned: true,
-        connected: res.data.connected,
-        exists: res.data.exists,
-        profilePictureUrl: res.data.profilePictureUrl,
-        about: res.data.about,
+        connected: data.connected,
+        exists: data.exists,
+        name: foundName,
+        profilePictureUrl: data.profilePictureUrl,
+        about: data.about,
+        businessProfile: data.businessProfile,
       });
+
+      if (data.exists) {
+        if (foundName) {
+          // Auto-populate Owner / Contact Person Name
+          setOwnerName(foundName);
+          // If shopName is currently empty, also prefill shopName with business name
+          setShopName((prev) => (prev.trim() ? prev : foundName));
+        }
+
+        // Auto-populate address from business profile if address is empty
+        if (data.businessProfile?.address) {
+          const addr = data.businessProfile.address;
+          setAddress((prev) => (prev.trim() ? prev : addr));
+        }
+
+        // Auto-populate notes from business description or WhatsApp about if notes is empty
+        if (data.businessProfile?.description) {
+          const desc = data.businessProfile.description;
+          setNotes((prev) => (prev.trim() ? prev : desc));
+        } else if (data.about) {
+          const abt = `WhatsApp About: ${data.about}`;
+          setNotes((prev) => (prev.trim() ? prev : abt));
+        }
+      }
     } catch (err: any) {
       alert('WhatsApp scan failed: ' + (err.message || 'Error'));
     } finally {
@@ -609,9 +640,14 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: waScanResult.exists ? '#15803d' : '#be123c' }}>
                           {waScanResult.exists ? '✓ Active on WhatsApp' : '✕ Not found on WhatsApp'}
                         </Typography>
+                        {waScanResult.name && (
+                          <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700, display: 'block' }}>
+                            ✓ Name found: <strong>"{waScanResult.name}"</strong> (Auto-filled below)
+                          </Typography>
+                        )}
                         {waScanResult.profilePictureUrl && (
                           <Typography variant="caption" sx={{ color: '#15803d', display: 'block' }}>
-                            Profile photo collected successfully!
+                            ✓ Profile photo collected successfully!
                           </Typography>
                         )}
                         {waScanResult.about && (
@@ -632,6 +668,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                 size="small"
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
+                helperText={waScanResult?.name && shopName === waScanResult.name ? 'Auto-suggested from WhatsApp Business Name' : undefined}
               />
 
               <TextField
@@ -641,6 +678,8 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                 size="small"
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
+                helperText={waScanResult?.name ? 'Auto-filled from WhatsApp Profile Name' : undefined}
+                FormHelperTextProps={{ sx: { color: '#059669', fontWeight: 600 } }}
               />
 
               {/* Category selector + Add New Category option */}
