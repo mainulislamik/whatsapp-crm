@@ -7,12 +7,6 @@ services:
       - "${WA_PORT:-5001}:5001"
     volumes:
       - wa_engine_auth:/app/auth_info_baileys
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
 
   backend:
     build: ./backend
@@ -21,10 +15,6 @@ services:
     ports:
       - "${BACKEND_PORT:-8050}:8000"
     environment:
-      - DB_HOST=ams-postgres
-      - DB_NAME=picasa_db
-      - DB_USER=picasa_user
-      - DB_PASSWORD=picasa_pass
       - WHATSAPP_ENGINE_URL=http://whatsapp-engine:5001
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-me-in-production}
       - DEBUG=True
@@ -39,10 +29,6 @@ services:
     ports:
       - "${FRONTEND_PORT:-3050}:3000"
     environment:
-      - DB_HOST=ams-postgres
-      - DB_NAME=picasa_db
-      - DB_USER=picasa_user
-      - DB_PASSWORD=picasa_pass
       - BACKEND_INTERNAL_URL=http://backend:8000
     depends_on: [backend]
 
