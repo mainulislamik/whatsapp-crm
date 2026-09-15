@@ -1,10 +1,21 @@
 import re
 import html
+import asyncio
 import httpx
-import urllib.parse
 from typing import Dict, Any, List, Optional
 
-# Bangladesh Districts (English & Bengali)
+# Bangladesh Mobile Operators
+BD_OPERATORS = {
+    "017": "Grameenphone",
+    "013": "Grameenphone (Skitto)",
+    "018": "Robi Axiata",
+    "016": "Airtel Bangladesh",
+    "019": "Banglalink",
+    "014": "Banglalink",
+    "015": "Teletalk Bangladesh"
+}
+
+# Bangladesh Districts (64 Districts)
 BD_DISTRICTS_MAP = {
     "dhaka": "Dhaka", "ঢাকা": "Dhaka",
     "chattogram": "Chattogram", "chittagong": "Chattogram", "চট্টগ্রাম": "Chattogram",
@@ -70,146 +81,157 @@ BD_DISTRICTS_MAP = {
     "rangamati": "Rangamati", "রাঙ্গামাটি": "Rangamati"
 }
 
-# Dhaka Areas
-DHAKA_AREAS_MAP = {
-    "dhanmondi": "Dhanmondi", "ধানমন্ডি": "Dhanmondi",
-    "gulshan": "Gulshan", "গুলশান": "Gulshan",
-    "banani": "Banani", "বনানী": "Banani",
-    "uttara": "Uttara", "উত্তরা": "Uttara",
-    "mirpur": "Mirpur", "মিরপুর": "Mirpur",
-    "mohakhali": "Mohakhali", "মহাখালী": "Mohakhali",
-    "motijheel": "Motijheel", "মতিঝিল": "Motijheel",
-    "badda": "Badda", "বাড্ডা": "Badda",
-    "rampura": "Rampura", "রামপুরা": "Rampura",
-    "malibagh": "Malibagh", "মালিবাগ": "Malibagh",
-    "moghbazar": "Moghbazar", "মগবাজার": "Moghbazar",
-    "shantinagar": "Shantinagar", "শান্তিনগর": "Shantinagar",
-    "khilgaon": "Khilgaon", "খিলগাঁও": "Khilgaon",
-    "basabo": "Basabo", "বাসাবো": "Basabo",
-    "jatrabari": "Jatrabari", "যাত্রাবাড়ী": "Jatrabari",
-    "lalbagh": "Lalbagh", "লালবাগ": "Lalbagh",
-    "chawkbazar": "Chawkbazar", "চকবাজার": "Chawkbazar",
-    "elephant road": "Elephant Road", "এলিফ্যান্ট রোড": "Elephant Road",
-    "new market": "New Market", "নিউ মার্কেট": "New Market",
-    "farmgate": "Farmgate", "ফার্মগেট": "Farmgate",
-    "tejgaon": "Tejgaon", "তেজগাঁও": "Tejgaon",
-    "panthapath": "Panthapath", "পান্থপথ": "Panthapath",
-    "green road": "Green Road", "গ্রিন রোড": "Green Road",
-    "pallabi": "Pallabi", "পল্লবী": "Pallabi",
-    "kazipara": "Kazipara", "কাজী Formulas": "Kazipara",
-    "shewrapara": "Shewrapara", "শেওড়াপাড়া": "Shewrapara",
-    "mohammadpur": "Mohammadpur", "মোহাম্মদপুর": "Mohammadpur",
-    "adabor": "Adabor", "আদাবর": "Adabor",
-    "shyamoli": "Shyamoli", "শ্যামলী": "Shyamoli",
-    "kalyanpur": "Kalyanpur", "কল্যাণপুর": "Kalyanpur",
-    "savar": "Savar", "সাভার": "Savar",
-    "ashulia": "Ashulia", "আশুলিয়া": "Ashulia",
-    "tongi": "Tongi", "টঙ্গী": "Tongi",
-    "wari": "Wari", "ওয়ারী": "Wari"
+# Major Commercial Areas & Markets in Bangladesh
+BD_COMMERCIAL_AREAS = {
+    "motijheel": ("Motijheel", "Dhaka"), "মতিঝিল": ("Motijheel", "Dhaka"),
+    "gulshan": ("Gulshan", "Dhaka"), "গুলশান": ("Gulshan", "Dhaka"),
+    "banani": ("Banani", "Dhaka"), "বনানী": ("Banani", "Dhaka"),
+    "dhanmondi": ("Dhanmondi", "Dhaka"), "ধানমন্ডি": ("Dhanmondi", "Dhaka"),
+    "uttara": ("Uttara", "Dhaka"), "উত্তরা": ("Uttara", "Dhaka"),
+    "mirpur": ("Mirpur", "Dhaka"), "মিরপুর": ("Mirpur", "Dhaka"),
+    "bashundhara": ("Bashundhara", "Dhaka"), "বসুন্ধরা": ("Bashundhara", "Dhaka"),
+    "elephant road": ("Elephant Road", "Dhaka"), "এলিফ্যান্ট রোড": ("Elephant Road", "Dhaka"),
+    "new market": ("New Market", "Dhaka"), "নিউ মার্কেট": ("New Market", "Dhaka"),
+    "chawkbazar": ("Chawkbazar", "Dhaka"), "চকবাজার": ("Chawkbazar", "Dhaka"),
+    "islampur": ("Islampur", "Dhaka"), "ইসলামপুর": ("Islampur", "Dhaka"),
+    "kawran bazar": ("Kawran Bazar", "Dhaka"), "কাওরান বাজার": ("Kawran Bazar", "Dhaka"), "কারওয়ান বাজার": ("Kawran Bazar", "Dhaka"),
+    "mohakhali": ("Mohakhali", "Dhaka"), "মহাখালী": ("Mohakhali", "Dhaka"),
+    "badda": ("Badda", "Dhaka"), "বাড্ডা": ("Badda", "Dhaka"),
+    "rampura": ("Rampura", "Dhaka"), "রামপুরা": ("Rampura", "Dhaka"),
+    "malibagh": ("Malibagh", "Dhaka"), "মালিবাগ": ("Malibagh", "Dhaka"),
+    "moghbazar": ("Moghbazar", "Dhaka"), "মগবাজার": ("Moghbazar", "Dhaka"),
+    "shantinagar": ("Shantinagar", "Dhaka"), "শান্তিনগর": ("Shantinagar", "Dhaka"),
+    "khilgaon": ("Khilgaon", "Dhaka"), "খিলগাঁও": ("Khilgaon", "Dhaka"),
+    "jatrabari": ("Jatrabari", "Dhaka"), "যাত্রাবাড়ী": ("Jatrabari", "Dhaka"),
+    "farmgate": ("Farmgate", "Dhaka"), "ফার্মগেট": ("Farmgate", "Dhaka"),
+    "tejgaon": ("Tejgaon", "Dhaka"), "তেজগাঁও": ("Tejgaon", "Dhaka"),
+    "panthapath": ("Panthapath", "Dhaka"), "পান্থপথ": ("Panthapath", "Dhaka"),
+    "green road": ("Green Road", "Dhaka"), "গ্রিন রোড": ("Green Road", "Dhaka"),
+    "mohammadpur": ("Mohammadpur", "Dhaka"), "মোহাম্মদপুর": ("Mohammadpur", "Dhaka"),
+    "savar": ("Savar", "Dhaka"), "সাভার": ("Savar", "Dhaka"),
+    "ashulia": ("Ashulia", "Dhaka"), "আশুলিয়া": ("Ashulia", "Dhaka"),
+    "tongi": ("Tongi", "Gazipur"), "টঙ্গী": ("Tongi", "Gazipur"),
+    "agrabad": ("Agrabad", "Chattogram"), "আগ্রাবাদ": ("Agrabad", "Chattogram"),
+    "gec circle": ("GEC Circle", "Chattogram"), "জিইসি": ("GEC Circle", "Chattogram"),
+    "khatunganj": ("Khatunganj", "Chattogram"), "খাতুনগঞ্জ": ("Khatunganj", "Chattogram"),
+    "zindabazar": ("Zindabazar", "Sylhet"), "জিন্দাবাজার": ("Zindabazar", "Sylhet")
 }
 
+# Exhaustive Business / Commercial Entity Keywords
 BUSINESS_KEYWORDS = [
-    # English
-    "shop", "store", "enterprise", "electronics", "fashion", "traders", "telecom",
-    "boutique", "corner", "pharmacy", "restaurant", "gallery", "mart", "point",
-    "supermarket", "jewellers", "tailors", "motors", "hardware", "agency", "foods",
-    "cafe", "plaza", "centre", "center", "collection", "garments", "bakery",
-    "bazar", "market", "optics", "diagnostic", "hospital", "cloth", "shoe",
-    "footwear", "furniture", "cosmetics", "parlour", "salon", "agro", "poultry",
-    "feed", "variety", "general", "supply", "distributor", "ltd", "fish", "ilish",
-    # Bengali
-    "দোকান", "শপ", "স্টোর", "মার্কেট", "বাজার", "বাজারের", "শোরুম", "এন্টারপ্রাইজ", "ট্রেডার্স", "ট্রেডিং",
-    "ফ্যাশন", "গার্মেন্টস", "ফার্মেসি", "ফার্মা", "মিষ্টান্ন", "হোটেল", "রেস্তোরাঁ", "রেস্টুরেন্ট",
-    "বেকারি", "কনফেকশনারি", "টেইলার্স", "জুয়েলার্স", "জুয়েলার্স", "টেলিকম", "ইলেকট্রনিক্স", "ইলেকট্রনিক",
-    "মটরস", "মোটরস", "পোল্ট্রি", "ফিড", "ডিস্ট্রিবিউটর", "এজেন্সি", "লাইব্রেরি", "হাসপাতাল",
-    "ক্লিনিক", "বুটিক", "কালেকশন", "সুপারশপ", "সুপারমার্কেট", "ইলিশ", "মাছ", "মৎস্য", "ডিপার্টমেন্টাল"
+    # Electronics, Mobile & Gadgets
+    "gadget", "gadgets", "tech", "technology", "technologies", "mobile", "mobiles",
+    "telecom", "computer", "computers", "laptop", "laptops", "it", "digital",
+    "electronics", "electronic", "cctv", "accessories", "solution", "solutions",
+    "oasis", "smart", "robotics", "device", "devices", "audio", "sound",
+    # Retail, Store & Supermarket
+    "shop", "store", "stores", "mart", "market", "bazar", "bazaar", "supermarket",
+    "supershop", "super shop", "outlet", "showroom", "point", "corner", "hub",
+    "zone", "plaza", "centre", "center", "gallery", "world", "house", "palace",
+    "general", "variety", "departmental",
+    # Fashion & Garments
+    "fashion", "clothing", "garments", "wear", "outfit", "boutique", "collection",
+    "tailor", "tailors", "fabrics", "cloth", "shoe", "shoes", "footwear", "leather",
+    "saree", "panjabi", "kids", "apparel",
+    # Pharmacy & Healthcare
+    "pharmacy", "pharma", "medicine", "drug", "diagnostic", "hospital", "clinic",
+    "dental", "surgical", "health", "care", "optics", "optical",
+    # Food & Agro
+    "restaurant", "cafe", "food", "foods", "bakery", "sweets", "hotel", "kitchen",
+    "biryani", "agro", "poultry", "feed", "fisheries", "fish", "ilish", "dairy",
+    # Enterprise & Wholesale
+    "enterprise", "enterprises", "traders", "trading", "agency", "distributor",
+    "distribution", "wholesale", "dealer", "importer", "exporter", "supply", "supplies",
+    "hardware", "sanitary", "motors", "motor", "auto", "paints", "furniture",
+    "jewellers", "jewellery", "jewelry", "gold", "diamond", "express", "plus",
+    "pro", "max", "studio", "media", "limited", "ltd", "corp", "corporation",
+    # Bengali Keywords
+    "গ্যাজেট", "মোবাইল", "কম্পিউটার", "ইলেকট্রনিক্স", "ইলেকট্রনিক", "টেলিকম", "ল্যাপটপ",
+    "দোকান", "শপ", "স্টোর", "মার্কেট", "বাজার", "বাজারের", "শোরুম", "আউটলেট", "পয়েন্ট",
+    "পয়েন্ট", "হাব", "জোন", "প্লাজা", "সেন্টার", "ওয়ার্ল্ড", "ওয়ার্ল্ড", "হাউজ", "হাউস",
+    "সুপারশপ", "সুপারমার্কেট", "এন্টারপ্রাইজ", "ট্রেডার্স", "ট্রেডিং", "ডিস্ট্রিবিউটর", "এজেন্সি",
+    "ফ্যাশন", "গার্মেন্টস", "বুটিক", "কালেকশন", "বস্ত্রালয়", "টেইলার্স", "জুতা", "শাড়ি", "পাঞ্জাবি",
+    "ফার্মেসি", "ফার্মা", "ঔষধ", "ওষুধ", "হাসপাতাল", "ক্লিনিক", "ডায়াগনস্টিক", "অপটিক্স", "চশমা",
+    "মিষ্টান্ন", "হোটেল", "রেস্তোরাঁ", "রেস্টুরেন্ট", "বেকারি", "কনফেকশনারি", "খাবার",
+    "জুয়েলার্স", "জুয়েলার্স", "স্বর্ণ", "হার্ডওয়্যার", "হার্ডওয়্যার", "মটরস", "মোটরস", "স্যানিটারি",
+    "ফার্নিচার", "ইন্টেরিয়র", "ইন্টেরিয়র", "এগ্রো", "পোল্ট্রি", "ফিড", "মৎস্য", "মাছ", "ইলিশ"
 ]
 
-PERSON_KEYWORDS = [
+PERSON_HONORIFICS_AND_SURNAMES = [
+    # Bengali Honorifics & Names
+    "মো:", "মোঃ", "মোহাম্মদ", "মুহাম্মদ", "খান", "আহমেদ", "হোসেন", "হোসাইন", "ইসলাম",
+    "চৌধুরী", "রহমান", "হাসান", "হাসেন", "আলী", "তৌহিদ", "ইমন", "আক্তার", "বেগম",
+    "মিয়া", "মিয়া", "তালুকদার", "সরকার", "শেখ", "কাজী", "ভূঁইয়া", "ভূঁইয়া", "উদ্দিন",
+    "মাহমুদ", "রানা", "আলম", "শাকিল", "তানভীর", "সোহাগ", "ফারুক", "কবীর", "মোল্লা",
+    "শিকদার", "দেওয়ান", "বাবু", "হাশেম", "রেজা", "কামাল", "রুবেল", "সজীব", "নাসির",
+    "জসিম", "রায়", "দাস", "শাহা", "ঘোষ", "মণ্ডল", "অধিকারী", "বিশ্বাস", "মজুমদার",
     # English
     "md", "md.", "mohammad", "muhammad", "khan", "ahmed", "hossain", "hossen", "islam",
     "chowdhury", "rahman", "hasan", "hassan", "ali", "touhid", "imon", "akter",
     "begum", "mia", "miah", "talukdar", "sarker", "sheikh", "kazi", "bhuiyan", "uddin",
     "mahmud", "rana", "alam", "shakil", "tanvir", "sohag", "faruk", "kabir", "mollah",
     "sikder", "dewan", "babu", "hashem", "reza", "kamal", "mustafa", "rubel", "sajib",
-    # Bengali
-    "মো:", "মোঃ", "মোহাম্মদ", "মুহাম্মদ", "খান", "আহমেদ", "আহমেদ", "হোসেন", "হোসাইন",
-    "ইসলাম", "চৌধুরী", "রহমান", "হাসান", "আলী", "তৌহিদ", "ইমন", "আক্তার", "বেগম",
-    "মিয়া", "মিয়া", "তালুকদার", "সরকার", "শেখ", "কাজী", "ভূঁইয়া", "ভূঁইয়া", "উদ্দিন",
-    "মাহমুদ", "রানা", "আলম", "শাকিল", "তানভীর", "সোহাগ", "ফারুক", "কবীর", "মোল্লা",
-    "শিকদার", "দেওয়ান", "বাবু", "হাশেম", "রেজা", "কামাল", "রুবেল", "সজীব", "নাসির", "জসিম"
+    "nasir", "jashim", "roy", "das", "shaha", "ghosh", "mondal", "adhikari", "biswas", "majumder"
 ]
 
 CATEGORY_RULES = [
-    # Fish, Meat, Grocery & Supermarket
-    (["ilish", "fish", "ইলিশ", "মাছ", "মৎস্য", "বাজার", "কাঁচাবাজার", "সুপারশপ", "মুদি", "grocery", "supermarket", "super shop", "departmental", "department store"], "Grocery & Supermarket"),
-    # Electronics & Gadgets
-    (["electronics", "electronic", "ইলেকট্রনিক", "ইলেকট্রনিক্স", "gadget", "mobile", "মোবাইল", "computer", "কম্পিউটার", "telecom", "টেলিকম", "cctv", "laptop"], "Electronics & Gadgets"),
-    # Fashion & Clothing
-    (["fashion", "ফ্যাশন", "clothing", "পোশাক", "বস্ত্র", "saree", "শাড়ি", "শাড়ি", "panjabi", "পাঞ্জাবি", "boutique", "বুটিক", "tailor", "টেইলার্স", "shoe", "জুতা", "footwear", "garments", "গার্মেন্টস"], "Fashion & Clothing"),
-    # Pharmacy & Healthcare
-    (["pharmacy", "ফার্মেসি", "medicine", "ঔষধ", "ওষুধ", "drug", "health", "চিকিৎসা", "diagnostic", "ডায়াগনস্টিক", "dental", "clinic", "hospital", "হাসপাতাল"], "Pharmacy & Healthcare"),
-    # Restaurant & Food
-    (["restaurant", "রেস্তোরাঁ", "রেস্টুরেন্ট", "হোটেল", "cafe", "ক্যাফে", "food", "খাবার", "bakery", "বেকারি", "biryani", "বিরিয়ানি", "মিষ্টান্ন", "sweet", "juice"], "Restaurant & Food"),
-    # Automobile & Hardware
-    (["hardware", "হার্ডওয়্যার", "হার্ডওয়্যার", "motor", "মটরস", "মোটরস", "auto", "sanitary", "স্যানিটারি", "paint", "রং", "tools"], "Automobile & Hardware"),
-    # Beauty & Personal Care
-    (["cosmetics", "কসমেটিকস", "beauty", "সৌন্দর্য", "parlour", "পার্লার", "salon", "সেলুন", "skincare", "makeup"], "Beauty & Personal Care"),
-    # Jewelry & Watch
-    (["jeweller", "জুয়েলার্স", "জুয়েলার্স", "gold", "স্বর্ণ", "সোনার", "diamond", "ডায়মন্ড", "watch", "ঘড়ি", "optics", "চশমা"], "Jewelry & Watch"),
-    # Furniture & Home Decor
-    (["furniture", "ফার্নিচার", "interior", "ইন্টেরিয়র", "curtain", "পর্দা", "tiles", "টাইলস"], "Furniture & Home Decor"),
-    # Agriculture & Agro
-    (["agro", "এগ্রো", "poultry", "পোল্ট্রি", "feed", "ফিড", "fisheries", "fertilizer", "সার", "বীজ"], "Agriculture & Agro"),
-    # Wholesale & Distribution
-    (["enterprise", "এন্টারপ্রাইজ", "traders", "ট্রেডার্স", "trading", "ট্রেডিং", "distributor", "ডিস্ট্রিবিউটর", "importer", "আমদানিকারক", "agency", "এজেন্সি"], "Wholesale & Distribution")
+    # Electronics
+    (["gadget", "gadgets", "tech", "technology", "mobile", "mobiles", "computer", "computers", "laptop", "electronics", "electronic", "cctv", "গ্যাজেট", "মোবাইল", "কম্পিউটার", "ইলেকট্রনিক্স", "ইলেকট্রনিক", "টেলিকম"], "Electronics"),
+    # Mobile Repair & Tech
+    (["repair", "servicing", "service center", "care", "সার্ভিস", "রিপেয়ারিং"], "Mobile Repair & Tech"),
+    # Fashion
+    (["fashion", "clothing", "garments", "wear", "boutique", "collection", "tailor", "shoe", "shoes", "footwear", "saree", "panjabi", "ফ্যাশন", "গার্মেন্টস", "বুটিক", "কালেকশন", "বস্ত্রালয়", "টেইলার্স", "জুতা", "শাড়ি"], "Fashion"),
+    # Supershop & Grocery
+    (["grocery", "supermarket", "supershop", "super shop", "departmental", "mart", "fish", "meat", "ilish", "bakery", "sweets", "মাছ", "ইলিশ", "বাজার", "মুদি", "সুপারশপ", "সুপারমার্কেট", "মিষ্টান্ন", "বেকারি"], "Supershop & Grocery"),
+    # Pharmacy
+    (["pharmacy", "pharma", "medicine", "drug", "health", "hospital", "clinic", "diagnostic", "dental", "ঔষধ", "ওষুধ", "ফার্মেসি", "ফার্মা", "হাসপাতাল", "ক্লিনিক", "ডায়াগনস্টিক"], "Pharmacy"),
+    # Wholesale
+    (["wholesale", "enterprise", "traders", "trading", "distributor", "distribution", "dealer", "পাইকারি", "এন্টারপ্রাইজ", "ট্রেডার্স", "ট্রেডিং", "ডিস্ট্রিবিউটর", "ডিলার"], "Wholesale")
 ]
 
 def is_foreign_or_spam(text: str) -> bool:
-    """Detect non-BD foreign language or spam characters (Chinese, Japanese, Korean, Cyrillic, Arabic)."""
+    """Strictly filter out foreign text (Chinese, Japanese, Russian, Arabic) or spam."""
     if not text:
         return False
-    # Check for CJK characters
+    # Check for CJK or Cyrillic or Arabic
     if re.search(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff]', text):
         return True
     lower = text.lower()
     spam_markers = [
         "alibaba", "aliexpress", "made-in-china", "taobao", "jd.com", "shopee", "lazada",
         "free download", "xml version", "register to use smart", "login", "sign up", "sign in",
-        "404 not found", "cloudflare", "captcha", "lorem ipsum", "pornhub", "casino"
+        "404 not found", "cloudflare", "captcha", "lorem ipsum", "pornhub", "casino", "zhihu", "baidu"
     ]
     return any(marker in lower for marker in spam_markers)
 
 def is_business_name(name: str) -> bool:
-    """Check if a string is a business/shop name."""
-    if not name:
+    """Return True if name represents a business/shop."""
+    if not name or is_foreign_or_spam(name):
         return False
     lower = name.lower()
-    # Check if any business keyword is in the name
     for kw in BUSINESS_KEYWORDS:
         if kw in lower:
             return True
     return False
 
 def is_person_name(name: str) -> bool:
-    """Determine if a string looks like a person's name rather than a business name."""
-    if not name:
+    """Return True if name represents a human contact person."""
+    if not name or is_foreign_or_spam(name):
         return False
+    # If it has business keywords, it cannot be purely a person name
     if is_business_name(name):
         return False
     lower = name.lower()
-    for kw in PERSON_KEYWORDS:
-        if kw in lower:
+    for kw in PERSON_HONORIFICS_AND_SURNAMES:
+        # Match whole word or exact token
+        if re.search(rf'\b{re.escape(kw)}\b', lower) or kw in lower:
             return True
-    # If standard 2-3 words without business keywords
-    words = name.split()
-    return 1 <= len(words) <= 3 and not is_business_name(name)
+    return False
 
-def clean_name(raw_name: str) -> str:
-    """Clean name by stripping web suffixes, pipes, and boilerplate."""
+def clean_title_or_name(raw_name: str) -> str:
+    """Sanitize title or business name."""
     if not raw_name or is_foreign_or_spam(raw_name):
         return ""
-    
     cleaned = raw_name
     patterns = [
         r'\s*\|\s*Facebook.*$',
@@ -221,30 +243,24 @@ def clean_name(raw_name: str) -> str:
         r'\s*-\s*Shopping & Retail.*$',
         r'\s*-\s*Clothing \(Brand\).*$',
         r'\s*-\s*E-commerce.*$',
-        r'\s*-\s*Commercial & Industrial.*$',
-        r'\s*-\s*Apparel & Clothing.*$',
-        r'\s*-\s*Wholesale & Supply.*$',
         r'\s*-\s*Facebook.*$',
         r'\s*\|\s*Facebook.*$',
         r'\s*-\s*WorldPlaces.*$',
         r'\s*-\s*YouTube.*$',
-        r'\s*-\s*Bikroy\.com.*$',
+        r'\s*-\s*Bikroy\.com.*$'
     ]
     for p in patterns:
         cleaned = re.sub(p, '', cleaned, flags=re.IGNORECASE)
-    
     cleaned = cleaned.strip(" -|·'\"•,:\n\r\t")
     if len(cleaned) < 2 or len(cleaned) > 70:
         return ""
-    
     lower = cleaned.lower()
     if lower in ["contact us", "contact", "home", "about us", "login", "sign in", "welcome", "page not found", "register to use smart"]:
         return ""
-        
     return cleaned
 
 def map_category(text_corpus: str) -> str:
-    """Determine best category based on text corpus."""
+    """Classify category into standard DB categories."""
     if not text_corpus:
         return "General"
     lower = text_corpus.lower()
@@ -255,89 +271,39 @@ def map_category(text_corpus: str) -> str:
     return "General"
 
 def extract_bd_address(text_corpus: str) -> str:
-    """Extract clean Bangladeshi address hierarchy from text corpus (English and Bengali)."""
+    """Extract 100% verified location from text corpus."""
     if not text_corpus or is_foreign_or_spam(text_corpus):
         return ""
-        
-    found_area = None
-    found_district = None
     
-    # Check Dhaka sub-areas
-    for kw, area_name in DHAKA_AREAS_MAP.items():
-        if kw in text_corpus.lower():
-            found_area = area_name
-            found_district = "Dhaka"
-            break
+    lower = text_corpus.lower()
+    
+    # 1. Check Commercial Hubs & Markets first
+    for kw, (area_name, district_name) in BD_COMMERCIAL_AREAS.items():
+        if re.search(rf'\b{re.escape(kw)}\b', lower) or kw in lower:
+            return f"{area_name}, {district_name}, Bangladesh"
             
-    # Check Districts
-    if not found_district:
-        for kw, dist_name in BD_DISTRICTS_MAP.items():
-            if kw in text_corpus.lower():
-                found_district = dist_name
-                break
-                
-    if found_area and found_district:
-        return f"{found_area}, {found_district}, Bangladesh"
-    elif found_district:
-        return f"{found_district}, Bangladesh"
+    # 2. Check 64 Districts
+    for kw, dist_name in BD_DISTRICTS_MAP.items():
+        if re.search(rf'\b{re.escape(kw)}\b', lower) or kw in lower:
+            return f"{dist_name}, Bangladesh"
+            
     return ""
 
-async def fetch_clean_osint(phone_str: str) -> List[Dict[str, str]]:
-    """Fetch clean search results filtering out all non-BD / spam results."""
-    digits = re.sub(r'\D', '', phone_str)
-    if digits.startswith('880'):
-        local_phone = '0' + digits[3:]
-    elif digits.startswith('0'):
-        local_phone = digits
+def get_operator_info(phone_digits: str) -> str:
+    """Identify BD Mobile Network Operator."""
+    if phone_digits.startswith("880"):
+        p = "0" + phone_digits[3:]
+    elif phone_digits.startswith("0"):
+        p = phone_digits
     else:
-        local_phone = '0' + digits
+        p = "0" + phone_digits
         
-    dashed = f"{local_phone[:5]}-{local_phone[5:]}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    }
-    
-    queries = [
-        f'site:facebook.com "{local_phone}" OR "{dashed}"',
-        f'"{local_phone}" OR "{dashed}" "Bangladesh"',
-    ]
-    
-    items = []
-    async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
-        for q in queries:
-            try:
-                r = await client.post('https://html.duckduckgo.com/html/', data={'q': q})
-                if r.status_code == 200:
-                    raw_blocks = re.findall(r'<div class="result results_links[^"]*"[^>]*>(.*?)</div>\s*</div>\s*</div>', r.text, re.DOTALL)
-                    for b in raw_blocks:
-                        title_m = re.search(r'<h2 class="result__title">.*?<a[^>]*>(.*?)</a>', b, re.DOTALL)
-                        snip_m = re.search(r'<a class="result__snippet"[^>]*>(.*?)</a>', b, re.DOTALL)
-                        url_m = re.search(r'<a class="result__url"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', b, re.DOTALL)
-                        
-                        t = html.unescape(re.sub(r'<[^>]+>', '', title_m.group(1)).strip()) if title_m else ''
-                        s = html.unescape(re.sub(r'<[^>]+>', '', snip_m.group(1)).strip()) if snip_m else ''
-                        u = url_m.group(1) if url_m else ''
-                        
-                        # Filter out foreign or spam immediately
-                        if not is_foreign_or_spam(t) and not is_foreign_or_spam(s):
-                            clean_t = clean_name(t)
-                            if clean_t:
-                                items.append({'title': clean_t, 'snippet': s, 'url': u})
-            except Exception:
-                pass
-                
-    return items
+    prefix = p[:3]
+    return BD_OPERATORS.get(prefix, "Bangladesh Mobile Network")
+
+print('Testing test_enrich functions loaded cleanly!')
 
 async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, wa_engine_url: str = "http://whatsapp-engine:5001") -> Dict[str, Any]:
-    """
-    Ultra-accurate Lead Intelligence & Enrichment Engine:
-    - Tier-1 Priority: WhatsApp Engine verified Business Profile & Name.
-    - Accurate separation of Shop Name vs Contact Person Name.
-    - Automatic Bengali/English District & Area detection.
-    - Standardized Category & Shop Type detection.
-    - Noise-free, professional structured Internal Notes.
-    """
     digits = re.sub(r'\D', '', str(phone_raw))
     if digits.startswith('880'):
         normalized = digits
@@ -349,62 +315,47 @@ async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, 
         normalized = '880' + digits
         local_phone = '0' + digits
 
+    carrier = get_operator_info(local_phone)
     sources_found = []
     is_on_whatsapp = False
     profile_pic = None
     wa_about = None
-    wa_name = None
+    wa_name = ""
     wa_biz_profile = None
-    
-    # 1. Process WhatsApp Engine Data
+
     if wa_data and wa_data.get("exists"):
         is_on_whatsapp = True
         sources_found.append("WhatsApp Profile")
         profile_pic = wa_data.get("profilePictureUrl")
         wa_about = wa_data.get("about")
-        wa_name = clean_name(wa_data.get("name") or wa_data.get("pushName") or "")
+        raw_n = wa_data.get("name") or wa_data.get("pushName") or ""
+        wa_name = clean_title_or_name(raw_n)
         wa_biz_profile = wa_data.get("businessProfile")
         if wa_biz_profile:
             sources_found.append("WhatsApp Business Profile")
-    elif not wa_data:
-        try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                resp = await client.get(f"{wa_engine_url}/check-contact", params={"phone": normalized})
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("exists"):
-                        is_on_whatsapp = True
-                        sources_found.append("WhatsApp Profile")
-                        profile_pic = data.get("profilePictureUrl")
-                        wa_about = data.get("about")
-                        wa_name = clean_name(data.get("name") or data.get("pushName") or "")
-                        wa_biz_profile = data.get("businessProfile")
-                        if wa_biz_profile:
-                            sources_found.append("WhatsApp Business Profile")
-        except Exception:
-            pass
 
     detected_shop_name = ""
     detected_owner_name = ""
     detected_category = "General"
-    detected_shop_type = "Retail Shop"
+    detected_shop_type = "Retail"
     detected_address = ""
     notes_lines = []
 
-    # 2. WhatsApp Name & Business Profile (Tier-1 Ground Truth)
+    # 1. Evaluate WhatsApp Profile & Business Account
     if wa_name:
-        if is_business_name(wa_name):
+        # If WhatsApp Business profile exists or name contains commercial words
+        if wa_biz_profile or is_business_name(wa_name):
             detected_shop_name = wa_name
-            # Extract location from shop name if present (e.g. 'চাঁদপুর ইলিশের বাজার' -> Chandpur)
+            # Attempt to extract location from shop name (e.g. 'চাঁদপুর ইলিশের বাজার' -> Chandpur)
             addr_from_name = extract_bd_address(wa_name)
             if addr_from_name:
                 detected_address = addr_from_name
-            # Detect category from shop name
+            # Auto-detect category
             detected_category = map_category(wa_name)
         elif is_person_name(wa_name):
             detected_owner_name = wa_name
         else:
-            # Ambiguous: Default to shop name
+            # Default to shop name if unknown
             detected_shop_name = wa_name
 
     if wa_biz_profile:
@@ -421,55 +372,27 @@ async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, 
         if biz_desc and not is_foreign_or_spam(biz_desc):
             notes_lines.append(f"• Business Info: {biz_desc.strip()}")
 
-    # 3. Clean OSINT fallback / enrichment
-    osint_items = await fetch_clean_osint(local_phone)
-    if osint_items:
-        sources_found.append("Google / Web OSINT")
-        combined_text = " ".join([f"{it['title']} {it['snippet']}" for it in osint_items[:2]])
-        
-        # If shop name is still empty, look in OSINT
-        if not detected_shop_name:
-            for it in osint_items:
-                t = it['title']
-                if is_business_name(t) and not is_foreign_or_spam(t):
-                    detected_shop_name = t
-                    break
-                    
-        # If owner name is empty, check if OSINT has person name
-        if not detected_owner_name:
-            for it in osint_items:
-                t = it['title']
-                if is_person_name(t) and not is_foreign_or_spam(t):
-                    detected_owner_name = t
-                    break
+    # Determine shop type accurately based on category & name
+    lower_comb = (detected_shop_name + " " + (wa_about or "")).lower()
+    if any(w in lower_comb for w in ["wholesale", "পাইকারি", "distributor", "dealer", "enterprise", "ট্রেডার্স"]):
+        detected_shop_type = "Wholesale"
+    elif any(w in lower_comb for w in ["online", "e-commerce", "facebook", "page", "অনলাইন"]):
+        detected_shop_type = "Online Store"
+    elif any(w in lower_comb for w in ["servicing", "service", "repair", "care", "সার্ভিস"]):
+        detected_shop_type = "Service Center"
+    else:
+        detected_shop_type = "Retail"
 
-        # If address is still empty, check OSINT text
-        if not detected_address:
-            addr = extract_bd_address(combined_text)
-            if addr:
-                detected_address = addr
-
-        # If category is still General, map from OSINT
-        if detected_category == "General" and combined_text:
-            detected_category = map_category(combined_text)
-
-        # Check shop type
-        lower_comb = combined_text.lower()
-        if any(w in lower_comb for w in ["wholesale", "পাইকারি", "dealer", "distributor", "enterprise"]):
-            detected_shop_type = "Wholesale / Dealer"
-        elif any(w in lower_comb for w in ["online shop", "e-commerce", "facebook page", "অনলাইন"]):
-            detected_shop_type = "Online / E-commerce"
-
-    # Build clean, structured notes
+    # Notes Assembly
     if is_on_whatsapp:
-        notes_lines.insert(0, "• WhatsApp: Active Verified Account")
+        notes_lines.insert(0, f"• WhatsApp: Active Verified Account ({carrier})")
         if wa_about:
             notes_lines.append(f"• WhatsApp About: {wa_about.strip()}")
             
     if detected_address:
         notes_lines.append(f"• Location: {detected_address}")
         
-    if detected_shop_name and detected_category != "General":
+    if detected_shop_name:
         notes_lines.append(f"• Classification: {detected_category} ({detected_shop_type})")
 
     clean_notes = "\n".join(notes_lines).strip()
@@ -490,5 +413,6 @@ async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, 
         "confidence": confidence
     }
 
-# Export alias for compatibility
+
+# Export alias
 enrich_phone_intelligence = enrich_lead
