@@ -102,6 +102,9 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
   const [quickMsgSuccess, setQuickMsgSuccess] = useState<boolean>(false);
   const [copiedPhone, setCopiedPhone] = useState<boolean>(false);
 
+  // Full Image Preview / Lightbox Modal State
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
+
   // Add / Edit Modal State
   const [openModal, setOpenModal] = useState<boolean>(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -775,31 +778,51 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                       {/* 1. Shop Name & Avatar */}
                       <TableCell sx={{ py: 1 }}>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                          <Badge
-                            overlap="circular"
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                            badgeContent={
-                              lead.is_on_whatsapp ? (
-                                <Tooltip title="Verified on WhatsApp">
-                                  <CheckCircleIcon sx={{ color: '#25D366', fontSize: 16, bgcolor: '#ffffff', borderRadius: '50%' }} />
-                                </Tooltip>
-                              ) : null
-                            }
-                          >
-                            <Avatar
-                              src={lead.whatsapp_profile_pic || undefined}
+                          <Tooltip title={lead.whatsapp_profile_pic ? "Click to view full photo" : "No photo available"}>
+                            <Box
+                              onClick={(e) => {
+                                if (lead.whatsapp_profile_pic) {
+                                  e.stopPropagation();
+                                  setPreviewImage({
+                                    url: lead.whatsapp_profile_pic,
+                                    title: lead.shop_name,
+                                    subtitle: `${lead.phone} • ${lead.category || 'Retail'}`
+                                  });
+                                }
+                              }}
                               sx={{
-                                width: 40,
-                                height: 40,
-                                bgcolor: '#0f172a',
-                                fontWeight: 700,
-                                fontSize: '0.9rem',
-                                boxShadow: '0 2px 5px rgba(0,0,0,0.08)',
+                                cursor: lead.whatsapp_profile_pic ? 'pointer' : 'default',
+                                display: 'inline-flex',
+                                transition: 'transform 0.2s ease',
+                                '&:hover': lead.whatsapp_profile_pic ? { transform: 'scale(1.12)' } : {},
                               }}
                             >
-                              {lead.shop_name.charAt(0).toUpperCase()}
-                            </Avatar>
-                          </Badge>
+                              <Badge
+                                overlap="circular"
+                                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                badgeContent={
+                                  lead.is_on_whatsapp ? (
+                                    <CheckCircleIcon sx={{ color: '#25D366', fontSize: 16, bgcolor: '#ffffff', borderRadius: '50%' }} />
+                                  ) : null
+                                }
+                              >
+                                <Avatar
+                                  src={lead.whatsapp_profile_pic || undefined}
+                                  sx={{
+                                    width: 42,
+                                    height: 42,
+                                    bgcolor: '#0f172a',
+                                    fontWeight: 700,
+                                    fontSize: '0.9rem',
+                                    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                                    border: lead.whatsapp_profile_pic ? '2px solid #10b981' : 'none',
+                                  }}
+                                >
+                                  {lead.shop_name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              </Badge>
+                            </Box>
+                          </Tooltip>
                           <Box sx={{ minWidth: 0, flex: 1 }}>
                             <Typography
                               variant="subtitle2"
@@ -1069,32 +1092,50 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
               </IconButton>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2.5} sx={{ alignItems: { sm: 'center' } }}>
-                <Badge
-                  overlap="circular"
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                  badgeContent={
-                    profileLead.is_on_whatsapp ? (
-                      <Tooltip title="Verified Active WhatsApp Account">
-                        <CheckCircleIcon sx={{ color: '#25D366', fontSize: 24, bgcolor: '#ffffff', borderRadius: '50%' }} />
-                      </Tooltip>
-                    ) : null
-                  }
-                >
-                  <Avatar
-                    src={profileLead.whatsapp_profile_pic || undefined}
+                <Tooltip title={profileLead.whatsapp_profile_pic ? "Click to view full photo" : ""}>
+                  <Box
+                    onClick={() => {
+                      if (profileLead.whatsapp_profile_pic) {
+                        setPreviewImage({
+                          url: profileLead.whatsapp_profile_pic,
+                          title: profileLead.shop_name,
+                          subtitle: `${profileLead.phone} • ${profileLead.owner_name || profileLead.category}`
+                        });
+                      }
+                    }}
                     sx={{
-                      width: 72,
-                      height: 72,
-                      bgcolor: '#10b981',
-                      fontSize: '1.8rem',
-                      fontWeight: 800,
-                      border: '3px solid rgba(255,255,255,0.2)',
-                      boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                      cursor: profileLead.whatsapp_profile_pic ? 'pointer' : 'default',
+                      display: 'inline-flex',
+                      transition: 'transform 0.2s ease',
+                      '&:hover': profileLead.whatsapp_profile_pic ? { transform: 'scale(1.08)' } : {},
                     }}
                   >
-                    {profileLead.shop_name.charAt(0).toUpperCase()}
-                  </Avatar>
-                </Badge>
+                    <Badge
+                      overlap="circular"
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                      badgeContent={
+                        profileLead.is_on_whatsapp ? (
+                          <CheckCircleIcon sx={{ color: '#25D366', fontSize: 24, bgcolor: '#ffffff', borderRadius: '50%' }} />
+                        ) : null
+                      }
+                    >
+                      <Avatar
+                        src={profileLead.whatsapp_profile_pic || undefined}
+                        sx={{
+                          width: 72,
+                          height: 72,
+                          bgcolor: '#10b981',
+                          fontSize: '1.8rem',
+                          fontWeight: 800,
+                          border: '3px solid rgba(255,255,255,0.2)',
+                          boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                        }}
+                      >
+                        {profileLead.shop_name.charAt(0).toUpperCase()}
+                      </Avatar>
+                    </Badge>
+                  </Box>
+                </Tooltip>
 
                 <Box sx={{ flex: 1 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
@@ -1642,6 +1683,103 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
             Create
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 🖼️ FULL IMAGE PREVIEW / LIGHTBOX MODAL */}
+      {/* ========================================================================= */}
+      <Dialog
+        open={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+        maxWidth="md"
+        PaperProps={{
+          sx: {
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+        }}
+        BackdropProps={{
+          sx: {
+            bgcolor: 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(8px)',
+          },
+        }}
+      >
+        {previewImage && (
+          <Box
+            sx={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              p: 2,
+            }}
+          >
+            {/* Top Header Bar */}
+            <Box
+              sx={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 1.5,
+                color: '#ffffff',
+                px: 1,
+              }}
+            >
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff', textShadow: '0 2px 4px rgba(0,0,0,0.6)' }}>
+                  {previewImage.title}
+                </Typography>
+                {previewImage.subtitle && (
+                  <Typography variant="caption" sx={{ color: '#cbd5e1', display: 'block' }}>
+                    {previewImage.subtitle}
+                  </Typography>
+                )}
+              </Box>
+
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Tooltip title="Open Original in New Tab">
+                  <IconButton
+                    onClick={() => window.open(previewImage.url, '_blank')}
+                    sx={{ color: '#ffffff', bgcolor: 'rgba(255,255,255,0.15)', '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' } }}
+                  >
+                    <OpenInNewIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Close (Esc)">
+                  <IconButton
+                    onClick={() => setPreviewImage(null)}
+                    sx={{ color: '#ffffff', bgcolor: 'rgba(255,255,255,0.15)', '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' } }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Box>
+
+            {/* Main Image */}
+            <Box
+              component="img"
+              src={previewImage.url}
+              alt={previewImage.title}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '75vh',
+                objectFit: 'contain',
+                borderRadius: 3,
+                boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+                border: '2px solid rgba(255,255,255,0.15)',
+              }}
+            />
+          </Box>
+        )}
       </Dialog>
     </Card>
   );
