@@ -22,6 +22,7 @@ services:
       - DEBUG=True
     volumes:
       - ./wa_backend_data:/app/data
+      - ./backend:/app
     depends_on: [whatsapp-engine]
 
   frontend:

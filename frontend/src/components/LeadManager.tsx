@@ -730,7 +730,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                 size="small"
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
-                helperText={waScanResult?.name ? 'Auto-filled from WhatsApp Profile Name' : undefined}
+                helperText={ownerName ? 'Auto-detected Contact Person' : undefined}
                 FormHelperTextProps={{ sx: { color: '#059669', fontWeight: 600 } }}
               />
 
