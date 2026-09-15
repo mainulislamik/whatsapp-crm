@@ -87,3 +87,50 @@ class CampaignLog(models.Model):
 
     def __str__(self):
         return f"{self.phone} - {self.status}"
+
+
+class LeadCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Lead(models.Model):
+    STATUS_CHOICES = [
+        ('NEW', 'New'),
+        ('CONTACTED', 'Contacted'),
+        ('INTERESTED', 'Interested'),
+        ('QUALIFIED', 'Qualified'),
+        ('LOST', 'Lost'),
+    ]
+
+    phone = models.CharField(max_length=50, db_index=True)
+    shop_name = models.CharField(max_length=255)
+    owner_name = models.CharField(max_length=255, blank=True, default='')
+    category = models.CharField(max_length=100, blank=True, default='General')
+    shop_type = models.CharField(max_length=100, blank=True, default='Retail')
+    
+    # WhatsApp Scanned Enrichment
+    is_on_whatsapp = models.BooleanField(default=False)
+    whatsapp_name = models.CharField(max_length=255, blank=True, default='')
+    whatsapp_profile_pic = models.TextField(blank=True, default='')
+    whatsapp_about = models.TextField(blank=True, default='')
+    
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NEW')
+    address = models.TextField(blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.shop_name} - {self.phone}"

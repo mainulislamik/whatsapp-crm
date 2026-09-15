@@ -20,7 +20,8 @@ import SendIcon from '@mui/icons-material/Send';
 import ChatIcon from '@mui/icons-material/Chat';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { ContactService, BroadcastService, WhatsAppService, Campaign } from '@/lib/api';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import { ContactService, BroadcastService, WhatsAppService, LeadService, Campaign } from '@/lib/api';
 
 interface OverviewProps {
   onNavigate: (section: string) => void;
@@ -29,6 +30,7 @@ interface OverviewProps {
 export default function Overview({ onNavigate }: OverviewProps) {
   const [stats, setStats] = useState({
     contactsCount: 0,
+    leadsCount: 0,
     campaignsCount: 0,
     sentCount: 0,
     failedCount: 0,
@@ -39,19 +41,22 @@ export default function Overview({ onNavigate }: OverviewProps) {
 
   const loadData = async () => {
     try {
-      const [contactsRes, campsRes, waRes] = await Promise.all([
+      const [contactsRes, leadsRes, campsRes, waRes] = await Promise.all([
         ContactService.list(),
+        LeadService.list(),
         BroadcastService.listCampaigns(),
         WhatsAppService.getStatus(),
       ]);
 
       const contacts = contactsRes.data || [];
+      const leads = leadsRes.data || [];
       const campaigns = campsRes.data || [];
       const sent = campaigns.reduce((acc, c) => acc + (c.sent_count || 0), 0);
       const failed = campaigns.reduce((acc, c) => acc + (c.failed_count || 0), 0);
 
       setStats({
         contactsCount: contacts.length,
+        leadsCount: leads.length,
         campaignsCount: campaigns.length,
         sentCount: sent,
         failedCount: failed,
@@ -152,40 +157,59 @@ export default function Overview({ onNavigate }: OverviewProps) {
         </CardContent>
       </Card>
 
-      {/* 4 Stat Cards */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3.5 }}>
+      {/* 5 Stat Cards */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 3.5 }}>
         {/* Contacts */}
         <Card sx={{ borderLeft: '4px solid #3b82f6' }}>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  Total Contacts
+                  Contacts
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
                   {stats.contactsCount}
                 </Typography>
               </Box>
-              <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: '#eff6ff', color: '#3b82f6' }}>
+              <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#eff6ff', color: '#3b82f6' }}>
                 <PeopleIcon fontSize="medium" />
               </Box>
             </Stack>
           </CardContent>
         </Card>
 
-        {/* Campaigns */}
+        {/* Leads */}
         <Card sx={{ borderLeft: '4px solid #8b5cf6' }}>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  Total Campaigns
+                  Leads & Shops
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
+                  {stats.leadsCount}
+                </Typography>
+              </Box>
+              <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#f5f3ff', color: '#8b5cf6' }}>
+                <StorefrontIcon fontSize="medium" />
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Campaigns */}
+        <Card sx={{ borderLeft: '4px solid #10b981' }}>
+          <CardContent>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
+                  Campaigns
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
                   {stats.campaignsCount}
                 </Typography>
               </Box>
-              <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: '#f5f3ff', color: '#8b5cf6' }}>
+              <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#ecfdf5', color: '#10b981' }}>
                 <CampaignIcon fontSize="medium" />
               </Box>
             </Stack>
@@ -193,18 +217,18 @@ export default function Overview({ onNavigate }: OverviewProps) {
         </Card>
 
         {/* Sent */}
-        <Card sx={{ borderLeft: '4px solid #10b981' }}>
+        <Card sx={{ borderLeft: '4px solid #14b8a6' }}>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  Messages Sent
+                  Sent
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#10b981', mt: 0.5 }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
                   {stats.sentCount}
                 </Typography>
               </Box>
-              <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: '#ecfdf5', color: '#10b981' }}>
+              <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#f0fdfa', color: '#14b8a6' }}>
                 <CheckCircleIcon fontSize="medium" />
               </Box>
             </Stack>
@@ -217,13 +241,13 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  Failed Messages
+                  Failed
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: stats.failedCount > 0 ? '#ef4444' : '#64748b', mt: 0.5 }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
                   {stats.failedCount}
                 </Typography>
               </Box>
-              <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: '#fef2f2', color: '#ef4444' }}>
+              <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#fef2f2', color: '#ef4444' }}>
                 <ErrorOutlineIcon fontSize="medium" />
               </Box>
             </Stack>
@@ -237,7 +261,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
           <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>
             Quick Launchpad
           </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(5, 1fr)' }, gap: 2 }}>
             <Button
               variant="outlined"
               color="primary"
@@ -245,16 +269,16 @@ export default function Overview({ onNavigate }: OverviewProps) {
               onClick={() => onNavigate('broadcast')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              New Bulk Broadcast
+              New Broadcast
             </Button>
             <Button
               variant="outlined"
               color="secondary"
-              startIcon={<ChatIcon />}
-              onClick={() => onNavigate('quickchat')}
+              startIcon={<StorefrontIcon />}
+              onClick={() => onNavigate('leads')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              Direct Quick Message
+              Lead Management
             </Button>
             <Button
               variant="outlined"
@@ -268,11 +292,20 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Button
               variant="outlined"
               color="secondary"
+              startIcon={<ChatIcon />}
+              onClick={() => onNavigate('quickchat')}
+              sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
+            >
+              Quick Message
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
               startIcon={<QrCodeScannerIcon />}
               onClick={() => onNavigate('device')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              WhatsApp Device Link
+              WhatsApp Device
             </Button>
           </Box>
         </CardContent>

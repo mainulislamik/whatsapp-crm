@@ -113,6 +113,64 @@ app.get('/status', (req, res) => {
   });
 });
 
+// Check contact on WhatsApp (existence, profile picture, about)
+app.get('/check-contact', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) {
+      return res.status(400).json({ error: 'phone query param is required' });
+    }
+
+    if (connectionStatus !== 'CONNECTED' || !sock) {
+      return res.json({
+        connected: false,
+        exists: false,
+        phone,
+        message: 'WhatsApp engine is not connected. Scan QR code first.'
+      });
+    }
+
+    const jid = formatJID(phone);
+    const results = await sock.onWhatsApp(jid);
+    const match = results && results.length > 0 ? results[0] : null;
+
+    if (!match || !match.exists) {
+      return res.json({
+        connected: true,
+        exists: false,
+        phone,
+        jid,
+        message: 'Number is not registered on WhatsApp.'
+      });
+    }
+
+    let profilePictureUrl = null;
+    try {
+      profilePictureUrl = await sock.profilePictureUrl(match.jid, 'image');
+    } catch (err) {
+      // Profile picture is private, contacts-only, or not set
+    }
+
+    let about = null;
+    try {
+      const statusRes = await sock.fetchStatus(match.jid);
+      about = statusRes?.status || null;
+    } catch (err) {}
+
+    return res.json({
+      connected: true,
+      exists: true,
+      phone,
+      jid: match.jid,
+      profilePictureUrl,
+      about
+    });
+  } catch (error) {
+    console.error('Error checking WhatsApp contact:', error);
+    res.status(500).json({ error: error.message || 'Failed to check contact' });
+  }
+});
+
 // QR Code endpoint
 app.get('/qr', (req, res) => {
   res.json({

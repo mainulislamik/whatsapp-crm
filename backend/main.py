@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from asgiref.sync import sync_to_async
 
-from crm_core.models import Contact, MessageTemplate, Campaign, CampaignLog
+from crm_core.models import Contact, MessageTemplate, Campaign, CampaignLog, Lead, LeadCategory
 
 WHATSAPP_ENGINE_URL = os.environ.get('WHATSAPP_ENGINE_URL', 'http://whatsapp-engine:5001')
 
@@ -109,6 +109,31 @@ class BulkSendRequest(BaseModel):
     file_name: Optional[str] = None
     mime_type: Optional[str] = None
     scheduled_at: Optional[str] = None # ISO format string
+
+class LeadCategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+
+class LeadCreate(BaseModel):
+    phone: str
+    shop_name: str
+    owner_name: Optional[str] = ""
+    category: Optional[str] = "General"
+    shop_type: Optional[str] = "Retail"
+    address: Optional[str] = ""
+    notes: Optional[str] = ""
+    status: Optional[str] = "NEW"
+    force_save: Optional[bool] = False
+
+class LeadUpdate(BaseModel):
+    phone: Optional[str] = None
+    shop_name: Optional[str] = None
+    owner_name: Optional[str] = None
+    category: Optional[str] = None
+    shop_type: Optional[str] = None
+    address: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
 
 # --- HEALTH & WHATSAPP ENGINE PROXY ---
 
@@ -565,3 +590,286 @@ async def export_campaign_logs_csv(campaign_id: int):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=campaign_{campaign_id}_report.csv"}
     )
+
+# --- LEAD MANAGEMENT HELPERS & ENDPOINTS ---
+
+def normalize_phone_digits(phone: str) -> str:
+    cleaned = re.sub(r'\D', '', str(phone))
+    if cleaned.startswith('88') and len(cleaned) == 13:
+        cleaned = cleaned[2:]
+    return cleaned
+
+def check_phone_duplicate(phone: str, exclude_lead_id: Optional[int] = None):
+    norm = normalize_phone_digits(phone)
+    if not norm:
+        return {"is_duplicate": False}
+
+    # 1. Check in Contacts
+    for c in Contact.objects.all():
+        if normalize_phone_digits(c.phone) == norm:
+            return {
+                "is_duplicate": True,
+                "type": "Contact",
+                "name": c.name,
+                "phone": c.phone,
+                "id": c.id
+            }
+
+    # 2. Check in Leads
+    lead_query = Lead.objects.all()
+    if exclude_lead_id:
+        lead_query = lead_query.exclude(id=exclude_lead_id)
+    for l in lead_query:
+        if normalize_phone_digits(l.phone) == norm:
+            return {
+                "is_duplicate": True,
+                "type": "Lead",
+                "name": l.shop_name,
+                "phone": l.phone,
+                "id": l.id,
+                "category": l.category
+            }
+
+    return {"is_duplicate": False}
+
+async def fetch_whatsapp_contact_info(phone: str):
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(f"{WHATSAPP_ENGINE_URL}/check-contact?phone={phone}")
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception as e:
+        print(f"Failed to check WhatsApp contact for {phone}:", e)
+    return {"connected": False, "exists": False}
+
+@app.get("/api/leads/check-phone")
+async def check_lead_phone(phone: str = Query(...), exclude_id: Optional[int] = Query(None)):
+    result = await sync_to_async(check_phone_duplicate)(phone, exclude_id)
+    return result
+
+@app.get("/api/leads/scan-phone")
+async def scan_lead_phone(phone: str = Query(...)):
+    result = await fetch_whatsapp_contact_info(phone)
+    return result
+
+@app.get("/api/lead-categories")
+async def list_lead_categories():
+    def _get_cats():
+        # Seed default categories if none exist
+        if not LeadCategory.objects.exists():
+            default_cats = [
+                'Fashion', 'Supershop & Grocery', 'Mobile Repair & Tech',
+                'Electronics', 'Wholesale', 'Pharmacy', 'General'
+            ]
+            for c_name in default_cats:
+                LeadCategory.objects.get_or_create(name=c_name)
+        return list(LeadCategory.objects.all().values('id', 'name', 'description', 'created_at'))
+    cats = await sync_to_async(_get_cats)()
+    return cats
+
+@app.post("/api/lead-categories")
+async def create_lead_category(payload: LeadCategoryCreate):
+    def _create():
+        name = payload.name.strip()
+        if not name:
+            return None
+        cat, created = LeadCategory.objects.get_or_create(
+            name=name,
+            defaults={'description': payload.description or ''}
+        )
+        return {"id": cat.id, "name": cat.name, "created": created}
+    res = await sync_to_async(_create)()
+    if not res:
+        raise HTTPException(status_code=400, detail="Category name cannot be empty")
+    return res
+
+@app.get("/api/leads")
+async def list_leads(
+    search: Optional[str] = "",
+    category: Optional[str] = "",
+    status: Optional[str] = "",
+    shop_type: Optional[str] = ""
+):
+    def _query():
+        qs = Lead.objects.all()
+        if search:
+            qs = qs.filter(
+                django.db.models.Q(shop_name__icontains=search) |
+                django.db.models.Q(owner_name__icontains=search) |
+                django.db.models.Q(phone__icontains=search) |
+                django.db.models.Q(address__icontains=search)
+            )
+        if category:
+            qs = qs.filter(category=category)
+        if status:
+            qs = qs.filter(status=status)
+        if shop_type:
+            qs = qs.filter(shop_type=shop_type)
+
+        leads = []
+        for l in qs:
+            leads.append({
+                "id": l.id,
+                "phone": l.phone,
+                "shop_name": l.shop_name,
+                "owner_name": l.owner_name,
+                "category": l.category,
+                "shop_type": l.shop_type,
+                "is_on_whatsapp": l.is_on_whatsapp,
+                "whatsapp_name": l.whatsapp_name,
+                "whatsapp_profile_pic": l.whatsapp_profile_pic,
+                "whatsapp_about": l.whatsapp_about,
+                "status": l.status,
+                "address": l.address,
+                "notes": l.notes,
+                "created_at": l.created_at.isoformat(),
+                "updated_at": l.updated_at.isoformat()
+            })
+        return leads
+
+    result = await sync_to_async(_query)()
+    return result
+
+@app.post("/api/leads")
+async def create_lead(payload: LeadCreate):
+    phone_clean = payload.phone.strip()
+    shop_name_clean = payload.shop_name.strip()
+
+    if not phone_clean or not shop_name_clean:
+        raise HTTPException(status_code=400, detail="Phone number and Shop Name are required")
+
+    # Duplicate checking
+    if not payload.force_save:
+        dup = await sync_to_async(check_phone_duplicate)(phone_clean)
+        if dup["is_duplicate"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "warning": "DUPLICATE_PHONE",
+                    "message": f"Phone number {phone_clean} already exists in {dup['type']} ({dup['name']})!",
+                    "duplicate_type": dup["type"],
+                    "duplicate_name": dup["name"],
+                    "duplicate_id": dup["id"]
+                }
+            )
+
+    # WhatsApp contact enrichment scan
+    wa_info = await fetch_whatsapp_contact_info(phone_clean)
+    is_on_wa = bool(wa_info.get("exists", False))
+    pic_url = wa_info.get("profilePictureUrl") or ""
+    about_text = wa_info.get("about") or ""
+
+    def _save():
+        lead = Lead.objects.create(
+            phone=phone_clean,
+            shop_name=shop_name_clean,
+            owner_name=payload.owner_name.strip() if payload.owner_name else "",
+            category=payload.category or "General",
+            shop_type=payload.shop_type or "Retail",
+            is_on_whatsapp=is_on_wa,
+            whatsapp_profile_pic=pic_url,
+            whatsapp_about=about_text,
+            address=payload.address or "",
+            notes=payload.notes or "",
+            status=payload.status or "NEW"
+        )
+        return {
+            "id": lead.id,
+            "phone": lead.phone,
+            "shop_name": lead.shop_name,
+            "owner_name": lead.owner_name,
+            "category": lead.category,
+            "shop_type": lead.shop_type,
+            "is_on_whatsapp": lead.is_on_whatsapp,
+            "whatsapp_profile_pic": lead.whatsapp_profile_pic,
+            "whatsapp_about": lead.whatsapp_about,
+            "status": lead.status,
+            "created_at": lead.created_at.isoformat()
+        }
+
+    lead_data = await sync_to_async(_save)()
+    return lead_data
+
+@app.put("/api/leads/{lead_id}")
+async def update_lead(lead_id: int, payload: LeadUpdate):
+    def _update():
+        lead = Lead.objects.filter(id=lead_id).first()
+        if not lead:
+            return None
+
+        if payload.shop_name is not None:
+            lead.shop_name = payload.shop_name.strip()
+        if payload.owner_name is not None:
+            lead.owner_name = payload.owner_name.strip()
+        if payload.phone is not None:
+            lead.phone = payload.phone.strip()
+        if payload.category is not None:
+            lead.category = payload.category
+        if payload.shop_type is not None:
+            lead.shop_type = payload.shop_type
+        if payload.status is not None:
+            lead.status = payload.status
+        if payload.address is not None:
+            lead.address = payload.address
+        if payload.notes is not None:
+            lead.notes = payload.notes
+
+        lead.save()
+        return {
+            "id": lead.id,
+            "phone": lead.phone,
+            "shop_name": lead.shop_name,
+            "owner_name": lead.owner_name,
+            "category": lead.category,
+            "shop_type": lead.shop_type,
+            "status": lead.status,
+            "is_on_whatsapp": lead.is_on_whatsapp,
+            "whatsapp_profile_pic": lead.whatsapp_profile_pic,
+            "updated_at": lead.updated_at.isoformat()
+        }
+
+    res = await sync_to_async(_update)()
+    if not res:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return res
+
+@app.delete("/api/leads/{lead_id}")
+async def delete_lead(lead_id: int):
+    def _del():
+        count, _ = Lead.objects.filter(id=lead_id).delete()
+        return count > 0
+    success = await sync_to_async(_del)()
+    if not success:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"success": True, "id": lead_id}
+
+@app.get("/api/leads/export-csv")
+async def export_leads_csv():
+    def _gen_csv():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Shop Name", "Owner Name", "Phone", "Category", "Shop Type", "Status", "On WhatsApp", "Address", "Notes", "Created At"])
+        for l in Lead.objects.all():
+            writer.writerow([
+                l.id,
+                l.shop_name,
+                l.owner_name,
+                l.phone,
+                l.category,
+                l.shop_type,
+                l.status,
+                "Yes" if l.is_on_whatsapp else "No",
+                l.address,
+                l.notes,
+                l.created_at.isoformat()
+            ])
+        output.seek(0)
+        return output.getvalue()
+
+    csv_text = await sync_to_async(_gen_csv)()
+    return StreamingResponse(
+        io.StringIO(csv_text),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads_export.csv"}
+    )
+

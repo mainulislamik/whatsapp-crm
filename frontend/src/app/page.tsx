@@ -29,6 +29,7 @@ import BroadcastSender from '@/components/BroadcastSender';
 import CampaignHistory from '@/components/CampaignHistory';
 import QuickChat from '@/components/QuickChat';
 import WhatsAppConnect from '@/components/WhatsAppConnect';
+import LeadManager from '@/components/LeadManager';
 import { WhatsAppService } from '@/lib/api';
 
 const DRAWER_WIDTH = 280;
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [messageText, setMessageText] = useState<string>('');
+  const [directChatPhone, setDirectChatPhone] = useState<string>('');
   const [historyRefreshKey, setHistoryRefreshKey] = useState<number>(0);
   const [waStatus, setWaStatus] = useState<{ status: string; user?: any; hasQr: boolean } | null>(null);
 
@@ -242,6 +244,16 @@ export default function Dashboard() {
             </Box>
           )}
 
+          {/* 2.1 Lead Management */}
+          {activeSection === 'leads' && (
+            <LeadManager
+              onDirectMessage={(phone) => {
+                setDirectChatPhone(phone);
+                setActiveSection('quickchat');
+              }}
+            />
+          )}
+
           {/* 3. Bulk Broadcast */}
           {activeSection === 'broadcast' && (
             <Box>
@@ -277,7 +289,7 @@ export default function Dashboard() {
           {/* 4. Direct Quick Chat */}
           {activeSection === 'quickchat' && (
             <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-              <QuickChat />
+              <QuickChat initialPhone={directChatPhone} />
             </Box>
           )}
 

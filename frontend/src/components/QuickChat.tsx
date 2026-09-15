@@ -19,8 +19,18 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import CloseIcon from '@mui/icons-material/Close';
 import { WhatsAppService } from '@/lib/api';
 
-export default function QuickChat() {
-  const [phone, setPhone] = useState<string>('');
+interface QuickChatProps {
+  initialPhone?: string;
+}
+
+export default function QuickChat({ initialPhone = '' }: QuickChatProps) {
+  const [phone, setPhone] = useState<string>(initialPhone);
+
+  React.useEffect(() => {
+    if (initialPhone) {
+      setPhone(initialPhone);
+    }
+  }, [initialPhone]);
   const [message, setMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);

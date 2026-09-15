@@ -60,6 +60,31 @@ export interface CampaignLog {
   sent_at?: string;
 }
 
+export interface LeadCategory {
+  id: number;
+  name: string;
+  description?: string;
+  created_at: string;
+}
+
+export interface Lead {
+  id: number;
+  phone: string;
+  shop_name: string;
+  owner_name?: string;
+  category: string;
+  shop_type: string;
+  is_on_whatsapp: boolean;
+  whatsapp_name?: string;
+  whatsapp_profile_pic?: string;
+  whatsapp_about?: string;
+  status: string;
+  address?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const WhatsAppService = {
   getStatus: () => api.get('/whatsapp/status'),
   getQr: () => api.get('/whatsapp/qr'),
@@ -124,6 +149,54 @@ export const BroadcastService = {
   }) => api.post('/campaigns', data),
   cancel: (id: number) => api.post(`/campaigns/${id}/cancel`),
   getExportCsvUrl: (id: number) => `/api/proxy/campaigns/${id}/export-csv`,
+};
+
+export const LeadService = {
+  list: (params?: { search?: string; category?: string; status?: string; shop_type?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.search) q.append('search', params.search);
+    if (params?.category) q.append('category', params.category);
+    if (params?.status) q.append('status', params.status);
+    if (params?.shop_type) q.append('shop_type', params.shop_type);
+    const queryStr = q.toString() ? `?${q.toString()}` : '';
+    return api.get<Lead[]>(`/leads${queryStr}`);
+  },
+  create: (data: {
+    phone: string;
+    shop_name: string;
+    owner_name?: string;
+    category?: string;
+    shop_type?: string;
+    address?: string;
+    notes?: string;
+    status?: string;
+    force_save?: boolean;
+  }) => api.post<Lead>('/leads', data),
+  update: (id: number, data: Partial<Lead>) => api.put<Lead>(`/leads/${id}`, data),
+  delete: (id: number) => api.delete(`/leads/${id}`),
+  checkPhone: (phone: string, excludeId?: number) =>
+    api.get<{
+      is_duplicate: boolean;
+      type?: 'Contact' | 'Lead';
+      name?: string;
+      phone?: string;
+      id?: number;
+      category?: string;
+    }>(`/leads/check-phone?phone=${encodeURIComponent(phone)}${excludeId ? `&exclude_id=${excludeId}` : ''}`),
+  scanWhatsApp: (phone: string) =>
+    api.get<{
+      connected: boolean;
+      exists: boolean;
+      phone: string;
+      jid?: string;
+      profilePictureUrl?: string | null;
+      about?: string | null;
+      message?: string;
+    }>(`/leads/scan-phone?phone=${encodeURIComponent(phone)}`),
+  listCategories: () => api.get<LeadCategory[]>('/lead-categories'),
+  createCategory: (data: { name: string; description?: string }) =>
+    api.post<LeadCategory>('/lead-categories', data),
+  getExportCsvUrl: () => '/api/proxy/leads/export-csv',
 };
 
 export default api;
