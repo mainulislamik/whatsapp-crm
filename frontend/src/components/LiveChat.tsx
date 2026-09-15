@@ -71,6 +71,8 @@ export default function LiveChat({ onBack }: LiveChatProps) {
 
   const [chats, setChats] = useState<ChatListItem[]>([]);
   const [selectedChat, setSelectedChat] = useState<ChatListItem | null>(null);
+  const selectedPhoneRef = useRef<string | null>(null);
+  selectedPhoneRef.current = selectedChat?.phone || null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -112,7 +114,14 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   const fetchChats = async () => {
     try {
       const res = await ChatService.list();
-      setChats(res.data || []);
+      const rawChats: ChatListItem[] = res.data || [];
+      const updated = rawChats.map((c) => {
+        if (selectedPhoneRef.current && selectedPhoneRef.current === c.phone) {
+          return { ...c, unread_count: 0 };
+        }
+        return c;
+      });
+      setChats(updated);
     } catch (err) {
       console.error('Failed to fetch chats:', err);
     }
@@ -171,9 +180,14 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   }, [selectedChat?.phone]);
 
   const handleSelectChat = (chat: ChatListItem) => {
+    selectedPhoneRef.current = chat.phone;
     setSelectedChat(chat);
     setPendingFile(null);
     setMessageText('');
+    setChats((prev) =>
+      prev.map((c) => (c.phone === chat.phone ? { ...c, unread_count: 0 } : c))
+    );
+    ChatService.markRead(chat.phone).catch(() => {});
   };
 
   // Format timestamps nicely like WhatsApp Web

@@ -406,6 +406,36 @@ async function connectToWhatsApp() {
   });
 
   // Handle real-time incoming and outgoing messages
+  // Sync read receipts when read on main WhatsApp phone / web
+  sock.ev.on('chats.update', async (updates) => {
+    if (Array.isArray(updates)) {
+      for (const u of updates) {
+        if (u.unreadCount === 0 || u.read === true) {
+          const rawId = u.id;
+          const { phone } = resolvePhoneAndName(rawId, null, null);
+          if (phone) {
+            try {
+              const req = http.request({
+                hostname: 'backend',
+                port: 8000,
+                path: `/api/chats/${encodeURIComponent(phone)}/read`,
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': 2
+                },
+                timeout: 3000
+              }, () => {});
+              req.on('error', () => {});
+              req.write('{}');
+              req.end();
+            } catch (e) {}
+          }
+        }
+      }
+    }
+  });
+
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (Array.isArray(messages)) {
       for (const m of messages) {
@@ -625,6 +655,33 @@ app.get('/check-contact', async (req, res) => {
 });
 
 // Send Message Endpoint (supports text, image, audio, document, video)
+// Mark messages as read on WhatsApp
+app.post('/mark-read', async (req, res) => {
+  try {
+    const { jid, phone, keys } = req.body;
+    if (!sock) {
+      return res.status(400).json({ error: 'WhatsApp socket not connected' });
+    }
+
+    if (Array.isArray(keys) && keys.length > 0) {
+      const formattedKeys = keys.map(k => ({
+        remoteJid: k.remoteJid || (k.jid ? k.jid : formatJID(phone || jid)),
+        id: k.id || k.whatsapp_msg_id,
+        participant: k.participant || undefined
+      }));
+      await sock.readMessages(formattedKeys);
+    } else if (jid || phone) {
+      const targetJid = jid || formatJID(phone);
+      await sock.chatModify({ markRead: true, lastMessages: [] }, targetJid);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error in /mark-read:', err);
+    res.status(500).json({ error: err.message || 'Failed to mark read' });
+  }
+});
+
 app.post('/send-message', async (req, res) => {
   try {
     const { phone, message, text, mediaType, mediaUrl, mediaBase64, fileName, mimeType } = req.body;

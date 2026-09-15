@@ -1096,10 +1096,21 @@ async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None 
 @app.post("/api/chats/{phone}/read")
 async def mark_chat_read(phone: str):
     def _mark_read():
-        ChatMessage.objects.filter(phone=phone, is_from_me=False, is_read=False).update(is_read=True)
+        unread_qs = ChatMessage.objects.filter(phone=phone, is_from_me=False, is_read=False)
+        keys = [{'remoteJid': m.jid or f'{phone}@s.whatsapp.net', 'id': m.whatsapp_msg_id} for m in unread_qs if m.whatsapp_msg_id]
+        unread_qs.update(is_read=True)
+        return keys
 
-    await sync_to_async(_mark_read)()
-    return {"success": True, "phone": phone}
+    keys = await sync_to_async(_mark_read)()
+    
+    # Notify WhatsApp Engine to send read receipts (Blue Ticks) to WhatsApp
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(f'{WHATSAPP_ENGINE_URL}/mark-read', json={'phone': phone, 'keys': keys})
+    except Exception:
+        pass
+
+    return {'success': True, 'phone': phone}
 
 
 # --- SEND MESSAGE (via WhatsApp Engine) ---
