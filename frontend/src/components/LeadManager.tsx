@@ -2189,36 +2189,47 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
 
                           <TableCell>
                             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                              <Avatar
-                                src={lead.whatsapp_profile_pic || lead.profile_pic}
-                                sx={{
-                                  width: 38,
-                                  height: 38,
-                                  borderRadius: 2,
-                                  bgcolor: '#e2e8f0',
-                                  color: '#334155',
-                                  fontWeight: 700,
-                                  fontSize: '0.875rem',
-                                  cursor: (lead.whatsapp_profile_pic || lead.profile_pic) ? 'pointer' : 'default',
-                                  border: '1px solid #cbd5e1',
-                                  '&:hover': (lead.whatsapp_profile_pic || lead.profile_pic) ? {
-                                    transform: 'scale(1.08)',
-                                    borderColor: '#6366f1',
-                                  } : {},
-                                }}
-                                onClick={() => {
-                                  const imgUrl = lead.whatsapp_profile_pic || lead.profile_pic;
-                                  if (imgUrl) {
-                                    setPreviewImage({
-                                      url: imgUrl,
-                                      title: lead.shop_name,
-                                      subtitle: `${lead.phone} • ${lead.address || 'Shop Profile'}`,
-                                    });
-                                  }
-                                }}
-                              >
-                                {lead.shop_name.charAt(0)}
-                              </Avatar>
+                              {(lead.whatsapp_profile_pic || lead.profile_pic) ? (
+                                <Avatar
+                                  src={lead.whatsapp_profile_pic || lead.profile_pic}
+                                  sx={{
+                                    width: 38,
+                                    height: 38,
+                                    borderRadius: 2,
+                                    cursor: 'pointer',
+                                    border: '1px solid #cbd5e1',
+                                    '&:hover': {
+                                      transform: 'scale(1.08)',
+                                      borderColor: '#6366f1',
+                                    },
+                                  }}
+                                  onClick={() => {
+                                    const imgUrl = lead.whatsapp_profile_pic || lead.profile_pic;
+                                    if (imgUrl) {
+                                      setPreviewImage({
+                                        url: imgUrl,
+                                        title: lead.shop_name,
+                                        subtitle: `${lead.phone} • ${lead.address || 'Shop Profile'}`,
+                                      });
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <Avatar
+                                  sx={{
+                                    width: 38,
+                                    height: 38,
+                                    borderRadius: 2,
+                                    bgcolor: '#f1f5f9',
+                                    color: '#475569',
+                                    fontWeight: 800,
+                                    fontSize: '0.9rem',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  {lead.shop_name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              )}
                               <Box>
                                 <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a' }}>
                                   {lead.shop_name}

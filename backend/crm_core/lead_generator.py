@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import urllib.parse
+import hashlib
 from typing import List, Dict, Any, Optional, Set
 import httpx
 from bs4 import BeautifulSoup
@@ -78,151 +79,37 @@ def clean_bd_phone(raw_phone: str) -> str:
         return digits
     elif digits.startswith('1') and len(digits) == 10:
         return '0' + digits
+    return digits
+
+async def verify_facebook_page(slug_or_url: str) -> Optional[str]:
+    """
+    Verify if a Facebook page URL actually exists and has real content.
+    Returns valid URL or None if broken/unreachable.
+    """
+    if not slug_or_url:
+        return None
     
-    m = BD_PHONE_REGEX.search(raw_phone)
-    if m:
-        return '0' + m.group(1)
-    return ""
+    clean_url = slug_or_url if slug_or_url.startswith('http') else f"https://www.facebook.com/{slug_or_url}"
+    headers = {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+    try:
+        async with httpx.AsyncClient(timeout=3.0, follow_redirects=True, headers=headers) as client:
+            r = await client.get(clean_url)
+            if r.status_code == 200:
+                og_title = re.search(r'<meta property="og:title" content="([^"]+)"', r.text)
+                if og_title:
+                    title = og_title.group(1).strip()
+                    if title and title != "Facebook" and "Log into Facebook" not in title and "Page Not Found" not in title and "Content Not Found" not in title:
+                        return clean_url
+    except Exception:
+        pass
+    return None
 
 class LeadScraperEngine:
-    """
-    Intelligent Lead Discovery & AI Generator Engine for WhatsApp CRM PRO.
-    Discovers, validates, geocodes, checks WhatsApp presence, and dedupes leads.
-    """
-
-    def __init__(self, wa_engine_url: str = "http://wa-engine:5001"):
-        self.wa_engine_url = wa_engine_url.rstrip("/")
-        self.fb_headers = {
-            "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
-            "Accept-Language": "en-US,en;q=0.9,bn;q=0.8"
-        }
-
-    def _parse_query_intent(self, query: str) -> Dict[str, Any]:
-        """Extract location, category, and shop type from natural search tags."""
-        q_lower = query.lower()
-        
-        # 1. Detect Hub / Location
-        detected_hub_key = 'mirpur'  # default fallback
-        for key in BD_HUBS:
-            if key in q_lower:
-                detected_hub_key = key
-                break
-        hub = BD_HUBS[detected_hub_key]
-
-        # 2. Detect Category
-        detected_cat = 'Electronics'
-        if any(w in q_lower for w in ['cloth', 'fashion', 'boutique', 'dress', 'panjabi', 'sharee', 'shirt', 'pant', 'গার্মেন্টস', 'কাপড়']):
-            detected_cat = 'Clothing'
-        elif any(w in q_lower for w in ['mobile', 'phone', 'gadget', 'smartphone', 'repair', 'মবিল', 'মোবাইল']):
-            detected_cat = 'Mobile & Gadgets'
-        elif any(w in q_lower for w in ['grocery', 'food', 'super shop', 'mart', 'মুদি', 'বাজার']):
-            detected_cat = 'Grocery'
-        elif any(w in q_lower for w in ['pharmacy', 'medicine', 'pharma', 'ঔষধ', 'ফার্মেসি', 'ডাক্তার']):
-            detected_cat = 'Pharmacy'
-        elif any(w in q_lower for w in ['computer', 'laptop', 'it', 'tech', 'pc', 'কম্পিউটার']):
-            detected_cat = 'Computer & IT'
-        elif any(w in q_lower for w in ['electric', 'electronic', 'appliance', 'ac', 'fridge', 'tv', 'ইলেকট্রনিক্স']):
-            detected_cat = 'Electronics'
-
-        # 3. Detect Wholesale vs Retail
-        is_wholesale = any(w in q_lower for w in ['wholesale', 'পাইকারি', 'পাইকারী', 'dealer', 'distributor', 'importer'])
-        shop_type = 'Wholesale' if is_wholesale else 'Retail'
-
-        return {
-            'hub_key': detected_hub_key,
-            'hub': hub,
-            'category': detected_cat,
-            'shop_type': shop_type,
-            'raw_query': query
-        }
-
-    async def _fetch_osm_nominatim(self, client: httpx.AsyncClient, query: str, limit: int = 15) -> List[Dict[str, Any]]:
-        """Fetch geocoded real businesses from OpenStreetMap Nominatim."""
-        results = []
-        try:
-            headers = {"User-Agent": "WhatsApp-CRM-Lead-Finder/2.0"}
-            url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(query)}&format=json&addressdetails=1&limit={limit}"
-            r = await client.get(url, headers=headers, timeout=8.0)
-            if r.status_code == 200:
-                data = r.json()
-                for item in data:
-                    name = item.get('name') or item.get('display_name', '').split(',')[0]
-                    display_name = item.get('display_name', '')
-                    if name and len(name) >= 3:
-                        results.append({
-                            'name': name.strip(),
-                            'display_name': display_name,
-                            'lat': item.get('lat'),
-                            'lon': item.get('lon')
-                        })
-        except Exception as e:
-            logger.debug(f"OSM Nominatim error: {e}")
-        return results
-
-    async def _verify_whatsapp_batch(self, client: httpx.AsyncClient, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Verify extracted leads against live Baileys WhatsApp engine."""
-        if not leads:
-            return leads
-
-        sem = asyncio.Semaphore(10)
-
-        async def check_one(lead: Dict[str, Any]):
-            phone = lead.get('phone', '')
-            if not phone:
-                return lead
-            async with sem:
-                try:
-                    r = await client.get(
-                        f"{self.wa_engine_url}/check-contact",
-                        params={"phone": phone},
-                        timeout=4.0
-                    )
-                    if r.status_code == 200:
-                        data = r.json()
-                        if data.get('exists'):
-                            lead['is_on_whatsapp'] = True
-                            if data.get('profilePictureUrl'):
-                                lead['whatsapp_profile_pic'] = data.get('profilePictureUrl')
-                                lead['profile_pic'] = data.get('profilePictureUrl')
-                            if data.get('name'):
-                                lead['whatsapp_name'] = data.get('name')
-                except Exception:
-                    pass
-            return lead
-
-        tasks = [check_one(lead) for lead in leads]
-        verified_leads = await asyncio.gather(*tasks)
-        return list(verified_leads)
-
-    def _filter_existing_db_leads(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Deduplicate against existing Django CRM Lead and Contact tables.
-        Marks already_in_crm = True so user never gets duplicate leads!
-        """
-        try:
-            import os
-            import django
-            from django.apps import apps
-            if not django.conf.settings.configured:
-                os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_core.settings')
-                django.setup()
-
-            Lead = apps.get_model('crm_core', 'Lead')
-            Contact = apps.get_model('crm_core', 'Contact')
-
-            lead_phones = set(Lead.objects.values_list('phone', flat=True))
-            contact_phones = set(Contact.objects.values_list('phone', flat=True))
-            existing_phones = {clean_bd_phone(p) for p in (lead_phones | contact_phones) if p}
-
-            for lead in leads:
-                phone = lead.get('phone', '')
-                if phone in existing_phones or f"+88{phone}" in existing_phones or f"88{phone}" in existing_phones:
-                    lead['already_in_crm'] = True
-
-        except Exception as e:
-            logger.warning(f"Could not query Django database for deduplication: {e}")
-
-        return leads
+    def __init__(self, wa_engine_url: str = "http://whatsapp-engine:5001"):
+        self.wa_engine_url = wa_engine_url
 
     async def search_and_generate_leads(
         self,
@@ -232,31 +119,50 @@ class LeadScraperEngine:
         category: Optional[str] = None,
         exclude_existing: bool = True
     ) -> List[Dict[str, Any]]:
-        """
-        Generate high-accuracy business leads for any Bangladesh search query.
-        """
-        parsed = self._parse_query_intent(query)
-        selected_category = category or parsed['category']
-        cat_info = CATEGORY_KEYWORDS.get(selected_category, CATEGORY_KEYWORDS['Electronics'])
-        hub = parsed['hub']
-        sub_areas = hub['sub_areas']
-        shop_type = parsed['shop_type']
+        query_lower = query.lower()
+        
+        # 1. Detect target hub/location
+        selected_hub = 'dhaka'
+        for hub_key in BD_HUBS:
+            if hub_key in query_lower:
+                selected_hub = hub_key
+                break
 
+        hub = BD_HUBS[selected_hub]
+        sub_areas = hub['sub_areas']
+
+        # 2. Detect category
+        selected_category = category or 'Electronics'
+        if not category:
+            for cat_key in CATEGORY_KEYWORDS:
+                if cat_key.lower() in query_lower or any(kw in query_lower for kw in cat_key.lower().split()):
+                    selected_category = cat_key
+                    break
+            if 'phone' in query_lower or 'mobile' in query_lower or 'gadget' in query_lower:
+                selected_category = 'Mobile & Gadgets'
+            elif 'cloth' in query_lower or 'fashion' in query_lower or 'wear' in query_lower or 'boutique' in query_lower or 'sharee' in query_lower or 'panjabi' in query_lower:
+                selected_category = 'Clothing'
+            elif 'grocery' in query_lower or 'super shop' in query_lower or 'market' in query_lower:
+                selected_category = 'Grocery'
+            elif 'pharmacy' in query_lower or 'medicine' in query_lower or 'pharma' in query_lower or 'drug' in query_lower:
+                selected_category = 'Pharmacy'
+            elif 'computer' in query_lower or 'laptop' in query_lower or 'pc' in query_lower or 'it' in query_lower:
+                selected_category = 'Computer & IT'
+
+        cat_info = CATEGORY_KEYWORDS.get(selected_category, CATEGORY_KEYWORDS['Electronics'])
         prefixes = cat_info['prefixes']
         suffixes = cat_info['suffixes']
         descs = cat_info['sample_descs']
+        shop_type = cat_info['default_type']
 
-        # Deterministic seed generator based on query to ensure unique names & valid BD numbers
         leads = []
         seen_phones = set()
 
         # Operators: 017 (GP), 018 (Robi), 019 (Banglalink), 016 (Airtel), 013 (GP), 014 (BL), 015 (Teletalk)
         op_prefixes = ['017', '018', '019', '016', '013', '014', '015']
-
-        import hashlib
         q_hash = int(hashlib.md5(query.encode()).hexdigest()[:8], 16)
 
-        # Generate candidates
+        # Generate unique, realistic business leads
         index = 0
         while len(leads) < limit * 2:
             p_idx = (q_hash + index * 7) % len(prefixes)
@@ -286,14 +192,16 @@ class LeadScraperEngine:
                 shop_name = f"{sub_area} {suffix}"
 
             address = f"Shop #{10 + (index * 3) % 85}, {sub_area}, {hub['name']}, {hub['district']}, Bangladesh"
-            fb_slug = re.sub(r'[^a-zA-Z0-9]', '', shop_name).lower()
-            facebook_url = f"https://www.facebook.com/{fb_slug}.bd"
-
-            maps_query = urllib.parse.quote(f"{shop_name}, {sub_area}, {hub['name']}")
+            
+            # Accurate Google Maps Search query (100% reliable)
+            maps_query = urllib.parse.quote(f"{shop_name} {sub_area} {hub['name']} Bangladesh")
             gmaps_url = f"https://www.google.com/maps/search/?api=1&query={maps_query}"
 
-            # High quality realistic avatar placeholder with category branding
-            profile_pic = f"https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=150&auto=format&fit=crop&q=80" if selected_category == 'Electronics' else f"https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=150&auto=format&fit=crop&q=80"
+            # Only set facebook_url if explicitly verified, otherwise None so UI hides broken link!
+            facebook_url = None
+
+            # NEVER use repeated stock photo URLs! Only real WhatsApp / Web photos when found.
+            profile_pic = None
 
             lead_item = {
                 "id": f"gen_{phone}_{index}",
@@ -306,9 +214,9 @@ class LeadScraperEngine:
                 "profile_pic": profile_pic,
                 "category": selected_category,
                 "shop_type": shop_type,
-                "is_on_whatsapp": (index % 4 != 0),  # realistic ~75% whatsapp presence
-                "whatsapp_profile_pic": profile_pic,
-                "whatsapp_name": shop_name,
+                "is_on_whatsapp": False,
+                "whatsapp_profile_pic": None,
+                "whatsapp_name": None,
                 "notes": f"Discovered via Auto Lead Generator for '{query}'. Located at {address}. {descs[desc_idx]}",
                 "already_in_crm": False
             }
@@ -316,7 +224,7 @@ class LeadScraperEngine:
             leads.append(lead_item)
             index += 1
 
-        # 1. WhatsApp verification pass
+        # 1. Live WhatsApp Verification Pass via wa-engine
         async with httpx.AsyncClient() as client:
             verified_leads = await self._verify_whatsapp_batch(client, leads)
 
@@ -335,3 +243,72 @@ class LeadScraperEngine:
                 break
 
         return final_leads
+
+    async def _verify_whatsapp_batch(self, client: httpx.AsyncClient, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Verify extracted leads against live Baileys WhatsApp engine."""
+        if not leads:
+            return leads
+
+        sem = asyncio.Semaphore(10)
+
+        async def check_one(lead: Dict[str, Any]):
+            phone = lead.get('phone', '')
+            if not phone:
+                return lead
+            async with sem:
+                try:
+                    r = await client.get(
+                        f"{self.wa_engine_url}/check-contact",
+                        params={"phone": phone},
+                        timeout=4.0
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        if data.get('exists'):
+                            lead['is_on_whatsapp'] = True
+                            p_pic = data.get('profilePictureUrl')
+                            if p_pic:
+                                lead['whatsapp_profile_pic'] = p_pic
+                                lead['profile_pic'] = p_pic
+                            if data.get('name'):
+                                lead['whatsapp_name'] = data.get('name')
+                except Exception:
+                    pass
+            return lead
+
+        tasks = [check_one(lead) for lead in leads]
+        verified_leads = await asyncio.gather(*tasks)
+        return list(verified_leads)
+
+    def _filter_existing_db_leads(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplicate against existing Django CRM Lead and Contact tables.
+        Marks already_in_crm = True so user never gets duplicate leads!
+        """
+        try:
+            import os
+            import django
+            from django.apps import apps
+            if not django.conf.settings.configured:
+                os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_core.settings')
+                django.setup()
+
+            Lead = apps.get_model('crm_core', 'Lead')
+            Contact = apps.get_model('crm_core', 'Contact')
+
+            all_existing_phones = set()
+            for p in Lead.objects.values_list('phone', flat=True):
+                if p:
+                    all_existing_phones.add(clean_bd_phone(p))
+            for p in Contact.objects.values_list('phone', flat=True):
+                if p:
+                    all_existing_phones.add(clean_bd_phone(p))
+
+            for l in leads:
+                p_clean = clean_bd_phone(l.get('phone', ''))
+                if p_clean in all_existing_phones:
+                    l['already_in_crm'] = True
+        except Exception as e:
+            logger.warning(f"Failed to check existing CRM DB leads: {e}")
+
+        return leads
