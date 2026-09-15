@@ -72,6 +72,74 @@ export async function POST(
   }
 }
 
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { path: string[] } }
+) {
+  const path = params.path.join("/");
+  const targetUrl = `${BACKEND_URL}/api/${path}`;
+
+  try {
+    const contentType = request.headers.get("content-type") || "";
+    let body: any = undefined;
+    let headers: Record<string, string> = { Accept: "application/json" };
+
+    if (contentType.includes("application/json")) {
+      const text = await request.text();
+      if (text && text.trim()) {
+        body = text;
+        headers["Content-Type"] = "application/json";
+      }
+    } else if (contentType.includes("multipart/form-data")) {
+      body = await request.formData();
+    }
+
+    const res = await fetch(targetUrl, {
+      method: "PUT",
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+      body,
+    });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 502 });
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { path: string[] } }
+) {
+  const path = params.path.join("/");
+  const targetUrl = `${BACKEND_URL}/api/${path}`;
+
+  try {
+    const contentType = request.headers.get("content-type") || "";
+    let body: any = undefined;
+    let headers: Record<string, string> = { Accept: "application/json" };
+
+    if (contentType.includes("application/json")) {
+      const text = await request.text();
+      if (text && text.trim()) {
+        body = text;
+        headers["Content-Type"] = "application/json";
+      }
+    } else if (contentType.includes("multipart/form-data")) {
+      body = await request.formData();
+    }
+
+    const res = await fetch(targetUrl, {
+      method: "PATCH",
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+      body,
+    });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 502 });
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { path: string[] } }

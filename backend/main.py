@@ -856,6 +856,9 @@ async def create_lead(payload: LeadCreate):
     return lead_data
 
 @app.put("/api/leads/{lead_id}")
+@app.put("/api/leads/{lead_id}/")
+@app.patch("/api/leads/{lead_id}")
+@app.patch("/api/leads/{lead_id}/")
 async def update_lead(lead_id: int, payload: LeadUpdate):
     def _update():
         lead = Lead.objects.filter(id=lead_id).first()
@@ -899,6 +902,7 @@ async def update_lead(lead_id: int, payload: LeadUpdate):
     return res
 
 @app.delete("/api/leads/{lead_id}")
+@app.delete("/api/leads/{lead_id}/")
 async def delete_lead(lead_id: int):
     def _del():
         count, _ = Lead.objects.filter(id=lead_id).delete()

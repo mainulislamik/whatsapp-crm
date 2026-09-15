@@ -199,9 +199,9 @@ export const LeadService = {
     notes?: string;
     status?: string;
     force_save?: boolean;
-  }) => api.post<Lead>('/leads', data),
-  update: (id: number, data: Partial<Lead>) => api.put<Lead>(`/leads/${id}`, data),
-  delete: (id: number) => api.delete(`/leads/${id}`),
+  }) => api.post<Lead>('/leads/', data),
+  update: (id: number, data: Partial<Lead>) => api.put<Lead>(`/leads/${id}/`, data),
+  delete: (id: number) => api.delete(`/leads/${id}/`),
   checkPhone: (phone: string, excludeId?: number) =>
     api.get<{
       is_duplicate: boolean;
