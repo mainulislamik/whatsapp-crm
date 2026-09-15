@@ -242,33 +242,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 />
               </Box>
 
-              {/* Quick autofill helper badge */}
-              <Paper
-                onClick={fillCredentials}
-                elevation={0}
-                sx={{
-                  p: 1.25,
-                  bgcolor: '#0f172a',
-                  border: '1px dashed #334155',
-                  borderRadius: 2,
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: '#1e293b', borderColor: '#25D366' },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <KeyIcon sx={{ color: '#25D366', fontSize: 18 }} />
-                  <Typography variant="caption" sx={{ color: '#94a3b8', flexGrow: 1 }}>
-                    Quick Fill Demo Credentials
-                  </Typography>
-                  <Chip
-                    label="stockwhisk"
-                    size="small"
-                    sx={{ height: 20, fontSize: '0.65rem', bgcolor: '#334155', color: '#cbd5e1' }}
-                  />
-                </Stack>
-              </Paper>
-
               <Button
                 type="submit"
                 fullWidth
