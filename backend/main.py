@@ -1081,14 +1081,18 @@ async def get_chat_list():
                         data = resp.json()
                         _chat_meta_cache[jid] = data
                         pic = pic or data.get('profilePictureUrl')
-                        if (not name or name == c['phone'] or name == 'WhatsApp Group') and data.get('name'):
+                        if (not name or name == c['phone'] or name == 'WhatsApp Group' or '(WhatsApp Group)' in str(name) or c['is_group']) and data.get('name'):
                             name = data.get('name')
                 except Exception:
                     pass
             
+            disp_name = name or c['phone']
+            while disp_name.startswith('00') and len(disp_name) > 2:
+                disp_name = disp_name[1:]
+            
             final_chats.append({
                 'phone': c['phone'],
-                'name': name or c['phone'],
+                'name': disp_name,
                 'jid': jid,
                 'last_message': c['last_message'],
                 'last_message_time': c['last_message_time'],
