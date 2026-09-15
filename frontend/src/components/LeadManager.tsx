@@ -36,6 +36,9 @@ import {
   Grid,
   Tabs,
   Tab,
+  Snackbar,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import AddIcon from '@mui/icons-material/Add';
@@ -63,8 +66,14 @@ import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import StarsIcon from '@mui/icons-material/Stars';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
+import MapIcon from '@mui/icons-material/Map';
+import FacebookIcon from '@mui/icons-material/Facebook';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 
-import { Lead, LeadCategory, LeadService, ChatService } from '@/lib/api';
+import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead } from '@/lib/api';
 
 interface LeadManagerProps {
   onDirectMessage?: (phone: string) => void;
@@ -104,6 +113,30 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
 
   // Full Image Preview / Lightbox Modal State
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
+
+  // 🤖 Auto Lead Generator Hub State
+  const [openAutoGenerator, setOpenAutoGenerator] = useState<boolean>(false);
+  const [genQuery, setGenQuery] = useState<string>('electronics shop in mirpur');
+  const [genLimit, setGenLimit] = useState<number>(50);
+  const [genOnlyWhatsapp, setGenOnlyWhatsapp] = useState<boolean>(false);
+  const [genCategory, setGenCategory] = useState<string>('Electronics');
+  const [generatingLeads, setGeneratingLeads] = useState<boolean>(false);
+  const [stagedLeads, setStagedLeads] = useState<GeneratedLead[]>([]);
+  const [selectedStagedIds, setSelectedStagedIds] = useState<Set<string>>(new Set());
+  const [importingStaged, setImportingStaged] = useState<boolean>(false);
+  const [editingStagedLead, setEditingStagedLead] = useState<GeneratedLead | null>(null);
+  const [batchCategoryAssign, setBatchCategoryAssign] = useState<string>('Electronics');
+
+  // Snackbar Notification State
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
+
+  const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
 
   // Add / Edit Modal State
   const [openModal, setOpenModal] = useState<boolean>(false);
@@ -295,6 +328,123 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     } finally {
       setSendingQuickMsg(false);
     }
+  };
+
+  // =========================================================================
+  // 🤖 AUTO LEAD GENERATOR LOGIC
+  // =========================================================================
+  const handleStartLeadGeneration = async () => {
+    if (!genQuery.trim()) {
+      showNotification('Please enter a search query or tag (e.g. electronics in mirpur)', 'warning');
+      return;
+    }
+    setGeneratingLeads(true);
+    setSelectedStagedIds(new Set());
+    try {
+      const res = await LeadService.autoGenerate({
+        query: genQuery.trim(),
+        limit: genLimit,
+        only_whatsapp: genOnlyWhatsapp,
+        category: genCategory !== 'All' ? genCategory : undefined,
+        exclude_existing: true,
+      });
+      const fetched = res.data.leads || [];
+      setStagedLeads(fetched);
+      const allIds = new Set(fetched.map((l: GeneratedLead) => l.id));
+      setSelectedStagedIds(allIds);
+      showNotification(`Discovered ${res.data.count} targeted businesses!`, 'success');
+    } catch (e: any) {
+      console.error(e);
+      showNotification(e?.response?.data?.detail || 'Failed to generate leads. Please try again.', 'error');
+    } finally {
+      setGeneratingLeads(false);
+    }
+  };
+
+  const handleToggleSelectStaged = (id: string) => {
+    setSelectedStagedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllStaged = () => {
+    if (selectedStagedIds.size === stagedLeads.length) {
+      setSelectedStagedIds(new Set());
+    } else {
+      setSelectedStagedIds(new Set(stagedLeads.map((l) => l.id)));
+    }
+  };
+
+  const handleImportSelectedStaged = async () => {
+    const toImport = stagedLeads.filter((l) => selectedStagedIds.has(l.id) && !l.already_in_crm);
+    if (toImport.length === 0) {
+      showNotification('Please select at least one new business to assign to leads', 'warning');
+      return;
+    }
+    setImportingStaged(true);
+    try {
+      const payload = toImport.map((l) => ({
+        ...l,
+        category: batchCategoryAssign || l.category || 'General',
+      }));
+      const res = await LeadService.batchImport(payload);
+      showNotification(`Successfully assigned ${res.data.imported_count} leads to CRM!`, 'success');
+      const importedPhones = new Set((res.data.imported || []).map((i: any) => i.phone));
+      setStagedLeads((prev) =>
+        prev.map((l) => (importedPhones.has(l.phone) ? { ...l, already_in_crm: true } : l))
+      );
+      setSelectedStagedIds((prev) => {
+        const next = new Set(prev);
+        toImport.forEach((l) => {
+          if (importedPhones.has(l.phone)) next.delete(l.id);
+        });
+        return next;
+      });
+      fetchLeadsAndCategories();
+    } catch (e: any) {
+      console.error(e);
+      showNotification(e?.response?.data?.detail || 'Failed to import selected leads', 'error');
+    } finally {
+      setImportingStaged(false);
+    }
+  };
+
+  const handleImportSingleStaged = async (lead: GeneratedLead) => {
+    setImportingStaged(true);
+    try {
+      const payload = [{
+        ...lead,
+        category: batchCategoryAssign || lead.category || 'General',
+      }];
+      const res = await LeadService.batchImport(payload);
+      showNotification(`Added ${lead.shop_name} to CRM Leads!`, 'success');
+      setStagedLeads((prev) =>
+        prev.map((l) => (l.id === lead.id ? { ...l, already_in_crm: true } : l))
+      );
+      setSelectedStagedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
+      fetchLeadsAndCategories();
+    } catch (e: any) {
+      console.error(e);
+      showNotification('Failed to import lead', 'error');
+    } finally {
+      setImportingStaged(false);
+    }
+  };
+
+  const handleSaveEditedStagedLead = (updated: GeneratedLead) => {
+    setStagedLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    setEditingStagedLead(null);
+    showNotification('Updated lead details!', 'success');
   };
 
   const handleOpenAdd = () => {
@@ -532,6 +682,24 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
               sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, color: '#334155', borderColor: '#cbd5e1' }}
             >
               Export CSV
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<SmartToyIcon />}
+              onClick={() => setOpenAutoGenerator(true)}
+              sx={{
+                fontWeight: 700,
+                borderRadius: 2,
+                textTransform: 'none',
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                boxShadow: '0 3px 12px rgba(99, 102, 241, 0.35)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                },
+              }}
+            >
+              🤖 Auto Lead Generator
             </Button>
             <Button
               variant="contained"
@@ -1686,6 +1854,694 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
       </Dialog>
 
       {/* ========================================================================= */}
+      {/* 🤖 AUTO LEAD GENERATOR & DISCOVERY MODAL */}
+      {/* ========================================================================= */}
+      <Dialog
+        open={openAutoGenerator}
+        onClose={() => setOpenAutoGenerator(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            bgcolor: '#0f172a',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            py: 2,
+            px: 3,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                bgcolor: 'rgba(99, 102, 241, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#818cf8',
+              }}
+            >
+              <SmartToyIcon />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2, color: '#ffffff' }}>
+                Automatic AI Lead Generator & Discovery Hub
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                Search Google Maps, Facebook & Web for targeted businesses across Bangladesh with live WhatsApp check.
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton onClick={() => setOpenAutoGenerator(false)} sx={{ color: '#94a3b8', '&:hover': { color: '#ffffff' } }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: { xs: 2, sm: 3 }, flex: 1, overflowY: 'auto' }}>
+          {/* Search Box & Controls */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              mb: 3,
+              bgcolor: '#f8fafc',
+              borderRadius: 2.5,
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SearchIcon fontSize="small" sx={{ color: '#6366f1' }} /> Targeted Business Search Criteria
+            </Typography>
+
+            <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+              <Grid item xs={12} md={5}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Search Tag / Keyword / Location"
+                  placeholder="e.g. electronics shop in mirpur, clothing store in uttara"
+                  value={genQuery}
+                  onChange={(e) => setGenQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleStartLeadGeneration();
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={6} sm={3} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Result Limit</InputLabel>
+                  <Select
+                    value={genLimit}
+                    label="Result Limit"
+                    onChange={(e) => setGenLimit(Number(e.target.value))}
+                  >
+                    <MenuItem value={10}>10 Shops</MenuItem>
+                    <MenuItem value={25}>25 Shops</MenuItem>
+                    <MenuItem value={50}>50 Shops (Standard)</MenuItem>
+                    <MenuItem value={100}>100 Shops (Deep Scan)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={6} sm={3} md={2.5}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Default Category</InputLabel>
+                  <Select
+                    value={genCategory}
+                    label="Default Category"
+                    onChange={(e) => {
+                      setGenCategory(e.target.value);
+                      setBatchCategoryAssign(e.target.value);
+                    }}
+                  >
+                    <MenuItem value="All">Auto-Detect</MenuItem>
+                    {categories.map((c) => (
+                      <MenuItem key={c.id} value={c.name}>
+                        {c.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={2.5}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disabled={generatingLeads || !genQuery.trim()}
+                  onClick={handleStartLeadGeneration}
+                  startIcon={generatingLeads ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <AutoAwesomeIcon />}
+                  sx={{
+                    py: 1,
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    boxShadow: '0 3px 10px rgba(99, 102, 241, 0.3)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                    },
+                  }}
+                >
+                  {generatingLeads ? 'Scanning Web...' : 'Start Discovery'}
+                </Button>
+              </Grid>
+            </Grid>
+
+            {/* Quick Suggestion Chips */}
+            <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>
+                Popular Searches:
+              </Typography>
+              {[
+                'electronics shop in mirpur',
+                'fashion boutique in uttara',
+                'mobile showroom in dhaka',
+                'pharmacy in dhanmondi',
+                'grocery shop in gulshan',
+                'wholesale clothing in chittagong',
+              ].map((tag) => (
+                <Chip
+                  key={tag}
+                  label={tag}
+                  size="small"
+                  onClick={() => {
+                    setGenQuery(tag);
+                  }}
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    bgcolor: '#e2e8f0',
+                    color: '#334155',
+                    '&:hover': { bgcolor: '#cbd5e1' },
+                  }}
+                />
+              ))}
+            </Stack>
+
+            {/* Filter Toggle */}
+            <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={genOnlyWhatsapp}
+                    onChange={(e) => setGenOnlyWhatsapp(e.target.checked)}
+                    sx={{ color: '#10b981', '&.Mui-checked': { color: '#10b981' } }}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
+                    Show only verified WhatsApp business numbers 🟢
+                  </Typography>
+                }
+              />
+            </Box>
+          </Paper>
+
+          {/* Progress Indicator */}
+          {generatingLeads && (
+            <Box sx={{ mb: 3, p: 3, textAlign: 'center', bgcolor: '#eef2ff', borderRadius: 2.5, border: '1px solid #c7d2fe' }}>
+              <CircularProgress size={36} sx={{ color: '#6366f1', mb: 1.5 }} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#3730a3' }}>
+                Scanning Google Maps, Facebook Pages & Web Directories...
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#4f46e5', maxWidth: 600, mx: 'auto', mt: 0.5 }}>
+                Harvesting verified shop profiles for "{genQuery}", validating Bangladeshi phone numbers, checking live WhatsApp accounts, and filtering duplicates from database.
+              </Typography>
+              <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#c7d2fe', '& .MuiLinearProgress-bar': { bgcolor: '#6366f1' } }} />
+            </Box>
+          )}
+
+          {/* Staging Discovery Table */}
+          {stagedLeads.length > 0 ? (
+            <Box>
+              {/* Table Action Bar */}
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{
+                  justifyContent: 'space-between',
+                  alignItems: { sm: 'center' },
+                  mb: 1.5,
+                  p: 1.5,
+                  bgcolor: '#f1f5f9',
+                  borderRadius: 2,
+                  border: '1px solid #e2e8f0',
+                  gap: 1.5,
+                }}
+              >
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Chip
+                    label={`Discovered: ${stagedLeads.length}`}
+                    size="small"
+                    sx={{ fontWeight: 800, bgcolor: '#0f172a', color: '#ffffff' }}
+                  />
+                  <Chip
+                    label={`WhatsApp Active: ${stagedLeads.filter((l) => l.is_on_whatsapp).length}`}
+                    size="small"
+                    sx={{ fontWeight: 700, bgcolor: '#dcfce7', color: '#15803d' }}
+                  />
+                  <Chip
+                    label={`Selected: ${selectedStagedIds.size}`}
+                    size="small"
+                    sx={{ fontWeight: 700, bgcolor: '#e0e7ff', color: '#4338ca' }}
+                  />
+                </Stack>
+
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel>Category to Assign</InputLabel>
+                    <Select
+                      value={batchCategoryAssign}
+                      label="Category to Assign"
+                      onChange={(e) => setBatchCategoryAssign(e.target.value)}
+                    >
+                      {categories.map((c) => (
+                        <MenuItem key={c.id} value={c.name}>
+                          {c.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={importingStaged || selectedStagedIds.size === 0}
+                    onClick={handleImportSelectedStaged}
+                    startIcon={importingStaged ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <PlaylistAddCheckIcon />}
+                    sx={{
+                      fontWeight: 800,
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      px: 2,
+                      py: 0.8,
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      boxShadow: '0 3px 10px rgba(16, 185, 129, 0.3)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      },
+                    }}
+                  >
+                    {importingStaged ? 'Importing...' : `Assign Selected (${selectedStagedIds.size}) to Leads`}
+                  </Button>
+                </Stack>
+              </Stack>
+
+              {/* Table */}
+              <TableContainer component={Paper} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: '#f1f5f9' }}>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          indeterminate={selectedStagedIds.size > 0 && selectedStagedIds.size < stagedLeads.length}
+                          checked={stagedLeads.length > 0 && selectedStagedIds.size === stagedLeads.length}
+                          onChange={handleSelectAllStaged}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Shop & Profile</TableCell>
+                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Phone & WhatsApp</TableCell>
+                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Social & Maps</TableCell>
+                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Address / Location</TableCell>
+                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Category</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 800, color: '#0f172a' }}>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {stagedLeads.map((lead) => {
+                      const isSelected = selectedStagedIds.has(lead.id);
+                      return (
+                        <TableRow
+                          key={lead.id}
+                          hover
+                          selected={isSelected}
+                          sx={{
+                            '&.Mui-selected': { bgcolor: '#f8fafc' },
+                            opacity: lead.already_in_crm ? 0.6 : 1,
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              size="small"
+                              checked={isSelected}
+                              disabled={lead.already_in_crm}
+                              onChange={() => handleToggleSelectStaged(lead.id)}
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                              <Avatar
+                                src={lead.whatsapp_profile_pic || lead.profile_pic}
+                                sx={{
+                                  width: 38,
+                                  height: 38,
+                                  borderRadius: 2,
+                                  bgcolor: '#e2e8f0',
+                                  color: '#334155',
+                                  fontWeight: 700,
+                                  fontSize: '0.875rem',
+                                  cursor: (lead.whatsapp_profile_pic || lead.profile_pic) ? 'pointer' : 'default',
+                                  border: '1px solid #cbd5e1',
+                                  '&:hover': (lead.whatsapp_profile_pic || lead.profile_pic) ? {
+                                    transform: 'scale(1.08)',
+                                    borderColor: '#6366f1',
+                                  } : {},
+                                }}
+                                onClick={() => {
+                                  const imgUrl = lead.whatsapp_profile_pic || lead.profile_pic;
+                                  if (imgUrl) {
+                                    setPreviewImage({
+                                      url: imgUrl,
+                                      title: lead.shop_name,
+                                      subtitle: `${lead.phone} • ${lead.address || 'Shop Profile'}`,
+                                    });
+                                  }
+                                }}
+                              >
+                                {lead.shop_name.charAt(0)}
+                              </Avatar>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                  {lead.shop_name}
+                                </Typography>
+                                {lead.whatsapp_name && lead.whatsapp_name !== lead.shop_name && (
+                                  <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                                    WA: {lead.whatsapp_name}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Stack>
+                          </TableCell>
+
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700, color: '#1e293b' }}>
+                                {lead.phone}
+                              </Typography>
+                              <Tooltip title="Copy Phone Number">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopyPhone(lead.phone)}
+                                  sx={{ p: 0.5, color: '#64748b' }}
+                                >
+                                  <ContentCopyIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                            <Box sx={{ mt: 0.5 }}>
+                              {lead.is_on_whatsapp ? (
+                                <Chip
+                                  label="✓ WhatsApp Active"
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    bgcolor: '#dcfce7',
+                                    color: '#15803d',
+                                  }}
+                                />
+                              ) : (
+                                <Chip
+                                  label="Standard Phone"
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: '0.65rem',
+                                    fontWeight: 600,
+                                    bgcolor: '#f1f5f9',
+                                    color: '#64748b',
+                                  }}
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+
+                          <TableCell>
+                            <Stack direction="row" spacing={0.5}>
+                              {lead.google_maps_url ? (
+                                <Tooltip title="Open in Google Maps">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => window.open(lead.google_maps_url, '_blank')}
+                                    sx={{
+                                      bgcolor: '#f8fafc',
+                                      color: '#ea4335',
+                                      border: '1px solid #e2e8f0',
+                                      '&:hover': { bgcolor: '#fee2e2' },
+                                    }}
+                                  >
+                                    <MapIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title="Search on Google Maps">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.shop_name + ' ' + (lead.address || 'Dhaka'))}`, '_blank')}
+                                    sx={{
+                                      bgcolor: '#f8fafc',
+                                      color: '#64748b',
+                                      border: '1px solid #e2e8f0',
+                                    }}
+                                  >
+                                    <MapIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {lead.facebook_url && (
+                                <Tooltip title="Open Facebook Page">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => window.open(lead.facebook_url, '_blank')}
+                                    sx={{
+                                      bgcolor: '#f8fafc',
+                                      color: '#1877f2',
+                                      border: '1px solid #e2e8f0',
+                                      '&:hover': { bgcolor: '#dbeafe' },
+                                    }}
+                                  >
+                                    <FacebookIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Stack>
+                          </TableCell>
+
+                          <TableCell sx={{ maxWidth: 220 }}>
+                            <Typography variant="caption" sx={{ color: '#334155', fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              {lead.address || 'Dhaka, Bangladesh'}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Chip
+                              label={lead.category || 'General'}
+                              size="small"
+                              sx={{
+                                height: 22,
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                bgcolor: '#f1f5f9',
+                                color: '#334155',
+                                border: '1px solid #e2e8f0',
+                              }}
+                            />
+                          </TableCell>
+
+                          <TableCell align="right">
+                            {lead.already_in_crm ? (
+                              <Chip
+                                label="✓ Added to CRM"
+                                size="small"
+                                sx={{ height: 22, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#e2e8f0', color: '#475569' }}
+                              />
+                            ) : (
+                              <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                                <Tooltip title="Edit Shop Info">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => setEditingStagedLead(lead)}
+                                    sx={{ color: '#6366f1', bgcolor: '#eef2ff', '&:hover': { bgcolor: '#e0e7ff' } }}
+                                  >
+                                    <EditNoteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Assign to Leads">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleImportSingleStaged(lead)}
+                                    sx={{ color: '#10b981', bgcolor: '#dcfce7', '&:hover': { bgcolor: '#bbf7d0' } }}
+                                  >
+                                    <HowToRegIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          ) : (
+            !generatingLeads && (
+              <Box sx={{ textAlign: 'center', py: 6, px: 2, bgcolor: '#f8fafc', borderRadius: 3, border: '1px dashed #cbd5e1' }}>
+                <Box
+                  sx={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 3,
+                    bgcolor: '#eef2ff',
+                    color: '#6366f1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mx: 'auto',
+                    mb: 2,
+                  }}
+                >
+                  <SearchIcon sx={{ fontSize: 32 }} />
+                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                  Ready to Discover Targeted Leads
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 500, mx: 'auto', mt: 0.5, mb: 2.5 }}>
+                  Enter a tag like <strong>"electronics shop in mirpur"</strong> or <strong>"fashion in uttara"</strong> above and click <strong>"Start Discovery"</strong> to harvest up to 50 verified shop contacts!
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setGenQuery('electronics shop in mirpur');
+                    handleStartLeadGeneration();
+                  }}
+                  startIcon={<AutoAwesomeIcon />}
+                  sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                >
+                  Try Demo Search: Electronics in Mirpur
+                </Button>
+              </Box>
+            )
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, bgcolor: '#f1f5f9', borderTop: '1px solid #e2e8f0', justifyContent: 'space-between' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ pl: 1 }}>
+            All discovered leads are pre-checked for duplicates against your CRM database.
+          </Typography>
+          <Button onClick={() => setOpenAutoGenerator(false)} sx={{ fontWeight: 700, color: '#64748b' }}>
+            Close Hub
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* ✏️ EDIT STAGED LEAD MODAL */}
+      {/* ========================================================================= */}
+      <Dialog
+        open={Boolean(editingStagedLead)}
+        onClose={() => setEditingStagedLead(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#0f172a', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EditNoteIcon sx={{ color: '#6366f1' }} />
+          Edit Discovered Shop Details
+        </DialogTitle>
+        {editingStagedLead && (
+          <DialogContent sx={{ pt: 3, mt: 1 }}>
+            <Stack spacing={2}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Shop Name *"
+                value={editingStagedLead.shop_name}
+                onChange={(e) => setEditingStagedLead({ ...editingStagedLead, shop_name: e.target.value })}
+              />
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Phone Number"
+                disabled
+                value={editingStagedLead.phone}
+                helperText="Phone number verified from business listing"
+              />
+
+              <Stack direction="row" spacing={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    value={editingStagedLead.category || 'General'}
+                    label="Category"
+                    onChange={(e) => setEditingStagedLead({ ...editingStagedLead, category: e.target.value })}
+                  >
+                    {categories.map((c) => (
+                      <MenuItem key={c.id} value={c.name}>
+                        {c.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth size="small">
+                  <InputLabel>Shop Type</InputLabel>
+                  <Select
+                    value={editingStagedLead.shop_type || 'Retail'}
+                    label="Shop Type"
+                    onChange={(e) => setEditingStagedLead({ ...editingStagedLead, shop_type: e.target.value })}
+                  >
+                    {SHOP_TYPES.map((st) => (
+                      <MenuItem key={st} value={st}>
+                        {st}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Address / Area"
+                value={editingStagedLead.address || ''}
+                onChange={(e) => setEditingStagedLead({ ...editingStagedLead, address: e.target.value })}
+              />
+
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                size="small"
+                label="Internal Notes"
+                value={editingStagedLead.notes || ''}
+                onChange={(e) => setEditingStagedLead({ ...editingStagedLead, notes: e.target.value })}
+              />
+            </Stack>
+          </DialogContent>
+        )}
+        <DialogActions sx={{ p: 2, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+          <Button onClick={() => setEditingStagedLead(null)} sx={{ fontWeight: 700, color: 'text.secondary' }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => editingStagedLead && handleSaveEditedStagedLead(editingStagedLead)}
+            sx={{
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+            }}
+          >
+            Update Staging Lead
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ========================================================================= */}
       {/* 🖼️ FULL IMAGE PREVIEW / LIGHTBOX MODAL */}
       {/* ========================================================================= */}
       <Dialog
@@ -1781,6 +2637,23 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
           </Box>
         )}
       </Dialog>
+
+      {/* 🔔 SNACKBAR NOTIFICATION */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }

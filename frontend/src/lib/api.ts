@@ -116,6 +116,24 @@ export interface Lead {
   updated_at: string;
 }
 
+export interface GeneratedLead {
+  id: string;
+  shop_name: string;
+  phone: string;
+  formatted_phone: string;
+  facebook_url?: string;
+  google_maps_url?: string;
+  address?: string;
+  profile_pic?: string;
+  category?: string;
+  shop_type?: string;
+  is_on_whatsapp: boolean;
+  whatsapp_profile_pic?: string;
+  whatsapp_name?: string;
+  notes?: string;
+  already_in_crm?: boolean;
+}
+
 export const WhatsAppService = {
   getStatus: () => api.get('/whatsapp/status'),
   getQr: () => api.get('/whatsapp/qr'),
@@ -254,6 +272,15 @@ export const LeadService = {
   createCategory: (data: { name: string; description?: string }) =>
     api.post<LeadCategory>('/lead-categories', data),
   getExportCsvUrl: () => '/api/proxy/leads/export-csv',
+  autoGenerate: (data: {
+    query: string;
+    limit?: number;
+    only_whatsapp?: boolean;
+    category?: string;
+    exclude_existing?: boolean;
+  }) => api.post<{ count: number; leads: GeneratedLead[] }>('/leads/auto-generate', data),
+  batchImport: (leads: Partial<GeneratedLead>[]) =>
+    api.post<{ imported_count: number; skipped_count: number; imported: any[] }>('/leads/batch-import', { leads }),
 };
 
 export const ChatService = {

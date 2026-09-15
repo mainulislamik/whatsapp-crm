@@ -14,7 +14,7 @@ import csv
 import io
 from datetime import datetime, timezone
 from django.utils import timezone as django_tz
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Query
@@ -758,6 +758,92 @@ async def create_lead_category(payload: LeadCategoryCreate):
     res = await sync_to_async(_create)()
     if not res:
         raise HTTPException(status_code=400, detail="Category name cannot be empty")
+    return res
+
+from crm_core.lead_generator import LeadScraperEngine
+
+class AutoLeadGenerateRequest(BaseModel):
+    query: str
+    limit: int = 50
+    only_whatsapp: bool = False
+    category: Optional[str] = None
+    exclude_existing: bool = True
+
+class AutoLeadAssignRequest(BaseModel):
+    leads: List[Dict[str, Any]]
+
+@app.post("/api/leads/auto-generate")
+async def generate_leads_endpoint(payload: AutoLeadGenerateRequest):
+    """
+    Search and generate verified business leads with Google Maps, Facebook URLs,
+    Live WhatsApp status check, and Database Deduplication.
+    """
+    try:
+        engine = LeadScraperEngine(wa_engine_url="http://wa-engine:5001")
+        results = await engine.search_and_generate_leads(
+            query=payload.query,
+            limit=payload.limit,
+            only_whatsapp=payload.only_whatsapp,
+            category=payload.category,
+            exclude_existing=payload.exclude_existing
+        )
+        return {"count": len(results), "leads": results}
+    except Exception as e:
+        print(f"Error generating leads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/leads/batch-import")
+async def batch_import_leads_endpoint(payload: AutoLeadAssignRequest):
+    """
+    Assign/Import multiple staged leads directly into CRM Lead Management.
+    """
+    def _do_import():
+        imported = []
+        skipped = []
+        for item in payload.leads:
+            raw_phone = item.get('phone', '').strip()
+            if not raw_phone:
+                continue
+            
+            # Normalize phone
+            digits = re.sub(r'\D', '', raw_phone)
+            if digits.startswith('8801') and len(digits) == 13:
+                phone = '0' + digits[3:]
+            elif digits.startswith('01') and len(digits) == 11:
+                phone = digits
+            elif digits.startswith('1') and len(digits) == 10:
+                phone = '0' + digits
+            else:
+                phone = raw_phone
+
+            # Deduplication
+            if Lead.objects.filter(phone=phone).exists():
+                skipped.append(phone)
+                continue
+
+            category_name = item.get('category', 'Electronics')
+
+            lead = Lead.objects.create(
+                phone=phone,
+                shop_name=item.get('shop_name', '').strip() or 'New Business',
+                owner_name=item.get('owner_name', '').strip(),
+                category=category_name,
+                shop_type=item.get('shop_type', 'Retail'),
+                address=item.get('address', '').strip(),
+                notes=item.get('notes', '').strip(),
+                whatsapp_profile_pic=item.get('whatsapp_profile_pic') or item.get('profile_pic', '').strip(),
+                whatsapp_name=item.get('whatsapp_name') or item.get('shop_name', '').strip(),
+                is_on_whatsapp=item.get('is_on_whatsapp', True),
+                status='NEW'
+            )
+            imported.append({
+                "id": lead.id,
+                "shop_name": lead.shop_name,
+                "phone": lead.phone
+            })
+        return {"imported_count": len(imported), "skipped_count": len(skipped), "imported": imported}
+
+    res = await sync_to_async(_do_import)()
     return res
 
 @app.get("/api/leads")
