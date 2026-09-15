@@ -214,21 +214,49 @@ export default function ContactManager({
             >
               Add Contact
             </Button>
-            <Button
-              component="label"
-              variant="outlined"
-              color="secondary"
-              size="small"
-              startIcon={<UploadFileIcon />}
-              sx={{ fontWeight: 700 }}
-            >
-              Import CSV
-              <input type="file" hidden accept=".csv" onChange={handleCsvUpload} />
-            </Button>
             <Tooltip title="Download CSV template format">
               <IconButton size="small" onClick={handleDownloadSampleCsv}>
                 <DownloadIcon fontSize="small" />
               </IconButton>
+            </Tooltip>
+            <Tooltip
+              title={
+                <Box sx={{ maxWidth: 320, textAlign: 'left' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                    CSV Import Format Guide
+                  </Typography>
+                  <Typography variant="caption" sx={{ mb: 1, display: 'block', color: 'inherit' }}>
+                    <strong>Required columns:</strong> <code>name, phone</code>
+                  </Typography>
+                  <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: 'inherit' }}>
+                    <strong>Optional columns:</strong> <code>email, tags, notes</code>
+                  </Typography>
+                  <Typography variant="caption" sx={{ mb: 1, display: 'block', color: 'inherit' }}>
+                    <strong>Tags:</strong> Separate multiple tags with commas (e.g. <code>"VIP, Wholesaler"</code>)
+                  </Typography>
+                  <Typography variant="caption" sx={{ mb: 1, display: 'block', color: 'inherit' }}>
+                    <strong>Phone format:</strong> Any format accepted (017..., 88017..., +88017...)
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+                    Duplicates (same phone) are auto-skipped.
+                  </Typography>
+                </Box>
+              }
+              placement="right"
+              arrow
+              enterDelay={300}
+            >
+              <Button
+                component="label"
+                variant="outlined"
+                color="secondary"
+                size="small"
+                startIcon={<UploadFileIcon />}
+                sx={{ fontWeight: 700 }}
+              >
+                Import CSV
+                <input type="file" hidden accept=".csv" onChange={handleCsvUpload} />
+              </Button>
             </Tooltip>
           </Stack>
         </Stack>
