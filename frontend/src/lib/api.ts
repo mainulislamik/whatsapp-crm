@@ -229,6 +229,22 @@ export const LeadService = {
       about?: string | null;
       message?: string;
     }>(`/leads/scan-phone?phone=${encodeURIComponent(phone)}`),
+  aiEnrich: (phone: string) =>
+    api.get<{
+      phone: string;
+      is_on_whatsapp: boolean;
+      shop_name: string;
+      owner_name: string;
+      category: string;
+      shop_type: string;
+      address: string;
+      notes: string;
+      profile_picture_url?: string | null;
+      whatsapp_about?: string | null;
+      sources_found: string[];
+      confidence: string;
+      error?: string;
+    }>(`/leads/ai-enrich?phone=${encodeURIComponent(phone)}`),
   listCategories: () => api.get<LeadCategory[]>('/lead-categories'),
   createCategory: (data: { name: string; description?: string }) =>
     api.post<LeadCategory>('/lead-categories', data),

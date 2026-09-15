@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from asgiref.sync import sync_to_async
 
 from crm_core.models import Contact, MessageTemplate, Campaign, CampaignLog, Lead, LeadCategory, ChatMessage
+from crm_core.ai_enricher import enrich_phone_intelligence
 
 WHATSAPP_ENGINE_URL = os.environ.get('WHATSAPP_ENGINE_URL', 'http://whatsapp-engine:5001')
 
@@ -651,6 +652,28 @@ async def check_lead_phone(phone: str = Query(...), exclude_id: Optional[int] = 
 async def scan_lead_phone(phone: str = Query(...)):
     result = await fetch_whatsapp_contact_info(phone)
     return result
+
+@app.get("/api/leads/ai-enrich")
+async def ai_enrich_lead_phone(phone: str = Query(...)):
+    try:
+        wa_data = await fetch_whatsapp_contact_info(phone)
+        enriched = await enrich_phone_intelligence(phone, wa_data)
+        return enriched
+    except Exception as e:
+        print(f"Error in ai_enrich_lead_phone for {phone}:", e)
+        return {
+            "phone": phone,
+            "is_on_whatsapp": False,
+            "shop_name": "",
+            "owner_name": "",
+            "category": "General",
+            "shop_type": "Retail",
+            "address": "",
+            "notes": "",
+            "sources_found": [],
+            "confidence": "low",
+            "error": str(e)
+        }
 
 @app.get("/api/lead-categories")
 async def list_lead_categories():

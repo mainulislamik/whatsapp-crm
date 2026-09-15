@@ -44,6 +44,10 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import TravelExploreIcon from '@mui/icons-material/TravelExplore';
+import LanguageIcon from '@mui/icons-material/Language';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { Lead, LeadCategory, LeadService } from '@/lib/api';
 
 interface LeadManagerProps {
@@ -75,7 +79,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
   const [address, setAddress] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
-  // Live WhatsApp Scan State
+  // Live WhatsApp & AI Scan State
   const [scanningWa, setScanningWa] = useState<boolean>(false);
   const [waScanResult, setWaScanResult] = useState<{
     scanned: boolean;
@@ -85,6 +89,8 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     profilePictureUrl?: string | null;
     about?: string | null;
     businessProfile?: any;
+    sources_found?: string[];
+    confidence?: string;
   } | null>(null);
 
   // Live Duplicate Check State
@@ -145,54 +151,58 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     }
   };
 
-  // Live Scan Phone on WhatsApp
+  // Live Scan Phone on WhatsApp & AI Web Intelligence (Google Maps / Facebook / OSINT)
   const handleScanWhatsApp = async () => {
     const p = phone.trim();
     if (!p) {
-      alert('Please enter a phone number first to scan on WhatsApp.');
+      alert('Please enter a phone number first to scan with AI.');
       return;
     }
     setScanningWa(true);
     try {
-      const res = await LeadService.scanWhatsApp(p);
+      const res = await LeadService.aiEnrich(p);
       const data = res.data;
-      const foundName = data.name || data.pushName || null;
 
       setWaScanResult({
         scanned: true,
-        connected: data.connected,
-        exists: data.exists,
-        name: foundName,
-        profilePictureUrl: data.profilePictureUrl,
-        about: data.about,
-        businessProfile: data.businessProfile,
+        connected: true,
+        exists: data.is_on_whatsapp,
+        name: data.owner_name || data.shop_name || null,
+        profilePictureUrl: data.profile_picture_url,
+        about: data.whatsapp_about,
+        sources_found: data.sources_found || [],
+        confidence: data.confidence || 'medium',
       });
 
-      if (data.exists) {
-        if (foundName) {
-          // Auto-populate Owner / Contact Person Name
-          setOwnerName(foundName);
-          // If shopName is currently empty, also prefill shopName with business name
-          setShopName((prev) => (prev.trim() ? prev : foundName));
-        }
-
-        // Auto-populate address from business profile if address is empty
-        if (data.businessProfile?.address) {
-          const addr = data.businessProfile.address;
-          setAddress((prev) => (prev.trim() ? prev : addr));
-        }
-
-        // Auto-populate notes from business description or WhatsApp about if notes is empty
-        if (data.businessProfile?.description) {
-          const desc = data.businessProfile.description;
-          setNotes((prev) => (prev.trim() ? prev : desc));
-        } else if (data.about) {
-          const abt = `WhatsApp About: ${data.about}`;
-          setNotes((prev) => (prev.trim() ? prev : abt));
+      // Auto-populate form fields
+      if (data.shop_name) {
+        setShopName(data.shop_name);
+      }
+      if (data.owner_name) {
+        setOwnerName(data.owner_name);
+      }
+      if (data.address) {
+        setAddress(data.address);
+      }
+      if (data.notes) {
+        setNotes(data.notes);
+      }
+      if (data.shop_type) {
+        setShopType(data.shop_type);
+      }
+      if (data.category && data.category !== 'General') {
+        const foundCat = categories.find(
+          (c) => c.name.toLowerCase() === data.category.toLowerCase()
+        );
+        if (foundCat) {
+          setCategory(foundCat.name);
+        } else {
+          // If category isn't in current list, create or assign it
+          setCategory(data.category);
         }
       }
     } catch (err: any) {
-      alert('WhatsApp scan failed: ' + (err.message || 'Error'));
+      alert('AI & WhatsApp scan failed: ' + (err.message || 'Error'));
     } finally {
       setScanningWa(false);
     }
@@ -596,19 +606,42 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                       setWaScanResult(null);
                     }}
                     onBlur={handlePhoneBlur}
-                    helperText="Will auto-check duplicate and scan WhatsApp"
+                    helperText="Enter phone & click AI Scan to auto-discover shop info"
                   />
                   <Button
-                    variant="outlined"
-                    color="secondary"
+                    variant="contained"
                     onClick={handleScanWhatsApp}
                     disabled={scanningWa || !phone.trim()}
-                    startIcon={scanningWa ? <CircularProgress size={16} /> : <QrCodeScannerIcon />}
-                    sx={{ whiteSpace: 'nowrap', py: 0.9 }}
+                    startIcon={scanningWa ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <AutoAwesomeIcon />}
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      py: 1,
+                      px: 2,
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: '#fff',
+                      fontWeight: 700,
+                      boxShadow: '0 3px 8px rgba(16, 185, 129, 0.3)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      }
+                    }}
                   >
-                    Scan WA
+                    {scanningWa ? 'Scanning...' : '⚡ AI Scan & Auto-Fill'}
                   </Button>
                 </Stack>
+
+                {/* Scanning Progress Bar */}
+                {scanningWa && (
+                  <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0fdf4', borderRadius: 1.5, border: '1px dashed #10b981' }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                      <CircularProgress size={18} sx={{ color: '#10b981' }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#047857' }}>
+                        🤖 AI Analyzing WhatsApp, Google Maps & Web OSINT...
+                      </Typography>
+                    </Stack>
+                    <LinearProgress sx={{ height: 6, borderRadius: 3, bgcolor: '#bbf7d0', '& .MuiLinearProgress-bar': { bgcolor: '#10b981' } }} />
+                  </Box>
+                )}
 
                 {/* Duplicate Warning indicator below input */}
                 {duplicateInfo?.is_duplicate && (
@@ -618,40 +651,59 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                   </Alert>
                 )}
 
-                {/* WhatsApp Live Scan Result Box */}
+                {/* WhatsApp & AI Intelligence Live Result Box */}
                 {waScanResult && (
                   <Box
                     sx={{
                       mt: 1.5,
-                      p: 1.5,
+                      p: 1.8,
                       bgcolor: waScanResult.exists ? '#f0fdf4' : '#fff1f2',
                       border: `1px solid ${waScanResult.exists ? '#bbf7d0' : '#fecdd3'}`,
-                      borderRadius: 1.5,
+                      borderRadius: 2,
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
                     }}
                   >
-                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
                       <Avatar
                         src={waScanResult.profilePictureUrl || undefined}
-                        sx={{ width: 44, height: 44, bgcolor: '#128C7E' }}
+                        sx={{ width: 48, height: 48, bgcolor: '#10b981', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}
                       >
-                        {shopName.charAt(0) || 'W'}
+                        {shopName.charAt(0) || <StorefrontIcon />}
                       </Avatar>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: waScanResult.exists ? '#15803d' : '#be123c' }}>
-                          {waScanResult.exists ? '✓ Active on WhatsApp' : '✕ Not found on WhatsApp'}
-                        </Typography>
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: waScanResult.exists ? '#15803d' : '#be123c' }}>
+                            {waScanResult.exists ? '✓ Active WhatsApp Account' : '✕ Not found on WhatsApp'}
+                          </Typography>
+                          {waScanResult.sources_found?.map((src) => (
+                            <Chip
+                              key={src}
+                              label={src}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                bgcolor: '#dcfce7',
+                                color: '#166534',
+                                border: '1px solid #86efac'
+                              }}
+                            />
+                          ))}
+                        </Stack>
+
                         {waScanResult.name && (
-                          <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700, display: 'block' }}>
-                            ✓ Name found: <strong>"{waScanResult.name}"</strong> (Auto-filled below)
+                          <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700, display: 'block', mt: 0.2 }}>
+                            ✨ Auto-Filled: <strong>"{waScanResult.name}"</strong>
                           </Typography>
                         )}
-                        {waScanResult.profilePictureUrl && (
-                          <Typography variant="caption" sx={{ color: '#15803d', display: 'block' }}>
-                            ✓ Profile photo collected successfully!
+                        {address && (
+                          <Typography variant="caption" sx={{ color: '#334155', display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.2 }}>
+                            <LocationOnIcon sx={{ fontSize: 13, color: '#e11d48' }} /> {address}
                           </Typography>
                         )}
                         {waScanResult.about && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.2, fontStyle: 'italic' }}>
                             About: "{waScanResult.about}"
                           </Typography>
                         )}
