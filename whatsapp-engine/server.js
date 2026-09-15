@@ -585,3 +585,86 @@ connectToWhatsApp();
 app.listen(PORT, () => {
   console.log(`WhatsApp Baileys Engine running on port ${PORT}`);
 });
+
+
+// Check if a phone number exists on WhatsApp + fetch live details
+app.get('/check-contact', async (req, res) => {
+  try {
+    const rawPhone = req.query.phone;
+    if (!rawPhone || !sock) {
+      return res.status(400).json({ error: 'Phone parameter required or socket not ready', exists: false });
+    }
+
+    let phone = String(rawPhone).replace(/\D/g, '');
+    let jidsToCheck = [];
+
+    if (phone.startsWith('01') && phone.length === 11) {
+      jidsToCheck.push('88' + phone + '@s.whatsapp.net');
+    } else if (phone.startsWith('8801') && phone.length === 13) {
+      jidsToCheck.push(phone + '@s.whatsapp.net');
+      jidsToCheck.push('0' + phone.slice(2) + '@s.whatsapp.net');
+    } else {
+      jidsToCheck.push(phone + '@s.whatsapp.net');
+      if (phone.startsWith('01')) {
+        jidsToCheck.push('88' + phone + '@s.whatsapp.net');
+      }
+    }
+
+    let exists = false;
+    let verifiedJid = null;
+
+    try {
+      const results = await sock.onWhatsApp(...jidsToCheck);
+      if (Array.isArray(results) && results.length > 0) {
+        const found = results.find(r => r && r.exists);
+        if (found) {
+          exists = true;
+          verifiedJid = found.jid;
+        }
+      }
+    } catch (e) {
+      console.warn('sock.onWhatsApp check error:', e.message);
+    }
+
+    let profilePictureUrl = null;
+    let name = null;
+    let about = null;
+    let businessProfile = null;
+
+    if (exists && verifiedJid) {
+      // 1. Profile Picture
+      try {
+        profilePictureUrl = await sock.profilePictureUrl(verifiedJid, 'image');
+      } catch (e) {}
+
+      // 2. Status / About
+      try {
+        const statusObj = await sock.fetchStatus(verifiedJid);
+        about = statusObj?.status || null;
+      } catch (e) {}
+
+      // 3. Business Profile
+      try {
+        businessProfile = await sock.getBusinessProfile(verifiedJid);
+      } catch (e) {}
+
+      // 4. Contact Name from store
+      const normPhone = normalizePhone(phone);
+      const cinfo = contactsStore.get(verifiedJid) || contactsStore.get(phone) || contactsStore.get(normPhone);
+      name = cinfo?.name || cinfo?.notify || cinfo?.verifiedName || businessProfile?.description || null;
+    }
+
+    res.json({
+      connected: connectionStatus === 'CONNECTED',
+      exists,
+      jid: verifiedJid || (phone.startsWith('01') ? '88' + phone + '@s.whatsapp.net' : phone + '@s.whatsapp.net'),
+      name,
+      profilePictureUrl,
+      about,
+      businessProfile
+    });
+  } catch (err) {
+    console.error('Error in /check-contact:', err);
+    res.status(500).json({ error: err.message, exists: false });
+  }
+});
