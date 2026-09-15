@@ -6,7 +6,6 @@ import urllib.parse
 import hashlib
 from typing import List, Dict, Any, Optional, Set
 import httpx
-from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -30,41 +29,61 @@ BD_HUBS = {
 }
 
 CATEGORY_KEYWORDS = {
+    'Clothing': {
+        'keywords': ['cloth', 'fashion', 'wear', 'boutique', 'sharee', 'panjabi', 'dress', 'attire', 'garment', 'textile', 'tailor', 'apparel', 'lehenga', 'kurti', 'lungee', 'shoe', 'footwear', 'richman', 'lubnan', 'an Jans', 'gentle park', 'sailor', 'cats eye', 'aarong', 'pant', 'shirt', 'polo'],
+        'prefixes': ['Fashion', 'Style', 'Aparajita', 'Trendy', 'Urban', 'Glamour', 'Elegance', 'Heritage', 'Silk', 'Cotton', 'Fabrics', 'Classic', 'Royal', 'Tradition', 'Deshi', 'Craft', 'Dapper', 'Vogue', 'Gentle', 'Smart', 'Richman', 'Lubnan', 'Mahir', 'Aroshi', 'Rang', 'Anjan\'s', 'Pari', 'Monami', 'Nakshi', 'Nogor', 'Chitralipi', 'Poshak'],
+        'suffixes': ['Fashion House', 'Boutique', 'Attire', 'Clothing', 'Wear', 'Collection', 'Fabrics', 'Outfitters', 'Tailors & Fabrics', 'Apparels', 'Lifestyle', 'Fashion Zone', 'Panjabi Palace', 'Sharee Ghar', 'Boutique Gallery'],
+        'default_type': 'Retail',
+        'sample_descs': ['Exclusive Panjabi, Sharee, Kurti, Salwar Kameez and festive designer outfits.', 'Men\'s formal shirts, polo t-shirts, casual pants and denim collection.', 'Premium women party wear, bridal lehenga, georgette dresses and accessories.', 'Wholesale and retail manufacturers of high-quality export-quality clothing.']
+    },
+    'Mobile & Gadgets': {
+        'keywords': ['phone', 'mobile', 'gadget', 'smartphone', 'iphone', 'android', 'cellular', 'telecom', 'sim', 'airpod', 'earbuds', 'smartwatch', 'charger', 'cables', 'xiaomi', 'samsung', 'realme', 'oppo', 'vivo'],
+        'prefixes': ['Mobile', 'Gadget', 'Apple', 'Smart', 'iShop', 'Phone', 'Cellular', 'Tech', 'Touch', 'Gizmo', 'Next', 'Prime', 'Elite', 'Galaxy', 'Pixel', 'Mi', 'Real', 'Turbo', 'Pro', 'Express', 'Quick', 'Fast', 'Apex', 'Cyber', 'Urban', 'Bismillah', 'Al-Amin', 'Friends', 'City', 'iCenter', 'Gadget Lab'],
+        'suffixes': ['Gadget Store', 'Mobile Care', 'Telecom', 'Phone Hub', 'Gadget World', 'Mobile Plaza', 'Gadget Zone', 'Mobile Mart', 'Phone Gallery', 'Gadget Station', 'Cell Point', 'Mobile Shop', 'Tech Store', 'Gadget Gallery'],
+        'default_type': 'Retail',
+        'sample_descs': ['Original iPhones, Android smartphones, authentic accessories and official warranty.', 'All brand smartphones, smart watches, earbuds, powerbanks and camera gadgets.', 'New and pre-owned smartphones exchange and buy-sell showroom.', 'Official distributor of mobile accessories, covers, chargers and audio devices.']
+    },
     'Electronics': {
+        'keywords': ['electronic', 'appliance', 'tv', 'fridge', 'refrigerator', 'ac', 'air condition', 'washing machine', 'sound system', 'generator', 'walton', 'singer', 'vision', 'panasonic', 'sony', 'lg', 'microwave', 'fan', 'blender'],
         'prefixes': ['Al-Madina', 'Prime', 'Techno', 'Smart', 'Apex', 'Star', 'Trust', 'Metro', 'Digital', 'Galaxy', 'New', 'Royal', 'Modern', 'Super', 'Rahim', 'Karim', 'Brother\'s', 'Khan', 'Asia', 'Everest', 'City', 'Globe', 'Unique', 'Future', 'National', 'Bismillah', 'Pioneer', 'Standard', 'Tokyo', 'Sony-Rangs', 'Walton Plaza', 'Singer Pro', 'Vision Plus'],
         'suffixes': ['Electronics', 'Home Appliance', 'Electro Mart', 'Electronics & Sound', 'Electro World', 'Electronics Zone', 'Technology', 'Electronic Center', 'Electronics Gallery', 'Refrigeration & AC', 'TV Center', 'Enterprise', 'Trading', 'Showroom'],
         'default_type': 'Retail',
         'sample_descs': ['All types of LED TV, Refrigerator, AC, Washing Machine and home appliances at best price.', 'Authorized dealer of Walton, Singer, Samsung, LG electronics.', 'Wholesale and retail sales of genuine electronic gadgets and appliances.', 'Exclusive showroom for smart TVs, inverter ACs and kitchen appliances.']
     },
-    'Mobile & Gadgets': {
-        'prefixes': ['Mobile', 'Gadget', 'Apple', 'Smart', 'iShop', 'Phone', 'Cellular', 'Tech', 'Touch', 'Gizmo', 'Next', 'Prime', 'Elite', 'Galaxy', 'Pixel', 'Mi', 'Real', 'Turbo', 'Pro', 'Express', 'Quick', 'Fast', 'Apex', 'Cyber', 'Urban', 'Bismillah', 'Al-Amin', 'Friends', 'City'],
-        'suffixes': ['Gadget Store', 'Mobile Care', 'Telecom', 'Phone Hub', 'Gadget World', 'Mobile Plaza', 'Gadget Zone', 'Mobile Mart', 'Phone Gallery', 'Gadget Station', 'Cell Point', 'Mobile Shop', 'Tech Store'],
-        'default_type': 'Retail',
-        'sample_descs': ['Original iPhones, Android smartphones, authentic accessories and official warranty.', 'All brand smartphones, smart watches, earbuds, powerbanks and camera gadgets.', 'New and pre-owned smartphones exchange and buy-sell showroom.', 'Official distributor of mobile accessories, covers, chargers and audio devices.']
-    },
-    'Clothing': {
-        'prefixes': ['Fashion', 'Style', 'Aparajita', 'Trendy', 'Urban', 'Glamour', 'Elegance', 'Heritage', 'Silk', 'Cotton', 'Fabrics', 'Classic', 'Royal', 'Tradition', 'Deshi', 'Craft', 'Dapper', 'Vogue', 'Gentle', 'Smart', 'Richman', 'Lubnan', 'Mahir', 'Aroshi', 'Rang', 'Anjan\'s', 'Pari', 'Monami'],
-        'suffixes': ['Fashion House', 'Boutique', 'Attire', 'Clothing', 'Wear', 'Collection', 'Fabrics', 'Outfitters', 'Tailors & Fabrics', 'Apparels', 'Lifestyle', 'Fashion Zone', 'Panjabi & Sharee Palace'],
-        'default_type': 'Retail',
-        'sample_descs': ['Exclusive Panjabi, Sharee, Kurti, Salwar Kameez and festive designer outfits.', 'Men\'s formal shirts, polo t-shirts, casual pants and denim collection.', 'Premium women party wear, bridal lehenga, georgette dresses and accessories.', 'Wholesale and retail manufacturers of high-quality export-quality clothing.']
-    },
     'Grocery': {
-        'prefixes': ['Fresh', 'Super', 'Bismillah', 'Al-Barakah', 'Green', 'Pure', 'Daily', 'Family', 'Halal', 'Organic', 'City', 'Local', 'Agro', 'Nature', 'Harvest', 'Smart', 'Metro', 'Golden', 'Prime', 'Direct'],
-        'suffixes': ['Super Shop', 'Grocery Mart', 'General Store', 'Food Store', 'Daily Needs', 'Bazar', 'Super Market', 'Agro Farm', 'Organic Shop', 'Grocers'],
+        'keywords': ['grocery', 'super shop', 'super store', 'bazar', 'vegetable', 'fruit', 'meat', 'dairy', 'daily needs', 'halal', 'food market', 'shwapno', 'meenabazar', 'agora', 'unimart', 'rice', 'oil', 'masala', 'organic'],
+        'prefixes': ['Fresh', 'Super', 'Bismillah', 'Al-Barakah', 'Green', 'Pure', 'Daily', 'Family', 'Halal', 'Organic', 'City', 'Local', 'Agro', 'Nature', 'Harvest', 'Smart', 'Metro', 'Golden', 'Prime', 'Direct', 'Ananda', 'Shuruchi'],
+        'suffixes': ['Super Shop', 'Grocery Mart', 'General Store', 'Food Store', 'Daily Needs', 'Bazar', 'Super Market', 'Agro Farm', 'Organic Shop', 'Grocers', 'Provisions'],
         'default_type': 'Retail',
         'sample_descs': ['Daily fresh vegetables, groceries, dairy, spices and cooking essentials.', 'All grocery items, oil, rice, pulses, beverages and packaged food at wholesale prices.', 'Organic pantry items, natural honey, mustard oil and authentic village food.']
     },
     'Pharmacy': {
-        'prefixes': ['Care', 'Pharma', 'Health', 'Life', 'Medicine', 'Plus', 'Apex', 'Cure', 'Medi', 'Well', 'Bio', 'Quick', 'Safe', 'City', 'Central', 'Model', 'Green', 'Universal', 'Popular', 'Medix'],
-        'suffixes': ['Pharmacy', 'Pharma Care', 'Drug House', 'Medicine Corner', 'Medicos', 'Surgical & Pharma', 'Healthcare', 'Medical Hall', 'Drug Point', 'Pharma Mart'],
+        'keywords': ['pharmacy', 'pharma', 'medicine', 'drug', 'medicos', 'health', 'surgical', 'clinic', 'diagnostic', 'doctor', 'bandage', 'prescription', 'lazz pharma', 'model pharmacy', 'capsule', 'syrup'],
+        'prefixes': ['Care', 'Pharma', 'Health', 'Life', 'Medicine', 'Plus', 'Apex', 'Cure', 'Medi', 'Well', 'Bio', 'Quick', 'Safe', 'City', 'Central', 'Model', 'Green', 'Universal', 'Popular', 'Medix', 'Arogya', 'Shifa'],
+        'suffixes': ['Pharmacy', 'Pharma Care', 'Drug House', 'Medicine Corner', 'Medicos', 'Surgical & Pharma', 'Healthcare', 'Medical Hall', 'Drug Point', 'Pharma Mart', 'Dispensary'],
         'default_type': 'Retail',
         'sample_descs': ['24/7 Model Pharmacy with all prescription medicines, surgical goods, and baby food.', 'Authentic imported medicines, diabetic care, vitamins and supplements.', 'All OTC and prescribed pharmaceutical products at standard discount rates.']
     },
     'Computer & IT': {
-        'prefixes': ['Byte', 'Cyber', 'Tech', 'Micro', 'Silicon', 'NextGen', 'Binary', 'Compute', 'PC', 'Mega', 'System', 'Data', 'Logic', 'Giga', 'Info', 'Core', 'Matrix', 'Digital', 'Apex', 'Star'],
-        'suffixes': ['Computer & IT', 'PC Shop', 'Tech Solutions', 'IT Park', 'Computer World', 'Laptop Zone', 'Computer City', 'Tech Zone', 'Infotech', 'Hardware & Network'],
+        'keywords': ['computer', 'laptop', 'pc', 'hardware', 'it solutions', 'cctv', 'printer', 'networking', 'cyber', 'ryans', 'star tech', 'techland', 'monitor', 'gpu', 'processor', 'ram', 'ssd', 'desktop'],
+        'prefixes': ['Byte', 'Cyber', 'Tech', 'Micro', 'Silicon', 'NextGen', 'Binary', 'Compute', 'PC', 'Mega', 'System', 'Data', 'Logic', 'Giga', 'Info', 'Core', 'Matrix', 'Digital', 'Apex', 'Star', 'Cloud', 'Pixel'],
+        'suffixes': ['Computer & IT', 'PC Shop', 'Tech Solutions', 'IT Park', 'Computer World', 'Laptop Zone', 'Computer City', 'Tech Zone', 'Infotech', 'Hardware & Network', 'IT Systems'],
         'default_type': 'Retail',
         'sample_descs': ['Custom gaming PC build, laptops, monitors, GPU and genuine computer hardware.', 'All brands of laptops (HP, Dell, Asus, Lenovo, Apple MacBook) with official warranty.', 'Office IT equipment, networking devices, CCTV security systems and printer solutions.']
+    },
+    'Cosmetics & Beauty': {
+        'keywords': ['cosmetic', 'beauty', 'makeup', 'skincare', 'parlour', 'salon', 'perfume', 'lipstick', 'fragrance', 'glow', 'hair', 'body care'],
+        'prefixes': ['Glow', 'Beauty', 'Glam', 'Luxe', 'Pure', 'Elegance', 'Velvet', 'Blush', 'Rose', 'Radiant', 'Chic', 'Queens', 'Princess', 'Herbal', 'Bloom'],
+        'suffixes': ['Cosmetics', 'Beauty Care', 'Makeup Studio', 'Skin Care', 'Beauty Zone', 'Cosmetic Mart', 'Perfume Gallery', 'Beauty World'],
+        'default_type': 'Retail',
+        'sample_descs': ['Authentic imported Korean & US skincare, cosmetics and hair treatments.', 'Original branded perfumes, makeup products, and body care essentials.']
+    },
+    'Restaurant & Cafe': {
+        'keywords': ['restaurant', 'cafe', 'food', 'biryani', 'coffee', 'bakery', 'sweets', 'fast food', 'catering', 'dine', 'kitchen', 'grill', 'pizza', 'burger'],
+        'prefixes': ['Taste', 'Royal', 'Kabab', 'Spicy', 'Flavors', 'Grand', 'Chef', 'Heritage', 'Crispy', 'Dine', 'Master', 'Sultan', 'Bhoj', 'Kacchi', 'Bismillah'],
+        'suffixes': ['Restaurant', 'Cafe & Bistro', 'Dine', 'Biryani House', 'Fast Food', 'Bakery & Sweets', 'Kitchen', 'Grill & BBQ', 'Food Court'],
+        'default_type': 'Retail',
+        'sample_descs': ['Authentic Traditional Kacchi Biryani, BBQ, Chinese and Continental delicacies.', 'Freshly brewed coffee, bakery pastries, burgers and fast food combos.']
     }
 }
 
@@ -81,31 +100,38 @@ def clean_bd_phone(raw_phone: str) -> str:
         return '0' + digits
     return digits
 
-async def verify_facebook_page(slug_or_url: str) -> Optional[str]:
+def detect_category_from_text(query: str, requested_category: Optional[str] = None) -> str:
     """
-    Verify if a Facebook page URL actually exists and has real content.
-    Returns valid URL or None if broken/unreachable.
+    Intelligently detects the most accurate category from search query or requested category.
     """
-    if not slug_or_url:
-        return None
+    if requested_category and requested_category.strip() not in ('', 'All', 'Auto', 'Auto-Detect'):
+        # Check if requested category matches known categories
+        for cat_name in CATEGORY_KEYWORDS:
+            if cat_name.lower() == requested_category.strip().lower():
+                return cat_name
+        return requested_category.strip()
+
+    q_lower = query.lower()
     
-    clean_url = slug_or_url if slug_or_url.startswith('http') else f"https://www.facebook.com/{slug_or_url}"
-    headers = {
-        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    }
-    try:
-        async with httpx.AsyncClient(timeout=3.0, follow_redirects=True, headers=headers) as client:
-            r = await client.get(clean_url)
-            if r.status_code == 200:
-                og_title = re.search(r'<meta property="og:title" content="([^"]+)"', r.text)
-                if og_title:
-                    title = og_title.group(1).strip()
-                    if title and title != "Facebook" and "Log into Facebook" not in title and "Page Not Found" not in title and "Content Not Found" not in title:
-                        return clean_url
-    except Exception:
-        pass
-    return None
+    # Check keyword matches with scoring
+    best_cat = None
+    best_score = 0
+
+    for cat_name, info in CATEGORY_KEYWORDS.items():
+        score = 0
+        if cat_name.lower() in q_lower:
+            score += 10
+        for kw in info['keywords']:
+            if kw in q_lower:
+                score += len(kw)  # longer keyword match has higher weight
+        if score > best_score:
+            best_score = score
+            best_cat = cat_name
+
+    if best_cat and best_score > 0:
+        return best_cat
+
+    return 'Clothing' if ('shop' in q_lower and 'electric' not in q_lower) else 'Electronics'
 
 class LeadScraperEngine:
     def __init__(self, wa_engine_url: str = "http://whatsapp-engine:5001"):
@@ -131,25 +157,10 @@ class LeadScraperEngine:
         hub = BD_HUBS[selected_hub]
         sub_areas = hub['sub_areas']
 
-        # 2. Detect category
-        selected_category = category or 'Electronics'
-        if not category:
-            for cat_key in CATEGORY_KEYWORDS:
-                if cat_key.lower() in query_lower or any(kw in query_lower for kw in cat_key.lower().split()):
-                    selected_category = cat_key
-                    break
-            if 'phone' in query_lower or 'mobile' in query_lower or 'gadget' in query_lower:
-                selected_category = 'Mobile & Gadgets'
-            elif 'cloth' in query_lower or 'fashion' in query_lower or 'wear' in query_lower or 'boutique' in query_lower or 'sharee' in query_lower or 'panjabi' in query_lower:
-                selected_category = 'Clothing'
-            elif 'grocery' in query_lower or 'super shop' in query_lower or 'market' in query_lower:
-                selected_category = 'Grocery'
-            elif 'pharmacy' in query_lower or 'medicine' in query_lower or 'pharma' in query_lower or 'drug' in query_lower:
-                selected_category = 'Pharmacy'
-            elif 'computer' in query_lower or 'laptop' in query_lower or 'pc' in query_lower or 'it' in query_lower:
-                selected_category = 'Computer & IT'
+        # 2. Detect category accurately
+        selected_category = detect_category_from_text(query, category)
 
-        cat_info = CATEGORY_KEYWORDS.get(selected_category, CATEGORY_KEYWORDS['Electronics'])
+        cat_info = CATEGORY_KEYWORDS.get(selected_category, CATEGORY_KEYWORDS['Clothing'])
         prefixes = cat_info['prefixes']
         suffixes = cat_info['suffixes']
         descs = cat_info['sample_descs']
@@ -160,7 +171,7 @@ class LeadScraperEngine:
 
         # Operators: 017 (GP), 018 (Robi), 019 (Banglalink), 016 (Airtel), 013 (GP), 014 (BL), 015 (Teletalk)
         op_prefixes = ['017', '018', '019', '016', '013', '014', '015']
-        q_hash = int(hashlib.md5(query.encode()).hexdigest()[:8], 16)
+        q_hash = int(hashlib.md5(f"{query}_{selected_category}".encode()).hexdigest()[:8], 16)
 
         # Generate unique, realistic business leads
         index = 0
@@ -197,21 +208,15 @@ class LeadScraperEngine:
             maps_query = urllib.parse.quote(f"{shop_name} {sub_area} {hub['name']} Bangladesh")
             gmaps_url = f"https://www.google.com/maps/search/?api=1&query={maps_query}"
 
-            # Only set facebook_url if explicitly verified, otherwise None so UI hides broken link!
-            facebook_url = None
-
-            # NEVER use repeated stock photo URLs! Only real WhatsApp / Web photos when found.
-            profile_pic = None
-
             lead_item = {
                 "id": f"gen_{phone}_{index}",
                 "shop_name": shop_name,
                 "phone": phone,
                 "formatted_phone": f"+88{phone}",
-                "facebook_url": facebook_url,
+                "facebook_url": None,
                 "google_maps_url": gmaps_url,
                 "address": address,
-                "profile_pic": profile_pic,
+                "profile_pic": None,
                 "category": selected_category,
                 "shop_type": shop_type,
                 "is_on_whatsapp": False,

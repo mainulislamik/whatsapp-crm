@@ -116,16 +116,16 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
 
   // 🤖 Auto Lead Generator Hub State
   const [openAutoGenerator, setOpenAutoGenerator] = useState<boolean>(false);
-  const [genQuery, setGenQuery] = useState<string>('electronics shop in mirpur');
+  const [genQuery, setGenQuery] = useState<string>('clothing shop in dhaka');
   const [genLimit, setGenLimit] = useState<number>(50);
   const [genOnlyWhatsapp, setGenOnlyWhatsapp] = useState<boolean>(false);
-  const [genCategory, setGenCategory] = useState<string>('Electronics');
+  const [genCategory, setGenCategory] = useState<string>('All');
   const [generatingLeads, setGeneratingLeads] = useState<boolean>(false);
   const [stagedLeads, setStagedLeads] = useState<GeneratedLead[]>([]);
   const [selectedStagedIds, setSelectedStagedIds] = useState<Set<string>>(new Set());
   const [importingStaged, setImportingStaged] = useState<boolean>(false);
   const [editingStagedLead, setEditingStagedLead] = useState<GeneratedLead | null>(null);
-  const [batchCategoryAssign, setBatchCategoryAssign] = useState<string>('Electronics');
+  const [batchCategoryAssign, setBatchCategoryAssign] = useState<string>('Clothing');
 
   // Snackbar Notification State
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
@@ -350,6 +350,9 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
       });
       const fetched = res.data.leads || [];
       setStagedLeads(fetched);
+      if (fetched.length > 0 && fetched[0].category) {
+        setBatchCategoryAssign(fetched[0].category);
+      }
       const allIds = new Set(fetched.map((l: GeneratedLead) => l.id));
       setSelectedStagedIds(allIds);
       showNotification(`Discovered ${res.data.count} targeted businesses!`, 'success');
