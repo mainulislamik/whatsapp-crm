@@ -193,7 +193,6 @@ def is_foreign_or_spam(text: str) -> bool:
     """Strictly filter out foreign text (Chinese, Japanese, Russian, Arabic) or spam."""
     if not text:
         return False
-    # Check for CJK or Cyrillic or Arabic
     if re.search(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff]', text):
         return True
     lower = text.lower()
@@ -218,12 +217,10 @@ def is_person_name(name: str) -> bool:
     """Return True if name represents a human contact person."""
     if not name or is_foreign_or_spam(name):
         return False
-    # If it has business keywords, it cannot be purely a person name
     if is_business_name(name):
         return False
     lower = name.lower()
     for kw in PERSON_HONORIFICS_AND_SURNAMES:
-        # Match whole word or exact token
         if re.search(rf'\b{re.escape(kw)}\b', lower) or kw in lower:
             return True
     return False
@@ -301,7 +298,57 @@ def get_operator_info(phone_digits: str) -> str:
     prefix = p[:3]
     return BD_OPERATORS.get(prefix, "Bangladesh Mobile Network")
 
-print('Testing test_enrich functions loaded cleanly!')
+async def fetch_facebook_business_page(business_name: str) -> Optional[Dict[str, Any]]:
+    """Query Facebook Open Graph metadata for verified Bangladesh Facebook pages."""
+    if not business_name or len(business_name) < 3:
+        return None
+        
+    clean_alpha = re.sub(r'[^a-zA-Z0-9]', '', business_name)
+    if not clean_alpha or len(clean_alpha) < 3:
+        return None
+
+    candidates = [
+        clean_alpha,
+        clean_alpha + 'bd',
+        clean_alpha + '.bd',
+        clean_alpha + 'official',
+        clean_alpha + 'bangladesh',
+        clean_alpha + 'shop',
+        clean_alpha + 'store'
+    ]
+    
+    headers = {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+    
+    async with httpx.AsyncClient(timeout=3.5, follow_redirects=True, headers=headers) as client:
+        for slug in candidates:
+            url = f'https://www.facebook.com/{slug}'
+            try:
+                r = await client.get(url)
+                if r.status_code == 200:
+                    og_title_m = re.search(r'<meta property="og:title" content="([^"]+)"', r.text)
+                    og_desc_m = re.search(r'<meta property="og:description" content="([^"]+)"', r.text)
+                    if og_title_m:
+                        og_title = html.unescape(og_title_m.group(1))
+                        og_desc = html.unescape(og_desc_m.group(1)) if og_desc_m else ''
+                        
+                        if 'Log into Facebook' in og_title or 'log in or sign up' in og_title or 'Facebook' == og_title.strip():
+                            continue
+                            
+                        likes_match = re.search(r'([\d,]+)\s*(?:likes|followers)', og_desc, re.IGNORECASE)
+                        likes = likes_match.group(1) if likes_match else None
+                        
+                        return {
+                            'page_url': url,
+                            'title': og_title,
+                            'description': og_desc,
+                            'likes': likes
+                        }
+            except Exception:
+                pass
+    return None
 
 async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, wa_engine_url: str = "http://whatsapp-engine:5001") -> Dict[str, Any]:
     digits = re.sub(r'\D', '', str(phone_raw))
@@ -343,19 +390,15 @@ async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, 
 
     # 1. Evaluate WhatsApp Profile & Business Account
     if wa_name:
-        # If WhatsApp Business profile exists or name contains commercial words
         if wa_biz_profile or is_business_name(wa_name):
             detected_shop_name = wa_name
-            # Attempt to extract location from shop name (e.g. 'চাঁদপুর ইলিশের বাজার' -> Chandpur)
             addr_from_name = extract_bd_address(wa_name)
             if addr_from_name:
                 detected_address = addr_from_name
-            # Auto-detect category
             detected_category = map_category(wa_name)
         elif is_person_name(wa_name):
             detected_owner_name = wa_name
         else:
-            # Default to shop name if unknown
             detected_shop_name = wa_name
 
     if wa_biz_profile:
@@ -371,6 +414,29 @@ async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, 
         biz_desc = wa_biz_profile.get("description")
         if biz_desc and not is_foreign_or_spam(biz_desc):
             notes_lines.append(f"• Business Info: {biz_desc.strip()}")
+
+    # 2. Facebook Open Graph & Page OSINT
+    search_target = detected_shop_name or wa_name
+    if search_target and is_business_name(search_target):
+        try:
+            fb_info = await fetch_facebook_business_page(search_target)
+            if fb_info:
+                sources_found.append("Facebook Page")
+                
+                # Check if FB description has address
+                fb_addr = extract_bd_address(fb_info['title'] + ' ' + fb_info['description'])
+                if fb_addr and not detected_address:
+                    detected_address = fb_addr
+                    
+                # Check category from FB description
+                if detected_category == "General":
+                    detected_category = map_category(fb_info['title'] + ' ' + fb_info['description'])
+                    
+                likes_str = f" ({fb_info['likes']} likes)" if fb_info.get('likes') else ""
+                short_url = fb_info['page_url'].replace('https://www.', '').replace('https://', '')
+                notes_lines.append(f"• Facebook: {short_url}{likes_str}")
+        except Exception:
+            pass
 
     # Determine shop type accurately based on category & name
     lower_comb = (detected_shop_name + " " + (wa_about or "")).lower()
