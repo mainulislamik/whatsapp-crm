@@ -115,6 +115,9 @@ class Lead(models.Model):
     phone = models.CharField(max_length=50, db_index=True)
     shop_name = models.CharField(max_length=255)
     owner_name = models.CharField(max_length=255, blank=True, default='')
+    email = models.CharField(max_length=255, blank=True, default='')
+    website = models.CharField(max_length=255, blank=True, default='')
+    facebook_url = models.CharField(max_length=255, blank=True, default='')
     category = models.CharField(max_length=100, blank=True, default='General')
     shop_type = models.CharField(max_length=100, blank=True, default='Retail')
 

@@ -100,6 +100,9 @@ export interface Lead {
   phone: string;
   shop_name: string;
   owner_name?: string;
+  email?: string;
+  website?: string;
+  facebook_url?: string;
   category: string;
   shop_type: string;
   is_on_whatsapp: boolean;
@@ -121,6 +124,8 @@ export interface GeneratedLead {
   shop_name: string;
   phone: string;
   formatted_phone: string;
+  email?: string;
+  website?: string;
   facebook_url?: string;
   google_maps_url?: string;
   address?: string;
@@ -215,6 +220,9 @@ export const LeadService = {
     phone: string;
     shop_name: string;
     owner_name?: string;
+    email?: string;
+    website?: string;
+    facebook_url?: string;
     category?: string;
     shop_type?: string;
     address?: string;

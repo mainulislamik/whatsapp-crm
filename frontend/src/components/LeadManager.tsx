@@ -72,6 +72,9 @@ import FacebookIcon from '@mui/icons-material/Facebook';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import LanguageIcon from '@mui/icons-material/Language';
+import EmailIcon from '@mui/icons-material/Email';
+import LinkIcon from '@mui/icons-material/Link';
 
 import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead } from '@/lib/api';
 
@@ -146,6 +149,9 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
   const [phone, setPhone] = useState<string>('');
   const [shopName, setShopName] = useState<string>('');
   const [ownerName, setOwnerName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [website, setWebsite] = useState<string>('');
+  const [facebookUrl, setFacebookUrl] = useState<string>('');
   const [category, setCategory] = useState<string>('General');
   const [shopType, setShopType] = useState<string>('Retail');
   const [status, setStatus] = useState<string>('NEW');
@@ -455,7 +461,10 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     setPhone('');
     setShopName('');
     setOwnerName('');
-    setCategory('General');
+    setEmail('');
+    setWebsite('');
+    setFacebookUrl('');
+    setCategory(categories[0]?.name || 'General');
     setShopType('Retail');
     setStatus('NEW');
     setAddress('');
@@ -470,6 +479,9 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     setPhone(lead.phone);
     setShopName(lead.shop_name);
     setOwnerName(lead.owner_name || '');
+    setEmail(lead.email || '');
+    setWebsite(lead.website || '');
+    setFacebookUrl(lead.facebook_url || '');
     setCategory(lead.category || 'General');
     setShopType(lead.shop_type || 'Retail');
     setStatus(lead.status || 'NEW');
@@ -581,6 +593,9 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
         phone: p,
         shop_name: sn,
         owner_name: ownerName.trim() || undefined,
+        email: email.trim() || undefined,
+        website: website.trim() || undefined,
+        facebook_url: facebookUrl.trim() || undefined,
         category,
         shop_type: shopType,
         status,
@@ -1020,6 +1035,52 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                             >
                               {lead.owner_name || 'No Owner'} • {lead.shop_type || 'Retail'}
                             </Typography>
+                            {(lead.website || lead.email || lead.facebook_url) && (
+                              <Stack direction="row" spacing={0.5} sx={{ mt: 0.3, alignItems: 'center' }}>
+                                {lead.website && (
+                                  <Tooltip title={`Visit Website: ${lead.website}`}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(lead.website?.startsWith('http') ? lead.website : `https://${lead.website}`, '_blank');
+                                      }}
+                                      sx={{ p: 0.2, color: '#0284c7' }}
+                                    >
+                                      <LanguageIcon sx={{ fontSize: 15 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                                {lead.email && (
+                                  <Tooltip title={`Email: ${lead.email}`}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(`mailto:${lead.email}`);
+                                      }}
+                                      sx={{ p: 0.2, color: '#8b5cf6' }}
+                                    >
+                                      <EmailIcon sx={{ fontSize: 15 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                                {lead.facebook_url && (
+                                  <Tooltip title="Facebook Page">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(lead.facebook_url, '_blank');
+                                      }}
+                                      sx={{ p: 0.2, color: '#1877f2' }}
+                                    >
+                                      <FacebookIcon sx={{ fontSize: 15 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                              </Stack>
+                            )}
                           </Box>
                         </Stack>
                       </TableCell>
@@ -1456,6 +1517,105 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                           </Typography>
                         </Box>
                       )}
+
+                      <Divider sx={{ my: 1 }} />
+
+                      {/* Email Address */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <EmailIcon sx={{ fontSize: 16, color: '#8b5cf6' }} /> Email:
+                        </Typography>
+                        {profileLead.email ? (
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                              {profileLead.email}
+                            </Typography>
+                            <Tooltip title="Send Email">
+                              <IconButton size="small" onClick={() => window.open(`mailto:${profileLead.email}`)} sx={{ p: 0.2, color: '#8b5cf6' }}>
+                                <OpenInNewIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">—</Typography>
+                        )}
+                      </Box>
+
+                      {/* Official Website */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <LanguageIcon sx={{ fontSize: 16, color: '#0284c7' }} /> Website:
+                        </Typography>
+                        {profileLead.website ? (
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 700,
+                                color: '#0284c7',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                maxWidth: 200,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                              onClick={() => window.open(profileLead.website?.startsWith('http') ? profileLead.website : `https://${profileLead.website}`, '_blank')}
+                            >
+                              {profileLead.website.replace(/^https?:\/\//, '')}
+                            </Typography>
+                            <Tooltip title="Visit Website">
+                              <IconButton
+                                size="small"
+                                onClick={() => window.open(profileLead.website?.startsWith('http') ? profileLead.website : `https://${profileLead.website}`, '_blank')}
+                                sx={{ p: 0.2, color: '#0284c7' }}
+                              >
+                                <OpenInNewIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">—</Typography>
+                        )}
+                      </Box>
+
+                      {/* Facebook Page */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <FacebookIcon sx={{ fontSize: 16, color: '#1877f2' }} /> Facebook:
+                        </Typography>
+                        {profileLead.facebook_url ? (
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 700,
+                                color: '#1877f2',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                maxWidth: 200,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                              onClick={() => window.open(profileLead.facebook_url, '_blank')}
+                            >
+                              View Facebook Page
+                            </Typography>
+                            <Tooltip title="Open Facebook">
+                              <IconButton
+                                size="small"
+                                onClick={() => window.open(profileLead.facebook_url, '_blank')}
+                                sx={{ p: 0.2, color: '#1877f2' }}
+                              >
+                                <OpenInNewIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">—</Typography>
+                        )}
+                      </Box>
                     </Stack>
                   </Paper>
 
@@ -1753,6 +1913,45 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                 </Select>
               </FormControl>
             </Stack>
+
+            {/* Email & Website */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Email Address"
+                placeholder="e.g. info@business.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                InputProps={{
+                  startAdornment: <EmailIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 18 }} />
+                }}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label="Website URL"
+                placeholder="e.g. https://brand.com.bd"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                InputProps={{
+                  startAdornment: <LanguageIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 18 }} />
+                }}
+              />
+            </Stack>
+
+            {/* Facebook URL */}
+            <TextField
+              fullWidth
+              size="small"
+              label="Facebook Page URL"
+              placeholder="e.g. https://facebook.com/brandname"
+              value={facebookUrl}
+              onChange={(e) => setFacebookUrl(e.target.value)}
+              InputProps={{
+                startAdornment: <FacebookIcon sx={{ color: '#1877f2', mr: 1, fontSize: 18 }} />
+              }}
+            />
 
             {/* Status */}
             <FormControl fullWidth size="small">
@@ -2162,7 +2361,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                       </TableCell>
                       <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Shop & Profile</TableCell>
                       <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Phone & WhatsApp</TableCell>
-                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Social & Maps</TableCell>
+                      <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Web & Social</TableCell>
                       <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Address / Location</TableCell>
                       <TableCell sx={{ fontWeight: 800, color: '#0f172a' }}>Category</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 800, color: '#0f172a' }}>Actions</TableCell>
@@ -2242,6 +2441,11 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                                     WA: {lead.whatsapp_name}
                                   </Typography>
                                 )}
+                                {lead.email && (
+                                  <Typography variant="caption" sx={{ color: '#7c3aed', display: 'flex', alignItems: 'center', gap: 0.3, mt: 0.2 }}>
+                                    <EmailIcon sx={{ fontSize: 11 }} /> {lead.email}
+                                  </Typography>
+                                )}
                               </Box>
                             </Stack>
                           </TableCell>
@@ -2291,7 +2495,58 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                           </TableCell>
 
                           <TableCell>
-                            <Stack direction="row" spacing={0.5}>
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                              {lead.website && (
+                                <Tooltip title={`Visit Website: ${lead.website}`}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => window.open(lead.website?.startsWith('http') ? lead.website : `https://${lead.website}`, '_blank')}
+                                    sx={{
+                                      bgcolor: '#f0f9ff',
+                                      color: '#0284c7',
+                                      border: '1px solid #bae6fd',
+                                      '&:hover': { bgcolor: '#e0f2fe' },
+                                    }}
+                                  >
+                                    <LanguageIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {lead.email && (
+                                <Tooltip title={`Send Email: ${lead.email}`}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => window.open(`mailto:${lead.email}`)}
+                                    sx={{
+                                      bgcolor: '#f5f3ff',
+                                      color: '#8b5cf6',
+                                      border: '1px solid #ddd6fe',
+                                      '&:hover': { bgcolor: '#ede9fe' },
+                                    }}
+                                  >
+                                    <EmailIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {lead.facebook_url && (
+                                <Tooltip title="Open Facebook Page">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => window.open(lead.facebook_url, '_blank')}
+                                    sx={{
+                                      bgcolor: '#eff6ff',
+                                      color: '#1877f2',
+                                      border: '1px solid #bfdbfe',
+                                      '&:hover': { bgcolor: '#dbeafe' },
+                                    }}
+                                  >
+                                    <FacebookIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
                               {lead.google_maps_url ? (
                                 <Tooltip title="Open in Google Maps">
                                   <IconButton
@@ -2319,23 +2574,6 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                                     }}
                                   >
                                     <MapIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              {lead.facebook_url && (
-                                <Tooltip title="Open Facebook Page">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => window.open(lead.facebook_url, '_blank')}
-                                    sx={{
-                                      bgcolor: '#f8fafc',
-                                      color: '#1877f2',
-                                      border: '1px solid #e2e8f0',
-                                      '&:hover': { bgcolor: '#dbeafe' },
-                                    }}
-                                  >
-                                    <FacebookIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
                               )}

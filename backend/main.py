@@ -147,6 +147,9 @@ class LeadCreate(BaseModel):
     phone: str
     shop_name: str
     owner_name: Optional[str] = ""
+    email: Optional[str] = ""
+    website: Optional[str] = ""
+    facebook_url: Optional[str] = ""
     category: Optional[str] = "General"
     shop_type: Optional[str] = "Retail"
     address: Optional[str] = ""
@@ -158,6 +161,9 @@ class LeadUpdate(BaseModel):
     phone: Optional[str] = None
     shop_name: Optional[str] = None
     owner_name: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    facebook_url: Optional[str] = None
     category: Optional[str] = None
     shop_type: Optional[str] = None
     address: Optional[str] = None
@@ -827,6 +833,9 @@ async def batch_import_leads_endpoint(payload: AutoLeadAssignRequest):
                 phone=phone,
                 shop_name=item.get('shop_name', '').strip() or 'New Business',
                 owner_name=item.get('owner_name', '').strip(),
+                email=item.get('email', '').strip(),
+                website=item.get('website', '').strip(),
+                facebook_url=item.get('facebook_url', '').strip(),
                 category=category_name,
                 shop_type=item.get('shop_type', 'Retail'),
                 address=item.get('address', '').strip(),
@@ -896,6 +905,9 @@ async def list_leads(
                 "phone": l.phone,
                 "shop_name": l.shop_name,
                 "owner_name": l.owner_name,
+                "email": l.email or "",
+                "website": l.website or "",
+                "facebook_url": l.facebook_url or "",
                 "category": l.category,
                 "shop_type": l.shop_type,
                 "is_on_whatsapp": l.is_on_whatsapp,
@@ -952,6 +964,9 @@ async def create_lead(payload: LeadCreate):
             phone=phone_clean,
             shop_name=shop_name_clean,
             owner_name=payload.owner_name.strip() if payload.owner_name else (wa_name if wa_name else ""),
+            email=payload.email.strip() if payload.email else "",
+            website=payload.website.strip() if payload.website else "",
+            facebook_url=payload.facebook_url.strip() if payload.facebook_url else "",
             category=payload.category or "General",
             shop_type=payload.shop_type or "Retail",
             is_on_whatsapp=is_on_wa,
@@ -967,6 +982,9 @@ async def create_lead(payload: LeadCreate):
             "phone": lead.phone,
             "shop_name": lead.shop_name,
             "owner_name": lead.owner_name,
+            "email": lead.email,
+            "website": lead.website,
+            "facebook_url": lead.facebook_url,
             "category": lead.category,
             "shop_type": lead.shop_type,
             "is_on_whatsapp": lead.is_on_whatsapp,
@@ -1018,6 +1036,12 @@ async def update_lead(lead_id: int, payload: LeadUpdate):
             lead.owner_name = payload.owner_name.strip()
         if payload.phone is not None:
             lead.phone = payload.phone.strip()
+        if payload.email is not None:
+            lead.email = payload.email.strip()
+        if payload.website is not None:
+            lead.website = payload.website.strip()
+        if payload.facebook_url is not None:
+            lead.facebook_url = payload.facebook_url.strip()
         if payload.category is not None:
             lead.category = payload.category
         if payload.shop_type is not None:
@@ -1037,6 +1061,9 @@ async def update_lead(lead_id: int, payload: LeadUpdate):
             "phone": lead.phone,
             "shop_name": lead.shop_name,
             "owner_name": lead.owner_name,
+            "email": lead.email,
+            "website": lead.website,
+            "facebook_url": lead.facebook_url,
             "category": lead.category,
             "shop_type": lead.shop_type,
             "status": lead.status,
@@ -1069,13 +1096,16 @@ async def export_leads_csv():
     def _gen_csv():
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["ID", "Shop Name", "Owner Name", "Phone", "Category", "Shop Type", "Status", "Contacted", "Last Contacted", "Sent Count", "On WhatsApp", "Address", "Notes", "Created At"])
+        writer.writerow(["ID", "Shop Name", "Owner Name", "Phone", "Email", "Website", "Facebook", "Category", "Shop Type", "Status", "Contacted", "Last Contacted", "Sent Count", "On WhatsApp", "Address", "Notes", "Created At"])
         for l in Lead.objects.all():
             writer.writerow([
                 l.id,
                 l.shop_name,
                 l.owner_name,
                 l.phone,
+                l.email or "",
+                l.website or "",
+                l.facebook_url or "",
                 l.category,
                 l.shop_type,
                 l.status,

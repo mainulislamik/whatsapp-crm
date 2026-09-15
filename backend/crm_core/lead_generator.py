@@ -117,6 +117,33 @@ class LeadScraperEngine:
                 return clean
         return None
 
+    @staticmethod
+    def extract_email(text: str) -> Optional[str]:
+        if not text:
+            return None
+        match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
+        if match:
+            email = match.group(0).lower().rstrip('.,;()[]')
+            if not any(email.endswith(x) for x in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']):
+                return email
+        return None
+
+    @staticmethod
+    def extract_website(text: str) -> Optional[str]:
+        if not text:
+            return None
+        excludes = ['facebook.com', 'fb.com', 'instagram.com', 'wa.me', 'whatsapp.com', 'google.com', 'goo.gl', 'youtube.com', 't.me', 'twitter.com', 'x.com', 'tiktok.com']
+        urls = re.findall(r'(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+(?:/[^\s]*)?)', text, re.IGNORECASE)
+        for u in urls:
+            u_clean = u.strip().rstrip('.,;()[]')
+            if any(ex in u_clean.lower() for ex in excludes):
+                continue
+            if '.' in u_clean and not any(u_clean.lower().endswith(ext) for ext in ['.jpg', '.png', '.jpeg', '.webp', '.svg', '.mp4', '.gif']):
+                if not u_clean.startswith('http://') and not u_clean.startswith('https://'):
+                    return f"https://{u_clean}"
+                return u_clean
+        return None
+
     async def fetch_searxng_facebook_pages(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Search Facebook pages and posts via local SearXNG instance."""
         fb_query = f"site:facebook.com {query}"
@@ -171,15 +198,19 @@ class LeadScraperEngine:
                         if not clean_name or len(clean_name) < 3 or clean_name.lower() in ["log in or sign up to view", "facebook", "home"]:
                             continue
                         
-                        # Extract phone
+                        # Extract phone, email, website
                         combined_text = f"{title} {content}"
                         phone = LeadScraperEngine.extract_phone(combined_text)
+                        email = LeadScraperEngine.extract_email(combined_text)
+                        website = LeadScraperEngine.extract_website(combined_text)
                         
                         results.append({
                             "shop_name": clean_name,
                             "facebook_url": clean_url,
                             "content": content,
                             "phone": phone,
+                            "email": email,
+                            "website": website,
                             "thumbnail": thumbnail,
                         })
                         if len(results) >= limit:
@@ -237,6 +268,8 @@ class LeadScraperEngine:
         for s_lead in searx_leads:
             name = s_lead["shop_name"]
             phone = s_lead["phone"]
+            email = s_lead.get("email") or ""
+            website = s_lead.get("website") or ""
             fb_url = s_lead["facebook_url"]
             content = s_lead["content"]
             thumb = s_lead["thumbnail"]
@@ -268,6 +301,8 @@ class LeadScraperEngine:
                 "id": lead_id,
                 "shop_name": name,
                 "phone": phone,
+                "email": email,
+                "website": website,
                 "category": selected_category,
                 "shop_type": detected_shop_type,
                 "address": address,
@@ -315,6 +350,8 @@ class LeadScraperEngine:
                     "id": lead_id,
                     "shop_name": shop_name,
                     "phone": gen_phone,
+                    "email": "",
+                    "website": "",
                     "category": selected_category,
                     "shop_type": detected_shop_type,
                     "address": address,
