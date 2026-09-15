@@ -14,7 +14,6 @@ import {
   CircularProgress,
   Stack,
   Chip,
-  Paper,
 } from '@mui/material';
 import {
   WhatsApp as WhatsAppIcon,
@@ -22,7 +21,6 @@ import {
   Lock as LockIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
-  Key as KeyIcon,
 } from '@mui/icons-material';
 import { AuthService } from '@/lib/api';
 
@@ -77,37 +75,21 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   };
 
-  const fillCredentials = () => {
-    setUsername('stockwhisk');
-    setPassword('imontouhid4992');
-    setError(null);
-  };
-
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: '#0f172a',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: 2,
-        backgroundImage: `radial-gradient(circle at 50% 50%, rgba(18, 140, 126, 0.15) 0%, rgba(15, 23, 42, 0.95) 70%)`,
-      }}
-    >
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/60 via-slate-50 to-slate-100">
       <Card
-        elevation={12}
+        elevation={0}
         sx={{
           width: '100%',
           maxWidth: 440,
           borderRadius: 4,
-          bgcolor: '#1e293b',
-          borderColor: '#334155',
+          bgcolor: '#ffffff',
+          borderColor: '#e2e8f0',
           borderWidth: 1,
           borderStyle: 'solid',
-          color: '#ffffff',
+          color: '#0f172a',
           overflow: 'hidden',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+          boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03)',
         }}
       >
         {/* Header Branding */}
@@ -115,40 +97,28 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           sx={{
             py: 4,
             px: 3,
-            bgcolor: '#0b1120',
-            borderBottom: '1px solid #334155',
+            bgcolor: '#ffffff',
+            borderBottom: '1px solid #f1f5f9',
             textAlign: 'center',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
           }}
         >
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: 3,
-              bgcolor: '#128C7E',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 20px rgba(18, 140, 126, 0.5)',
-              mb: 1.5,
-            }}
-          >
+          <div className="w-14 h-14 rounded-2xl bg-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-700/20 mb-3">
             <WhatsAppIcon sx={{ color: '#ffffff', fontSize: 36 }} />
-          </Box>
+          </div>
 
-          <Typography variant="h5" sx={{ fontWeight: 800, color: '#ffffff', letterSpacing: 0.5 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: 0.5 }}>
             WhatsApp CRM
           </Typography>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
             <Chip
               label="PRO v2.0"
               size="small"
-              sx={{ bgcolor: 'rgba(37, 211, 102, 0.15)', color: '#25D366', fontWeight: 800, fontSize: '0.7rem' }}
+              sx={{ bgcolor: 'rgba(18, 140, 126, 0.1)', color: '#128C7E', fontWeight: 800, fontSize: '0.7rem' }}
             />
-            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
               Secure Admin Login
             </Typography>
           </Stack>
@@ -160,7 +130,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             <Alert
               severity="error"
               onClose={() => setError(null)}
-              sx={{ mb: 3, borderRadius: 2, bgcolor: 'rgba(239, 68, 68, 0.15)', color: '#fca5a5' }}
+              sx={{ mb: 3, borderRadius: 2.5, bgcolor: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}
             >
               {error}
             </Alert>
@@ -169,7 +139,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <form onSubmit={handleSubmit}>
             <Stack spacing={2.5}>
               <Box>
-                <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 700, mb: 0.75, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: '#334155', fontWeight: 700, mb: 0.75, display: 'block' }}>
                   Username
                 </Typography>
                 <TextField
@@ -182,25 +152,25 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <PersonIcon sx={{ color: '#64748b' }} />
+                        <PersonIcon sx={{ color: '#94a3b8' }} />
                       </InputAdornment>
                     ),
                   }}
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 2.5,
-                      bgcolor: '#0f172a',
-                      color: '#ffffff',
-                      '& fieldset': { borderColor: '#334155' },
-                      '&:hover fieldset': { borderColor: '#64748b' },
-                      '&.Mui-focused fieldset': { borderColor: '#25D366' },
+                      bgcolor: '#f8fafc',
+                      color: '#0f172a',
+                      '& fieldset': { borderColor: '#e2e8f0' },
+                      '&:hover fieldset': { borderColor: '#cbd5e1' },
+                      '&.Mui-focused fieldset': { borderColor: '#128C7E', borderWidth: 2 },
                     },
                   }}
                 />
               </Box>
 
               <Box>
-                <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 700, mb: 0.75, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: '#334155', fontWeight: 700, mb: 0.75, display: 'block' }}>
                   Password
                 </Typography>
                 <TextField
@@ -214,7 +184,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <LockIcon sx={{ color: '#64748b' }} />
+                        <LockIcon sx={{ color: '#94a3b8' }} />
                       </InputAdornment>
                     ),
                     endAdornment: (
@@ -222,7 +192,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          sx={{ color: '#64748b' }}
+                          sx={{ color: '#94a3b8' }}
                         >
                           {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
                         </IconButton>
@@ -232,11 +202,11 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 2.5,
-                      bgcolor: '#0f172a',
-                      color: '#ffffff',
-                      '& fieldset': { borderColor: '#334155' },
-                      '&:hover fieldset': { borderColor: '#64748b' },
-                      '&.Mui-focused fieldset': { borderColor: '#25D366' },
+                      bgcolor: '#f8fafc',
+                      color: '#0f172a',
+                      '& fieldset': { borderColor: '#e2e8f0' },
+                      '&:hover fieldset': { borderColor: '#cbd5e1' },
+                      '&.Mui-focused fieldset': { borderColor: '#128C7E', borderWidth: 2 },
                     },
                   }}
                 />
@@ -250,15 +220,15 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 sx={{
                   py: 1.5,
                   borderRadius: 2.5,
-                  bgcolor: '#25D366',
-                  color: '#0f172a',
+                  bgcolor: '#128C7E',
+                  color: '#ffffff',
                   fontWeight: 800,
                   fontSize: '1rem',
                   textTransform: 'none',
-                  boxShadow: '0 4px 14px rgba(37, 211, 102, 0.4)',
+                  boxShadow: '0 4px 14px rgba(18, 140, 126, 0.3)',
                   '&:hover': {
-                    bgcolor: '#1DB954',
-                    boxShadow: '0 6px 18px rgba(37, 211, 102, 0.6)',
+                    bgcolor: '#0f766e',
+                    boxShadow: '0 6px 18px rgba(18, 140, 126, 0.4)',
                   },
                 }}
               >
@@ -268,6 +238,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </form>
         </CardContent>
       </Card>
-    </Box>
+    </div>
   );
 }

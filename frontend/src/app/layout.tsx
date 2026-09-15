@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ThemeRegistry from '@/theme/ThemeRegistry';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'WhatsApp CRM | Bulk Message Sender',

@@ -70,34 +70,35 @@ export default function Sidebar({
       sx={{
         width: { xs: 280, md: 280 },
         height: '100%',
-        bgcolor: '#0f172a',
-        color: '#f8fafc',
+        bgcolor: '#ffffff',
+        color: '#0f172a',
         display: 'flex',
         flexDirection: 'column',
+        borderRight: '1px solid #e2e8f0',
       }}
     >
       {/* Brand Header */}
-      <Box sx={{ p: 2.5, borderBottom: '1px solid #1e293b' }}>
+      <Box sx={{ p: 2.5, borderBottom: '1px solid #f1f5f9', bgcolor: '#ffffff' }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
               width: 40,
               height: 40,
-              borderRadius: 2,
+              borderRadius: 2.5,
               bgcolor: '#128C7E',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(18, 140, 126, 0.4)',
+              boxShadow: '0 4px 12px rgba(18, 140, 126, 0.25)',
             }}
           >
             <WhatsAppIcon sx={{ color: '#ffffff', fontSize: 26 }} />
           </Box>
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
               WhatsApp CRM
             </Typography>
-            <Typography variant="caption" sx={{ color: '#25D366', fontWeight: 700, letterSpacing: 0.5 }}>
+            <Typography variant="caption" sx={{ color: '#128C7E', fontWeight: 800, letterSpacing: 0.5 }}>
               PRO v2.0
             </Typography>
           </Box>
@@ -114,20 +115,20 @@ export default function Sidebar({
                 <ListItemButton
                   onClick={() => handleClick(item.id)}
                   sx={{
-                    borderRadius: 2,
+                    borderRadius: 2.5,
                     py: 1.2,
                     px: 1.5,
-                    bgcolor: active ? '#1e293b' : 'transparent',
-                    borderLeft: active ? '4px solid #25D366' : '4px solid transparent',
+                    bgcolor: active ? 'rgba(18, 140, 126, 0.08)' : 'transparent',
+                    borderLeft: active ? '4px solid #128C7E' : '4px solid transparent',
                     '&:hover': {
-                      bgcolor: active ? '#1e293b' : 'rgba(255, 255, 255, 0.05)',
+                      bgcolor: active ? 'rgba(18, 140, 126, 0.12)' : '#f8fafc',
                     },
                   }}
                 >
                   <ListItemIcon
                     sx={{
                       minWidth: 38,
-                      color: active ? '#25D366' : '#94a3b8',
+                      color: active ? '#128C7E' : '#64748b',
                     }}
                   >
                     {item.icon}
@@ -137,8 +138,8 @@ export default function Sidebar({
                       <Typography
                         variant="body2"
                         sx={{
-                          fontWeight: active ? 700 : 500,
-                          color: active ? '#ffffff' : '#cbd5e1',
+                          fontWeight: active ? 800 : 600,
+                          color: active ? '#128C7E' : '#334155',
                         }}
                       >
                         {item.label}
@@ -149,7 +150,7 @@ export default function Sidebar({
                         <Typography
                           variant="caption"
                           sx={{
-                            color: active ? '#94a3b8' : '#64748b',
+                            color: active ? '#0f766e' : '#94a3b8',
                             fontSize: '0.72rem',
                           }}
                         >
@@ -165,28 +166,28 @@ export default function Sidebar({
         </List>
       </Box>
 
-      <Divider sx={{ borderColor: '#1e293b' }} />
+      <Divider sx={{ borderColor: '#f1f5f9' }} />
 
       {/* Footer Connection Status */}
-      <Box sx={{ p: 2, bgcolor: '#0b1120' }}>
+      <Box sx={{ p: 2, bgcolor: '#f8fafc', borderTop: '1px solid #f1f5f9' }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
-              width: 12,
-              height: 12,
+              width: 10,
+              height: 10,
               borderRadius: '50%',
               bgcolor: isConnected ? '#10b981' : isScanQr ? '#f59e0b' : '#ef4444',
-              boxShadow: isConnected ? '0 0 8px #10b981' : 'none',
+              boxShadow: isConnected ? '0 0 8px rgba(16, 185, 129, 0.6)' : 'none',
             }}
           />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', fontWeight: 600 }}>
-              Connection Status
+            <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontWeight: 600 }}>
+              Engine Status
             </Typography>
             <Typography
               variant="body2"
               sx={{
-                color: '#ffffff',
+                color: '#0f172a',
                 fontWeight: 700,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
