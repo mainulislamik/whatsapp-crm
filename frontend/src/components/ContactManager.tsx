@@ -22,68 +22,116 @@ import {
   DialogContent,
   DialogActions,
   Stack,
-  Alert,
   Tooltip,
+  LinearProgress,
 } from '@mui/material';
+import PeopleIcon from '@mui/icons-material/People';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DownloadIcon from '@mui/icons-material/Download';
 import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import { Contact, TagCount, ContactService } from '@/lib/api';
+import { Contact, ContactService } from '@/lib/api';
 
 interface ContactManagerProps {
   selectedIds: number[];
   onSelectionChange: (ids: number[]) => void;
 }
 
-export default function ContactManager({ selectedIds, onSelectionChange }: ContactManagerProps) {
+export default function ContactManager({
+  selectedIds,
+  onSelectionChange,
+}: ContactManagerProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [tagsList, setTagsList] = useState<TagCount[]>([]);
+  const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [search, setSearch] = useState<string>('');
+  const [openAddDialog, setOpenAddDialog] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [openAdd, setOpenAdd] = useState<boolean>(false);
-  const [openImport, setOpenImport] = useState<boolean>(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   // Form State
-  const [name, setName] = useState<string>('');
-  const [phone, setPhone] = useState<string>('');
-  const [email, setEmail] = useState<string>('');
-  const [tags, setTags] = useState<string>('');
-  const [notes, setNotes] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const [formName, setFormName] = useState<string>('');
+  const [formPhone, setFormPhone] = useState<string>('');
+  const [formEmail, setFormEmail] = useState<string>('');
+  const [formTags, setFormTags] = useState<string>('');
+  const [formNotes, setFormNotes] = useState<string>('');
 
-  const fetchContacts = async () => {
+  const fetchContactsAndTags = async () => {
     setLoading(true);
     try {
-      const res = await ContactService.list(search, selectedTag);
-      setContacts(res.data);
-      const tagRes = await ContactService.getTags();
-      setTagsList(tagRes.data);
-    } catch (err: any) {
-      console.error('Error fetching contacts:', err);
+      const [contactsRes, tagsRes] = await Promise.all([
+        ContactService.list(),
+        ContactService.getTags(),
+      ]);
+      setContacts(contactsRes.data);
+      setTags(tagsRes.data);
+    } catch (err) {
+      console.error('Failed to load contacts:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchContacts();
-  }, [search, selectedTag]);
+    fetchContactsAndTags();
+  }, []);
 
-  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.checked) {
-      onSelectionChange(contacts.map((c) => c.id));
-    } else {
-      onSelectionChange([]);
+  const handleCreateContact = async () => {
+    if (!formName.trim() || !formPhone.trim()) {
+      alert('Name and Phone number are required.');
+      return;
+    }
+    try {
+      await ContactService.create({
+        name: formName.trim(),
+        phone: formPhone.trim(),
+        email: formEmail.trim() || undefined,
+        tags: formTags.trim(),
+        notes: formNotes.trim(),
+      });
+      setOpenAddDialog(false);
+      setFormName('');
+      setFormPhone('');
+      setFormEmail('');
+      setFormTags('');
+      setFormNotes('');
+      fetchContactsAndTags();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to save contact');
     }
   };
 
-  const handleSelectOne = (id: number) => {
+  const handleDeleteContact = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this contact?')) return;
+    try {
+      await ContactService.delete(id);
+      onSelectionChange(selectedIds.filter((item) => item !== id));
+      fetchContactsAndTags();
+    } catch (err) {
+      alert('Delete failed');
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allFilteredIds = filteredContacts.map((c) => c.id);
+      const combined = Array.from(new Set([...selectedIds, ...allFilteredIds]));
+      onSelectionChange(combined);
+    } else {
+      const filteredSet = new Set(filteredContacts.map((c) => c.id));
+      onSelectionChange(selectedIds.filter((id) => !filteredSet.has(id)));
+    }
+  };
+
+  const handleSelectTagGroup = (tag: string) => {
+    const taggedIds = contacts
+      .filter((c) => c.tags?.split(',').map((t) => t.trim().toLowerCase()).includes(tag.toLowerCase()))
+      .map((c) => c.id);
+    const combined = Array.from(new Set([...selectedIds, ...taggedIds]));
+    onSelectionChange(combined);
+  };
+
+  const handleToggleOne = (id: number) => {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter((item) => item !== id));
     } else {
@@ -91,216 +139,238 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
     }
   };
 
-  const handleSelectTagAudience = () => {
-    const idsInTag = contacts.map((c) => c.id);
-    const merged = Array.from(new Set([...selectedIds, ...idsInTag]));
-    onSelectionChange(merged);
-  };
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleCreateContact = async () => {
-    if (!name.trim() || !phone.trim()) {
-      setError('নাম এবং ফোন নম্বর আবশ্যক');
-      return;
-    }
-    setError(null);
-    try {
-      await ContactService.create({ name, phone, email, tags, notes });
-      setOpenAdd(false);
-      setName('');
-      setPhone('');
-      setEmail('');
-      setTags('');
-      setNotes('');
-      fetchContacts();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to save contact');
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('আপনি কি এই কন্টাক্ট মুছে ফেলতে চান?')) return;
-    try {
-      await ContactService.delete(id);
-      onSelectionChange(selectedIds.filter((item) => item !== id));
-      fetchContacts();
-    } catch (err: any) {
-      alert('Delete failed');
-    }
-  };
-
-  const handleImportCsv = async () => {
-    if (!csvFile) return;
     setLoading(true);
     try {
-      const res = await ContactService.importCsv(csvFile);
-      setImportStatus(`সফলভাবে ${res.data.imported} টি নতুন কন্টাক্ট এবং ${res.data.updated} টি আপডেট করা হয়েছে।`);
-      setCsvFile(null);
-      fetchContacts();
-      setTimeout(() => {
-        setOpenImport(false);
-        setImportStatus(null);
-      }, 2000);
+      const res = await ContactService.importCsv(file);
+      alert(`CSV imported: ${res.data.imported} added, ${res.data.skipped} duplicates skipped.`);
+      fetchContactsAndTags();
     } catch (err: any) {
-      setImportStatus(`ত্রুটি: ${err.message || 'Import failed'}`);
+      alert(err.response?.data?.detail || 'CSV Import failed');
     } finally {
       setLoading(false);
+      e.target.value = '';
     }
   };
+
+  const handleDownloadSampleCsv = () => {
+    const sample = 'name,phone,email,tags,notes\nRahim Khan,01700000001,rahim@example.com,"VIP, Wholesaler",Regular client\nKarim Ahmed,01800000002,karim@example.com,Retail,Cash payment';
+    const blob = new Blob([sample], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'whatsapp_contacts_sample.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const filteredContacts = contacts.filter((c) => {
+    const matchesSearch =
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.phone.includes(search) ||
+      (c.tags && c.tags.toLowerCase().includes(search.toLowerCase()));
+
+    const matchesTag =
+      !selectedTag ||
+      (c.tags &&
+        c.tags
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .includes(selectedTag.toLowerCase()));
+
+    return matchesSearch && matchesTag;
+  });
+
+  const isAllSelected =
+    filteredContacts.length > 0 &&
+    filteredContacts.every((c) => selectedIds.includes(c.id));
 
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
-        <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2, gap: 2 }}>
+        {/* Header Row */}
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 2, gap: 1.5 }}>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              কন্টাক্ট তালিকা ({contacts.length})
+            <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PeopleIcon color="primary" /> Contact Directory & Audience
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              ট্যাগ ফিল্টার করুন বা প্রাপক নির্বাচন করে বাল্ক মেসেজ পাঠান।
+              Manage, search, filter, and import your contacts.
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
             <Button
               variant="contained"
+              color="primary"
+              size="small"
               startIcon={<PersonAddIcon />}
-              onClick={() => setOpenAdd(true)}
+              onClick={() => setOpenAddDialog(true)}
+              sx={{ fontWeight: 700 }}
             >
-              নতুন কন্টাক্ট
+              Add Contact
             </Button>
             <Button
+              component="label"
               variant="outlined"
+              color="secondary"
+              size="small"
               startIcon={<UploadFileIcon />}
-              onClick={() => setOpenImport(true)}
+              sx={{ fontWeight: 700 }}
             >
-              CSV ইমপোর্ট
+              Import CSV
+              <input type="file" hidden accept=".csv" onChange={handleCsvUpload} />
             </Button>
+            <Tooltip title="Download CSV template format">
+              <IconButton size="small" onClick={handleDownloadSampleCsv}>
+                <DownloadIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
 
-        {/* Tag Filters Row */}
-        {tagsList.length > 0 && (
-          <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-              <FilterListIcon fontSize="small" sx={{ color: 'text.secondary', mr: 0.5 }} />
-              <Typography variant="caption" sx={{ fontWeight: 700, mr: 1 }}>
-                ট্যাগ অনুযায়ী অডিয়েন্স:
-              </Typography>
-              <Chip
-                label="সব কন্টাক্ট"
-                size="small"
-                clickable
-                color={selectedTag === '' ? 'primary' : 'default'}
-                variant={selectedTag === '' ? 'filled' : 'outlined'}
-                onClick={() => setSelectedTag('')}
-              />
-              {tagsList.map((t) => (
+        {/* Tag Audience Filters */}
+        {tags.length > 0 && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                  Filter by Tag:
+                </Typography>
                 <Chip
-                  key={t.tag}
-                  label={`${t.tag} (${t.count})`}
+                  label={`All (${contacts.length})`}
                   size="small"
                   clickable
-                  color={selectedTag === t.tag ? 'primary' : 'default'}
-                  variant={selectedTag === t.tag ? 'filled' : 'outlined'}
-                  onClick={() => setSelectedTag(t.tag)}
+                  color={selectedTag === '' ? 'primary' : 'default'}
+                  onClick={() => setSelectedTag('')}
+                  sx={{ fontWeight: 600 }}
                 />
-              ))}
+                {tags.map((t) => (
+                  <Chip
+                    key={t.tag}
+                    label={`${t.tag} (${t.count})`}
+                    size="small"
+                    clickable
+                    color={selectedTag === t.tag ? 'primary' : 'default'}
+                    onClick={() => setSelectedTag(t.tag === selectedTag ? '' : t.tag)}
+                    sx={{ fontWeight: 600 }}
+                  />
+                ))}
+              </Stack>
 
               {selectedTag && (
                 <Button
                   size="small"
-                  variant="contained"
+                  variant="outlined"
                   color="secondary"
-                  startIcon={<CheckBoxIcon />}
-                  onClick={handleSelectTagAudience}
-                  sx={{ ml: 'auto !nowrap' }}
+                  onClick={() => handleSelectTagGroup(selectedTag)}
+                  sx={{ fontSize: '0.78rem', fontWeight: 700 }}
                 >
-                  {selectedTag} গ্রুপের সবাইকে সিলেক্ট করুন ({contacts.length})
+                  Select All in "{selectedTag}"
                 </Button>
               )}
             </Stack>
           </Box>
         )}
 
-        <Box sx={{ mb: 2 }}>
+        {/* Search & Selection Bar */}
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 2, gap: 1.5 }}>
           <TextField
-            fullWidth
             size="small"
-            placeholder="নাম অথবা ফোন নম্বর দিয়ে খুঁজুন..."
+            placeholder="Search by name, phone, or tag..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             InputProps={{
-              startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />,
+              startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />,
             }}
+            sx={{ width: { xs: '100%', sm: 300 } }}
           />
-        </Box>
 
-        {selectedIds.length > 0 && (
-          <Alert
-            severity="info"
-            sx={{ mb: 2 }}
-            action={
-              <Button color="inherit" size="small" onClick={() => onSelectionChange([])}>
-                সিলেকশন মুছুন
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Chip
+              label={`${selectedIds.length} Selected`}
+              color={selectedIds.length > 0 ? 'primary' : 'default'}
+              sx={{ fontWeight: 700 }}
+            />
+            {selectedIds.length > 0 && (
+              <Button size="small" color="inherit" onClick={() => onSelectionChange([])}>
+                Clear Selection
               </Button>
-            }
-          >
-            বর্তমানে <b>{selectedIds.length}</b> জন কন্টাক্ট সিলেক্ট করা হয়েছে।
-          </Alert>
-        )}
+            )}
+          </Stack>
+        </Stack>
 
-        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5, maxHeight: 380 }}>
-          <Table stickyHeader size="small">
+        {loading && <LinearProgress sx={{ mb: 1.5 }} />}
+
+        {/* Contacts Table */}
+        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 2, maxHeight: 440 }}>
+          <Table size="small" stickyHeader>
             <TableHead>
-              <TableRow sx={{ bgcolor: '#f8fafc' }}>
+              <TableRow>
                 <TableCell padding="checkbox">
                   <Checkbox
-                    indeterminate={selectedIds.length > 0 && selectedIds.length < contacts.length}
-                    checked={contacts.length > 0 && selectedIds.length === contacts.length}
-                    onChange={handleSelectAll}
+                    checked={isAllSelected}
+                    indeterminate={selectedIds.length > 0 && !isAllSelected}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
                   />
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>নাম</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>ফোন নম্বর</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>ট্যাগ</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>নোট</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>অ্যাকশন</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Phone Number</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Tags / Group</TableCell>
+                <TableCell>Notes</TableCell>
+                <TableCell align="right">Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {contacts.length === 0 ? (
+              {filteredContacts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                    কোন কন্টাক্ট পাওয়া যায়নি।
+                  <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    No contacts found.
                   </TableCell>
                 </TableRow>
               ) : (
-                contacts.map((c) => {
+                filteredContacts.map((c) => {
                   const isSelected = selectedIds.includes(c.id);
                   return (
                     <TableRow key={c.id} hover selected={isSelected}>
                       <TableCell padding="checkbox">
                         <Checkbox
                           checked={isSelected}
-                          onChange={() => handleSelectOne(c.id)}
+                          onChange={() => handleToggleOne(c.id)}
                         />
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{c.name || '—'}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace' }}>{c.phone || '—'}</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace' }}>{c.phone}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary' }}>{c.email || '—'}</TableCell>
                       <TableCell>
-                        {c.tags ? (
-                          c.tags.split(',').map((t, idx) => (
-                            <Chip key={idx} label={t.trim()} size="small" sx={{ mr: 0.5, mb: 0.5 }} />
-                          ))
-                        ) : (
-                          '—'
-                        )}
+                        {c.tags
+                          ? c.tags.split(',').map((tag) => (
+                              <Chip
+                                key={tag.trim()}
+                                label={tag.trim()}
+                                size="small"
+                                variant="outlined"
+                                sx={{ mr: 0.5, mb: 0.5, fontSize: '0.72rem' }}
+                              />
+                            ))
+                          : '—'}
                       </TableCell>
-                      <TableCell>{c.notes || '—'}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.notes || '—'}
+                      </TableCell>
                       <TableCell align="right">
-                        <Tooltip title="কন্টাক্ট মুছুন">
-                          <IconButton size="small" color="error" onClick={() => handleDelete(c.id)}>
-                            <DeleteIcon fontSize="small" />
+                        <Tooltip title="Delete contact">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeleteContact(c.id)}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
@@ -313,80 +383,53 @@ export default function ContactManager({ selectedIds, onSelectionChange }: Conta
         </TableContainer>
 
         {/* Add Contact Modal */}
-        <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="xs" fullWidth>
-          <DialogTitle sx={{ fontWeight: 700 }}>নতুন কন্টাক্ট যোগ করুন</DialogTitle>
+        <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Add New Contact</DialogTitle>
           <DialogContent>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Stack spacing={2} sx={{ mt: 1 }}>
               <TextField
-                label="নাম *"
+                label="Full Name *"
                 fullWidth
                 size="small"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
               />
               <TextField
-                label="ফোন নম্বর (উদা: 01712345678 বা 88017...) *"
+                label="Phone Number * (e.g. 01712345678 or 88017...)"
                 fullWidth
                 size="small"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                value={formPhone}
+                onChange={(e) => setFormPhone(e.target.value)}
               />
               <TextField
-                label="ইমেইল (ঐচ্ছিক)"
+                label="Email (Optional)"
                 fullWidth
                 size="small"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
               />
               <TextField
-                label="ট্যাগ (কমা দিয়ে লিখুন, যেমন: VIP, Client)"
+                label="Tags / Groups (Comma separated, e.g. VIP, Wholesaler)"
                 fullWidth
                 size="small"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
+                value={formTags}
+                onChange={(e) => setFormTags(e.target.value)}
               />
               <TextField
-                label="নোট (ঐচ্ছিক)"
+                label="Notes (Optional)"
                 fullWidth
                 multiline
                 rows={2}
                 size="small"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
               />
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpenAdd(false)}>বাতিল</Button>
-            <Button variant="contained" onClick={handleCreateContact}>সংরক্ষণ করুন</Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* CSV Import Modal */}
-        <Dialog open={openImport} onClose={() => setOpenImport(false)} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ fontWeight: 700 }}>CSV ফাইল থেকে কন্টাক্ট ইমপোর্ট</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              আপনার CSV ফাইলে <b>Name</b> এবং <b>Phone</b> কলাম থাকতে হবে (ঐচ্ছিক: Email, Tags, Notes)।
-            </Typography>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-            />
-            {importStatus && (
-              <Alert severity="info" sx={{ mt: 2 }}>{importStatus}</Alert>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenImport(false)}>বন্ধ করুন</Button>
-            <Button
-              variant="contained"
-              onClick={handleImportCsv}
-              disabled={!csvFile || loading}
-            >
-              ইমপোর্ট শুরু করুন
+            <Button onClick={() => setOpenAddDialog(false)}>Cancel</Button>
+            <Button variant="contained" color="primary" onClick={handleCreateContact}>
+              Save Contact
             </Button>
           </DialogActions>
         </Dialog>

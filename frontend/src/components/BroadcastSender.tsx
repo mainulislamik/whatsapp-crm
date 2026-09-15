@@ -42,7 +42,7 @@ export default function BroadcastSender({
   onMessageChange,
   onCampaignStarted,
 }: BroadcastSenderProps) {
-  const [title, setTitle] = useState<string>('নতুন প্রচার ক্যাম্পেইন');
+  const [title, setTitle] = useState<string>('New Broadcast Campaign');
   const [delay, setDelay] = useState<number>(5);
   const [loading, setLoading] = useState<boolean>(false);
   const [openConfirm, setOpenConfirm] = useState<boolean>(false);
@@ -68,9 +68,8 @@ export default function BroadcastSender({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (max 20MB)
     if (file.size > 20 * 1024 * 1024) {
-      alert('ফাইলের সাইজ সর্বোচ্চ ২০MB হতে পারে।');
+      alert('Maximum file size is 20MB.');
       return;
     }
 
@@ -94,15 +93,15 @@ export default function BroadcastSender({
 
   const handleStartBroadcast = async () => {
     if (selectedContactIds.length === 0) {
-      setStatusMsg({ type: 'error', text: 'অনুগ্রহ করে প্রথমে কমপক্ষে একজন কন্টাক্ট সিলেক্ট করুন।' });
+      setStatusMsg({ type: 'error', text: 'Please select at least one contact first.' });
       return;
     }
     if (!messageText.trim() && !attachedFile) {
-      setStatusMsg({ type: 'error', text: 'মেসেজ কন্টেন্ট অথবা ফাইল এটাচমেন্ট আবশ্যক।' });
+      setStatusMsg({ type: 'error', text: 'Message text or media attachment is required.' });
       return;
     }
     if (isScheduled && !scheduleDateTime) {
-      setStatusMsg({ type: 'error', text: 'শিডিউল করার জন্য তারিখ ও সময় নির্বাচন করুন।' });
+      setStatusMsg({ type: 'error', text: 'Please choose date and time for scheduled send.' });
       return;
     }
 
@@ -125,13 +124,13 @@ export default function BroadcastSender({
 
       setStatusMsg({
         type: 'success',
-        text: res.data.message || 'ক্যাম্পেইন সফলভাবে তৈরি হয়েছে!',
+        text: res.data.message || 'Campaign started successfully!',
       });
       onCampaignStarted();
     } catch (err: any) {
       setStatusMsg({
         type: 'error',
-        text: err.response?.data?.detail || err.message || 'ক্যাম্পেইন শুরু করতে সমস্যা হয়েছে।',
+        text: err.response?.data?.detail || err.message || 'Failed to start campaign.',
       });
     } finally {
       setLoading(false);
@@ -144,14 +143,14 @@ export default function BroadcastSender({
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 2, gap: 1 }}>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SendIcon color="secondary" /> বাল্ক মেসেজ সেন্ডার (Broadcast)
+              <SendIcon color="secondary" /> Bulk Broadcast Sender
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              ছবি, ডকুমেন্ট ও টেক্সট সহ একসাথে একাধিক ইউজারের কাছে পাঠান।
+              Send personalized text, images, and documents to multiple users.
             </Typography>
           </Box>
           <Chip
-            label={`${selectedContactIds.length} জন প্রাপক নির্বাচিত`}
+            label={`${selectedContactIds.length} Recipients Selected`}
             color={selectedContactIds.length > 0 ? 'primary' : 'default'}
             sx={{ fontWeight: 700, fontSize: '0.9rem' }}
           />
@@ -165,7 +164,7 @@ export default function BroadcastSender({
 
         <Stack spacing={2.5}>
           <TextField
-            label="ক্যাম্পেইন টাইটেল / নাম *"
+            label="Campaign Title *"
             size="small"
             fullWidth
             value={title}
@@ -175,11 +174,11 @@ export default function BroadcastSender({
           {/* Dynamic Tags & Spintax Helpers */}
           <Box>
             <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.8 }}>
-              ডায়নামিক ট্যাগ ও স্পিনট্যাক্স হেল্পার (মেসেজে ইনসার্ট করতে ক্লিক করুন):
+              Dynamic Variables & Spintax Helpers (Click to insert):
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
               <Chip
-                label="{name} (নাম)"
+                label="{name} (Contact Name)"
                 size="small"
                 onClick={() => insertTag('{name}')}
                 clickable
@@ -187,19 +186,19 @@ export default function BroadcastSender({
                 variant="outlined"
               />
               <Chip
-                label="{phone} (ফোন নম্বর)"
+                label="{phone} (Phone Number)"
                 size="small"
                 onClick={() => insertTag('{phone}')}
                 clickable
                 color="secondary"
                 variant="outlined"
               />
-              <Tooltip title="প্রতিটি প্রাপকের কাছে একেকটি ভিন্ন ভ্যারিয়েশন যাবে — অ্যান্টি-ব্যান সুরক্ষা">
+              <Tooltip title="Each recipient receives a randomly selected variant to avoid spam detection">
                 <Chip
                   icon={<AutoAwesomeIcon fontSize="small" />}
-                  label="{আসসালামু আলাইকুম|নমস্কার|শুভ দিন} (Spintax)"
+                  label="{Hello|Hi|Greetings} (Spintax)"
                   size="small"
-                  onClick={() => insertTag('{আসসালামু আলাইকুম|নমস্কার|শুভ দিন}')}
+                  onClick={() => insertTag('{Hello|Hi|Greetings}')}
                   clickable
                   color="primary"
                   variant="outlined"
@@ -209,14 +208,14 @@ export default function BroadcastSender({
           </Box>
 
           <TextField
-            label="মেসেজ কন্টেন্ট *"
+            label="Message Content *"
             fullWidth
             multiline
             rows={4}
             value={messageText}
             onChange={(e) => onMessageChange(e.target.value)}
-            placeholder="{আসসালামু আলাইকুম|নমস্কার} {name} ভাই! আমাদের বিশেষ অফার দেখতে সংযুক্ত ফাইলটি চেক করুন..."
-            helperText="স্পিনট্যাক্স ব্যবহার করলে WhatsApp বট ধরতে পারবে না।"
+            placeholder="{Hello|Hi} {name}! Check out our special announcement..."
+            helperText="Using Spintax variations prevents account flags and keeps messages organic."
           />
 
           {/* Media Attachment Row */}
@@ -229,7 +228,7 @@ export default function BroadcastSender({
                   size="small"
                   startIcon={<AttachFileIcon />}
                 >
-                  ফাইল/ছবি এটাচ করুন
+                  Attach Image / Document
                   <input
                     type="file"
                     hidden
@@ -238,7 +237,7 @@ export default function BroadcastSender({
                   />
                 </Button>
                 <Typography variant="caption" color="text.secondary">
-                  (JPG, PNG, PDF, DOCX — সর্বোচ্চ 20MB)
+                  (JPG, PNG, PDF, DOCX — max 20MB)
                 </Typography>
               </Stack>
 
@@ -277,7 +276,7 @@ export default function BroadcastSender({
               }
               label={
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  নির্দিষ্ট সময়ে শিডিউল করুন (Scheduled Send)
+                  Schedule for Later (Optional)
                 </Typography>
               }
             />
@@ -286,7 +285,7 @@ export default function BroadcastSender({
                 <TextField
                   type="datetime-local"
                   size="small"
-                  label="পাঠানোর সময়"
+                  label="Scheduled Delivery Time"
                   InputLabelProps={{ shrink: true }}
                   value={scheduleDateTime}
                   onChange={(e) => setScheduleDateTime(e.target.value)}
@@ -301,11 +300,11 @@ export default function BroadcastSender({
             <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1 }}>
               <SecurityIcon color="success" fontSize="small" />
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                অ্যান্টি-ব্যান সুরক্ষা ডিলে: {delay} সেকেন্ড (± ১.৫ সে. র্যান্ডম হিউম্যান জিটার)
+                Anti-Ban Protection Delay: {delay}s (±1.5s random human jitter)
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontSize: '0.82rem' }}>
-              সিস্টেম প্রতি মেসেজে স্বয়ংক্রিয়ভাবে সামান্য সময় পরিবর্তন করে মানুষের মতো আচরণ তৈরি করে।
+              System dynamically varies intervals between sends to mirror natural human typing rhythms.
             </Typography>
             <Slider
               value={delay}
@@ -331,32 +330,33 @@ export default function BroadcastSender({
               sx={{ px: 4, py: 1.2, fontWeight: 700 }}
             >
               {isScheduled
-                ? `শিডিউল নিশ্চিত করুন (${selectedContactIds.length})`
-                : `বাল্ক মেসেজ শুরু করুন (${selectedContactIds.length})`}
+                ? `Confirm Schedule (${selectedContactIds.length})`
+                : `Start Broadcast (${selectedContactIds.length})`}
             </Button>
           </Box>
         </Stack>
 
         {/* Confirmation Modal */}
         <Dialog open={openConfirm} onClose={() => setOpenConfirm(false)}>
-          <DialogTitle sx={{ fontWeight: 700 }}>আপনি কি নিশ্চিত?</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 700 }}>Confirm Broadcast</DialogTitle>
           <DialogContent>
             <Typography variant="body1" sx={{ mb: 1.5 }}>
-              আপনি <b>{selectedContactIds.length}</b> জন কন্টাক্টকে মেসেজ {isScheduled ? 'শিডিউল করতে' : 'পাঠাতে'} যাচ্ছেন।
+              You are about to {isScheduled ? 'schedule messages for' : 'send messages to'}{' '}
+              <b>{selectedContactIds.length}</b> contact(s).
             </Typography>
             {attachedFile && (
               <Typography variant="body2" color="primary" sx={{ mb: 1 }}>
-                সংযুক্ত ফাইল: <b>{attachedFile.file.name}</b>
+                Attached file: <b>{attachedFile.file.name}</b>
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary">
-              প্রতিটি মেসেজের গড় ব্যবধান: <b>{delay} সেকেন্ড</b>।
+              Average delay: <b>{delay} seconds</b> per recipient.
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpenConfirm(false)}>বাতিল</Button>
+            <Button onClick={() => setOpenConfirm(false)}>Cancel</Button>
             <Button variant="contained" color="primary" onClick={handleStartBroadcast}>
-              হ্যাঁ, নিশ্চিত করুন
+              Yes, Confirm & Start
             </Button>
           </DialogActions>
         </Dialog>

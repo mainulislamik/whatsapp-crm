@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Grid,
   Card,
   CardContent,
   Typography,
@@ -109,10 +108,10 @@ export default function Overview({ onNavigate }: OverviewProps) {
                 </Box>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff' }}>
-                    WhatsApp CRM ড্যাশবোর্ড
+                    WhatsApp CRM Dashboard
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-                    স্মার্ট কন্টাক্ট ম্যানেজমেন্ট ও সুরক্ষিত বাল্ক ব্রডকাস্ট ইঞ্জিন
+                    Smart Contact Management & Safe Bulk Broadcast Engine
                   </Typography>
                 </Box>
               </Stack>
@@ -122,10 +121,10 @@ export default function Overview({ onNavigate }: OverviewProps) {
               <Chip
                 label={
                   waStatus?.status === 'CONNECTED'
-                    ? `সংযুক্ত: ${waStatus.user?.name || waStatus.user?.id?.split(':')[0] || 'WhatsApp'}`
+                    ? `Connected: ${waStatus.user?.name || waStatus.user?.id?.split(':')[0] || 'WhatsApp'}`
                     : waStatus?.status === 'SCAN_QR'
-                    ? 'QR কোড স্ক্যান প্রয়োজন'
-                    : 'ডিসকানেক্টেড'
+                    ? 'QR Scan Required'
+                    : 'Disconnected'
                 }
                 color={
                   waStatus?.status === 'CONNECTED'
@@ -145,7 +144,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
                   onClick={() => onNavigate('device')}
                   sx={{ fontWeight: 700 }}
                 >
-                  QR স্ক্যান করুন
+                  Scan QR
                 </Button>
               )}
             </Stack>
@@ -161,7 +160,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  মোট কন্টাক্টস
+                  Total Contacts
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
                   {stats.contactsCount}
@@ -180,7 +179,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  মোট ক্যাম্পেইন
+                  Total Campaigns
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
                   {stats.campaignsCount}
@@ -199,7 +198,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  সফল মেসেজ
+                  Messages Sent
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 800, color: '#10b981', mt: 0.5 }}>
                   {stats.sentCount}
@@ -218,7 +217,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  ব্যর্থ মেসেজ
+                  Failed Messages
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 800, color: stats.failedCount > 0 ? '#ef4444' : '#64748b', mt: 0.5 }}>
                   {stats.failedCount}
@@ -236,7 +235,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
       <Card sx={{ mb: 3.5 }}>
         <CardContent>
           <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>
-            কুইক লঞ্চপ্যাড (দ্রুত শুরু করুন)
+            Quick Launchpad
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
             <Button
@@ -246,7 +245,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
               onClick={() => onNavigate('broadcast')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              নতুন বাল্ক ব্রডকাস্ট
+              New Bulk Broadcast
             </Button>
             <Button
               variant="outlined"
@@ -255,7 +254,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
               onClick={() => onNavigate('quickchat')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              সরাসরি কুইক মেসেজ
+              Direct Quick Message
             </Button>
             <Button
               variant="outlined"
@@ -264,7 +263,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
               onClick={() => onNavigate('contacts')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              কন্টাক্টস ও ট্যাগ ফিল্টার
+              Contacts & Audience
             </Button>
             <Button
               variant="outlined"
@@ -273,7 +272,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
               onClick={() => onNavigate('device')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              WhatsApp QR লিঙ্ক
+              WhatsApp Device Link
             </Button>
           </Box>
         </CardContent>
@@ -284,7 +283,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
         <CardContent>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-              সাম্প্রতিক ক্যাম্পেইনসমূহ
+              Recent Campaigns
             </Typography>
             <Button
               size="small"
@@ -292,13 +291,13 @@ export default function Overview({ onNavigate }: OverviewProps) {
               onClick={() => onNavigate('reports')}
               sx={{ fontWeight: 700 }}
             >
-              সব রিপোর্ট দেখুন
+              View All Reports
             </Button>
           </Stack>
 
           {recentCampaigns.length === 0 ? (
             <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
-              এখনো কোনো ক্যাম্পেইন চালানো হয়নি।
+              No campaigns found.
             </Box>
           ) : (
             <Stack spacing={1.5}>
@@ -321,7 +320,7 @@ export default function Overview({ onNavigate }: OverviewProps) {
                       {camp.title}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      মোট প্রাপক: {camp.total_recipients} | পাঠানো: {camp.sent_count} | ব্যর্থ: {camp.failed_count}
+                      Recipients: {camp.total_recipients} | Sent: {camp.sent_count} | Failed: {camp.failed_count}
                     </Typography>
                   </Box>
                   <Chip

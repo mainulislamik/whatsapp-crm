@@ -37,7 +37,7 @@ export default function QuickChat() {
     if (!file) return;
 
     if (file.size > 20 * 1024 * 1024) {
-      alert('ফাইলের সাইজ সর্বোচ্চ ২০MB হতে পারে।');
+      alert('Maximum file size is 20MB.');
       return;
     }
 
@@ -57,11 +57,11 @@ export default function QuickChat() {
 
   const handleSend = async () => {
     if (!phone.trim()) {
-      setStatus({ type: 'error', text: 'ফোন নম্বর প্রদান করুন।' });
+      setStatus({ type: 'error', text: 'Recipient phone number is required.' });
       return;
     }
     if (!message.trim() && !attachedFile) {
-      setStatus({ type: 'error', text: 'মেসেজ অথবা এটাচমেন্ট প্রদান করুন।' });
+      setStatus({ type: 'error', text: 'Message text or attachment is required.' });
       return;
     }
 
@@ -80,14 +80,14 @@ export default function QuickChat() {
 
       setStatus({
         type: 'success',
-        text: `মেসেজ সফলভাবে পাঠানো হয়েছে! (Message ID: ${res.data.messageId || 'OK'})`,
+        text: `Message sent successfully! (ID: ${res.data.messageId || 'OK'})`,
       });
       setMessage('');
       setAttachedFile(null);
     } catch (err: any) {
       setStatus({
         type: 'error',
-        text: err.response?.data?.detail || err.message || 'মেসেজ পাঠাতে সমস্যা হয়েছে।',
+        text: err.response?.data?.detail || err.message || 'Failed to send message.',
       });
     } finally {
       setLoading(false);
@@ -98,10 +98,10 @@ export default function QuickChat() {
     <Card sx={{ mb: 3, borderLeft: '6px solid #128C7E' }}>
       <CardContent>
         <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <ChatIcon color="secondary" /> সরাসরি কুইক মেসেজ (Single Direct Send)
+          <ChatIcon color="secondary" /> Direct Quick Message (1-to-1 Send)
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          যেকোনো নির্দিষ্ট নম্বরে তাৎক্ষণিক মেসেজ বা ফাইল পাঠাতে এটি ব্যবহার করুন।
+          Send an instant text message or media file directly to any WhatsApp phone number.
         </Typography>
 
         {status && (
@@ -112,8 +112,8 @@ export default function QuickChat() {
 
         <Stack spacing={2}>
           <TextField
-            label="প্রাপকের ফোন নম্বর *"
-            placeholder="01712345678 বা 88017..."
+            label="Recipient Phone Number *"
+            placeholder="e.g. 01712345678 or 88017..."
             size="small"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -121,8 +121,8 @@ export default function QuickChat() {
           />
 
           <TextField
-            label="মেসেজ কন্টেন্ট"
-            placeholder="আপনার মেসেজ লিখুন..."
+            label="Message Content"
+            placeholder="Type your message here..."
             multiline
             rows={3}
             value={message}
@@ -138,7 +138,7 @@ export default function QuickChat() {
                 size="small"
                 startIcon={<AttachFileIcon />}
               >
-                ফাইল / ছবি
+                Attach File / Image
                 <input
                   type="file"
                   hidden
@@ -166,7 +166,7 @@ export default function QuickChat() {
               disabled={loading || !phone.trim() || (!message.trim() && !attachedFile)}
               sx={{ px: 3, fontWeight: 700 }}
             >
-              মেসেজ পাঠান
+              Send Message
             </Button>
           </Stack>
         </Stack>

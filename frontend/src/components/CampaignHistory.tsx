@@ -66,12 +66,12 @@ export default function CampaignHistory() {
       setSelectedLogs(res.data.logs);
       setOpenDialog(true);
     } catch (err: any) {
-      alert('Log fetch failed');
+      alert('Failed to fetch campaign logs.');
     }
   };
 
   const handleCancel = async (campId: number) => {
-    if (!confirm('আপনি কি এই ক্যাম্পেইন বাতিল করতে চান?')) return;
+    if (!confirm('Are you sure you want to cancel this campaign?')) return;
     try {
       await BroadcastService.cancel(campId);
       fetchCampaigns();
@@ -87,17 +87,17 @@ export default function CampaignHistory() {
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return <Chip label="সম্পন্ন" color="success" size="small" />;
+        return <Chip label="Completed" color="success" size="small" />;
       case 'RUNNING':
-        return <Chip label="চলছে..." color="warning" size="small" />;
+        return <Chip label="Running" color="warning" size="small" />;
       case 'SCHEDULED':
-        return <Chip label="শিডিউল করা" color="secondary" size="small" />;
+        return <Chip label="Scheduled" color="secondary" size="small" />;
       case 'PENDING':
-        return <Chip label="অপেক্ষমান" color="info" size="small" />;
+        return <Chip label="Pending" color="info" size="small" />;
       case 'CANCELLED':
-        return <Chip label="বাতিল" color="default" size="small" />;
+        return <Chip label="Cancelled" color="default" size="small" />;
       case 'FAILED':
-        return <Chip label="ব্যর্থ" color="error" size="small" />;
+        return <Chip label="Failed" color="error" size="small" />;
       default:
         return <Chip label={status} size="small" />;
     }
@@ -109,10 +109,10 @@ export default function CampaignHistory() {
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 2, gap: 1 }}>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <HistoryIcon /> ক্যাম্পেইন ও ডেলিভারি হিস্ট্রি
+              <HistoryIcon /> Campaign & Delivery History
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              আপনার পাঠানো সকল বাল্ক ক্যাম্পেইনের লাইভ ফলাফল ও CSV এক্সপোর্ট রিপোর্ট।
+              Live delivery results, recipient logs, and CSV export for all campaigns.
             </Typography>
           </Box>
           <Button
@@ -121,31 +121,31 @@ export default function CampaignHistory() {
             startIcon={<RefreshIcon />}
             onClick={fetchCampaigns}
           >
-            রিফ্রেশ
+            Refresh
           </Button>
         </Stack>
 
         {loading && <LinearProgress sx={{ mb: 1.5 }} />}
 
-        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5 }}>
+        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                <TableCell sx={{ fontWeight: 700 }}>ক্যাম্পেইন নাম</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>মিডিয়া</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>মোট প্রাপক</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>পাঠানো হয়েছে</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>ব্যর্থ</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>স্ট্যাটাস</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>সময়</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>অ্যাকশন</TableCell>
+              <TableRow>
+                <TableCell>Campaign Title</TableCell>
+                <TableCell>Media</TableCell>
+                <TableCell>Recipients</TableCell>
+                <TableCell>Sent</TableCell>
+                <TableCell>Failed</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Timestamp</TableCell>
+                <TableCell align="right">Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {campaigns.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                    এখনো কোনো ক্যাম্পেইন চালানো হয়নি।
+                    No campaigns found.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -155,11 +155,11 @@ export default function CampaignHistory() {
                     <TableCell>
                       {c.has_media ? (
                         c.media_type === 'image' ? (
-                          <Tooltip title={`ছবি: ${c.file_name || 'image'}`}>
+                          <Tooltip title={`Image: ${c.file_name || 'image'}`}>
                             <ImageIcon color="primary" fontSize="small" />
                           </Tooltip>
                         ) : (
-                          <Tooltip title={`ডকুমেন্ট: ${c.file_name || 'document'}`}>
+                          <Tooltip title={`Document: ${c.file_name || 'document'}`}>
                             <DescriptionIcon color="secondary" fontSize="small" />
                           </Tooltip>
                         )
@@ -175,23 +175,23 @@ export default function CampaignHistory() {
                     <TableCell>{getStatusChip(c.status)}</TableCell>
                     <TableCell sx={{ fontSize: '0.82rem' }}>
                       {c.scheduled_at
-                        ? `📅 ${new Date(c.scheduled_at).toLocaleString('bn-BD')}`
-                        : new Date(c.created_at).toLocaleString('bn-BD')}
+                        ? `📅 ${new Date(c.scheduled_at).toLocaleString()}`
+                        : new Date(c.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                        <Tooltip title="লগ দেখুন">
+                        <Tooltip title="View Logs">
                           <IconButton size="small" color="primary" onClick={() => handleViewLogs(c)}>
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="CSV রিপোর্ট ডাউনলোড">
+                        <Tooltip title="Download CSV Report">
                           <IconButton size="small" color="secondary" onClick={() => handleDownloadCsv(c.id)}>
                             <DownloadIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         {(c.status === 'RUNNING' || c.status === 'SCHEDULED' || c.status === 'PENDING') && (
-                          <Tooltip title="ক্যাম্পেইন বাতিল করুন">
+                          <Tooltip title="Cancel Campaign">
                             <IconButton size="small" color="error" onClick={() => handleCancel(c.id)}>
                               <CancelIcon fontSize="small" />
                             </IconButton>
@@ -209,7 +209,7 @@ export default function CampaignHistory() {
         {/* Logs Dialog */}
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Box>ক্যাম্পেইন লগ: {activeCampaign?.title}</Box>
+            <Box>Campaign Logs: {activeCampaign?.title}</Box>
             {activeCampaign && (
               <Button
                 variant="outlined"
@@ -217,7 +217,7 @@ export default function CampaignHistory() {
                 startIcon={<DownloadIcon />}
                 onClick={() => handleDownloadCsv(activeCampaign.id)}
               >
-                CSV রিপোর্ট
+                CSV Report
               </Button>
             )}
           </DialogTitle>
@@ -226,11 +226,11 @@ export default function CampaignHistory() {
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>প্রাপকের নাম</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>ফোন নম্বর</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>স্ট্যাটাস</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>মেসেজ প্রিভিউ</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>পাঠানোর সময়</TableCell>
+                    <TableCell>Recipient Name</TableCell>
+                    <TableCell>Phone Number</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Message Preview</TableCell>
+                    <TableCell>Sent Time</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -263,7 +263,7 @@ export default function CampaignHistory() {
                         {log.message}
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem' }}>
-                        {log.sent_at ? new Date(log.sent_at).toLocaleTimeString('bn-BD') : '—'}
+                        {log.sent_at ? new Date(log.sent_at).toLocaleTimeString() : '—'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -272,7 +272,7 @@ export default function CampaignHistory() {
             </TableContainer>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>বন্ধ করুন</Button>
+            <Button onClick={() => setOpenDialog(false)}>Close</Button>
           </DialogActions>
         </Dialog>
       </CardContent>

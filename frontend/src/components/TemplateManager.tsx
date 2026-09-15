@@ -8,7 +8,6 @@ import {
   Box,
   Button,
   TextField,
-  Grid,
   Chip,
   IconButton,
   Dialog,
@@ -18,21 +17,22 @@ import {
   Stack,
   Tooltip,
 } from '@mui/material';
-import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
+import DescriptionIcon from '@mui/icons-material/Description';
+import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { Template, TemplateService } from '@/lib/api';
+import CheckIcon from '@mui/icons-material/Check';
+import { MessageTemplate, TemplateService } from '@/lib/api';
 
 interface TemplateManagerProps {
-  onSelectTemplate?: (content: string) => void;
+  onSelectTemplate: (content: string) => void;
 }
 
 export default function TemplateManager({ onSelectTemplate }: TemplateManagerProps) {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [open, setOpen] = useState<boolean>(false);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [openDialog, setOpenDialog] = useState<boolean>(false);
   const [name, setName] = useState<string>('');
-  const [content, setContent] = useState<string>('');
   const [category, setCategory] = useState<string>('General');
+  const [content, setContent] = useState<string>('');
 
   const fetchTemplates = async () => {
     try {
@@ -48,20 +48,27 @@ export default function TemplateManager({ onSelectTemplate }: TemplateManagerPro
   }, []);
 
   const handleCreate = async () => {
-    if (!name.trim() || !content.trim()) return;
+    if (!name.trim() || !content.trim()) {
+      alert('Template Name and Content are required.');
+      return;
+    }
     try {
-      await TemplateService.create({ name, content, category });
-      setOpen(false);
+      await TemplateService.create({
+        name: name.trim(),
+        category: category.trim() || 'General',
+        content: content.trim(),
+      });
+      setOpenDialog(false);
       setName('');
       setContent('');
       fetchTemplates();
     } catch (err: any) {
-      alert(err.message || 'Failed to create template');
+      alert(err.response?.data?.detail || 'Failed to save template');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('আপনি কি এই টেমপ্লেট মুছে ফেলতে চান?')) return;
+    if (!confirm('Are you sure you want to delete this template?')) return;
     try {
       await TemplateService.delete(id);
       fetchTemplates();
@@ -70,8 +77,8 @@ export default function TemplateManager({ onSelectTemplate }: TemplateManagerPro
     }
   };
 
-  const insertVariable = (variable: string) => {
-    setContent((prev) => prev + variable);
+  const insertTag = (tag: string) => {
+    setContent(content + tag);
   };
 
   return (
@@ -79,133 +86,143 @@ export default function TemplateManager({ onSelectTemplate }: TemplateManagerPro
       <CardContent>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              মেসেজ টেমপ্লেট ({templates.length})
+            <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <DescriptionIcon color="primary" /> Message Template Library
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              বারবার ব্যবহার করা মেসেজগুলো টেমপ্লেট হিসেবে সংরক্ষণ করে রাখুন।
+              Save and reuse pre-written templates with dynamic tags.
             </Typography>
           </Box>
           <Button
-            variant="outlined"
-            startIcon={<BookmarkAddIcon />}
-            onClick={() => setOpen(true)}
+            size="small"
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenDialog(true)}
+            sx={{ fontWeight: 700 }}
           >
-            নতুন টেমপ্লেট
+            New Template
           </Button>
         </Stack>
 
-        <Grid container spacing={2}>
-          {templates.length === 0 ? (
-            <Grid item xs={12}>
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                কোনো টেমপ্লেট তৈরি করা হয়নি।
-              </Typography>
-            </Grid>
-          ) : (
-            templates.map((t) => (
-              <Grid item xs={12} sm={6} md={4} key={t.id}>
-                <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <CardContent sx={{ flexGrow: 1, pb: 1 }}>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                        {t.name}
-                      </Typography>
-                      <Chip label={t.category} size="small" variant="outlined" />
-                    </Stack>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{
-                        whiteSpace: 'pre-wrap',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        mb: 1.5,
-                      }}
-                    >
-                      {t.content}
+        {templates.length === 0 ? (
+          <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
+            No templates saved yet. Click "New Template" to add one.
+          </Box>
+        ) : (
+          <Stack spacing={1.5}>
+            {templates.map((t) => (
+              <Box
+                key={t.id}
+                sx={{
+                  p: 1.5,
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 2,
+                  bgcolor: '#ffffff',
+                  '&:hover': { bgcolor: '#f8fafc' },
+                }}
+              >
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      {t.name}
                     </Typography>
-                  </CardContent>
-                  <Box sx={{ p: 1.5, pt: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    {onSelectTemplate && (
-                      <Button
-                        size="small"
-                        startIcon={<ContentCopyIcon fontSize="small" />}
-                        onClick={() => onSelectTemplate(t.content)}
-                      >
-                        ব্যবহার করুন
-                      </Button>
-                    )}
-                    <Tooltip title="মুছে ফেলুন">
+                    <Chip label={t.category} size="small" sx={{ mt: 0.5, fontSize: '0.7rem' }} />
+                  </Box>
+                  <Stack direction="row" spacing={0.5}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<CheckIcon />}
+                      onClick={() => onSelectTemplate(t.content)}
+                      sx={{ fontSize: '0.78rem', py: 0.2 }}
+                    >
+                      Use
+                    </Button>
+                    <Tooltip title="Delete template">
                       <IconButton size="small" color="error" onClick={() => handleDelete(t.id)}>
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                  </Box>
-                </Card>
-              </Grid>
-            ))
-          )}
-        </Grid>
+                  </Stack>
+                </Stack>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    bgcolor: '#f8fafc',
+                    p: 1,
+                    borderRadius: 1,
+                    fontSize: '0.82rem',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {t.content}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        )}
 
-        {/* Create Dialog */}
-        <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ fontWeight: 700 }}>নতুন মেসেজ টেমপ্লেট তৈরি করুন</DialogTitle>
+        {/* Create Template Dialog */}
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Create Message Template</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ mt: 1 }}>
               <TextField
-                label="টেমপ্লেট নাম *"
+                label="Template Name *"
                 fullWidth
                 size="small"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
               <TextField
-                label="ক্যাটাগরি"
+                label="Category (e.g. Offers, Notification, Support)"
                 fullWidth
                 size="small"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               />
               <Box>
-                <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                  ডায়নামিক ট্যাগ যোগ করতে ক্লিক করুন:
+                <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.8 }}>
+                  Insert Tag:
                 </Typography>
                 <Stack direction="row" spacing={1}>
                   <Chip
-                    label="{name} (নাম)"
+                    label="{name} (Contact Name)"
                     size="small"
-                    onClick={() => insertVariable('{name}')}
                     clickable
-                    color="primary"
+                    color="secondary"
                     variant="outlined"
+                    onClick={() => insertTag('{name}')}
                   />
                   <Chip
-                    label="{phone} (ফোন নম্বর)"
+                    label="{phone} (Phone Number)"
                     size="small"
-                    onClick={() => insertVariable('{phone}')}
                     clickable
-                    color="primary"
+                    color="secondary"
                     variant="outlined"
+                    onClick={() => insertTag('{phone}')}
                   />
                 </Stack>
               </Box>
               <TextField
-                label="মেসেজ কন্টেন্ট *"
+                label="Message Body *"
                 fullWidth
                 multiline
                 rows={4}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="আসসালামু আলাইকুম {name} ভাই..."
+                placeholder="Hello {name}! We have an exciting update..."
               />
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpen(false)}>বাতিল</Button>
-            <Button variant="contained" onClick={handleCreate}>সংরক্ষণ করুন</Button>
+            <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+            <Button variant="contained" color="primary" onClick={handleCreate}>
+              Save Template
+            </Button>
           </DialogActions>
         </Dialog>
       </CardContent>

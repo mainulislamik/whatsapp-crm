@@ -160,10 +160,10 @@ export default function Dashboard() {
               <Chip
                 label={
                   waStatus?.status === 'CONNECTED'
-                    ? `অনলাইন: ${waStatus.user?.name || waStatus.user?.id?.split(':')[0] || 'WhatsApp'}`
+                    ? `Online: ${waStatus.user?.name || waStatus.user?.id?.split(':')[0] || 'WhatsApp'}`
                     : waStatus?.status === 'SCAN_QR'
-                    ? 'QR স্ক্যান করুন'
-                    : 'অফলাইন'
+                    ? 'Scan QR'
+                    : 'Offline'
                 }
                 color={
                   waStatus?.status === 'CONNECTED'
@@ -185,7 +185,7 @@ export default function Dashboard() {
                   onClick={() => setActiveSection('device')}
                   sx={{ fontWeight: 700, display: { xs: 'none', sm: 'inline-flex' } }}
                 >
-                  কানেক্ট করুন
+                  Connect
                 </Button>
               )}
 
@@ -204,12 +204,12 @@ export default function Dashboard() {
               severity="warning"
               action={
                 <Button color="inherit" size="small" onClick={() => setActiveSection('device')}>
-                  QR কোড দেখুন
+                  View QR Code
                 </Button>
               }
               sx={{ mb: 3 }}
             >
-              মেসেজ পাঠানোর পূর্বে আপনার মোবাইল থেকে WhatsApp QR কোড স্ক্যান করে ডিভাইস কানেক্ট করুন।
+              Please link your WhatsApp account by scanning the QR code before sending messages.
             </Alert>
           )}
 
@@ -235,7 +235,7 @@ export default function Dashboard() {
                     onClick={() => setActiveSection('broadcast')}
                     sx={{ px: 3, fontWeight: 700 }}
                   >
-                    সিলেক্টেড {selectedContactIds.length} জনকে বাল্ক মেসেজ পাঠান
+                    Send Bulk Broadcast to {selectedContactIds.length} Selected
                   </Button>
                 </Box>
               )}
@@ -250,12 +250,12 @@ export default function Dashboard() {
                   severity="info"
                   action={
                     <Button color="inherit" size="small" startIcon={<PeopleIcon />} onClick={() => setActiveSection('contacts')}>
-                      কন্টাক্টস সিলেক্ট করুন
+                      Select Contacts
                     </Button>
                   }
                   sx={{ mb: 3 }}
                 >
-                  কোনো কন্টাক্ট নির্বাচিত নেই। আপনি "কন্টাক্টস ও অডিয়েন্স" পেইজ থেকে এক ক্লিকে ট্যাগ বা অল সিলেক্ট করতে পারেন।
+                  No contacts selected. You can select contacts or filter by tag from the "Contacts & Audience" page.
                 </Alert>
               )}
 

@@ -9,7 +9,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Chip,
   Divider,
   Stack,
 } from '@mui/material';
@@ -30,13 +29,13 @@ export interface NavItem {
 }
 
 export const navItems: NavItem[] = [
-  { id: 'overview', label: 'ড্যাশবোর্ড ওভারভিউ', sublabel: 'সামারি ও মেট্রিক্স', icon: <DashboardIcon /> },
-  { id: 'contacts', label: 'কন্টাক্টস ও অডিয়েন্স', sublabel: 'ফিল্টার ও ইমপোর্ট', icon: <PeopleIcon /> },
-  { id: 'broadcast', label: 'বাল্ক ব্রডকাস্ট', sublabel: 'মিডিয়া ও স্পিনট্যাক্স', icon: <CampaignIcon /> },
-  { id: 'quickchat', label: 'সরাসরি কুইক মেসেজ', sublabel: '১-টু-১ তাৎক্ষণিক মেসেজ', icon: <ChatIcon /> },
-  { id: 'templates', label: 'মেসেজ টেমপ্লেটস', sublabel: 'সংরক্ষিত মেসেজ লাইব্রেরি', icon: <DescriptionIcon /> },
-  { id: 'reports', label: 'রিপোর্ট ও ডেলিভারি লগ', sublabel: 'CSV এক্সপোর্ট সহ', icon: <AssessmentIcon /> },
-  { id: 'device', label: 'WhatsApp ডিভাইস লিঙ্ক', sublabel: 'QR কোড ও কানেকশন', icon: <QrCode2Icon /> },
+  { id: 'overview', label: 'Dashboard Overview', sublabel: 'Summary & Metrics', icon: <DashboardIcon /> },
+  { id: 'contacts', label: 'Contacts & Audience', sublabel: 'Filter & Import', icon: <PeopleIcon /> },
+  { id: 'broadcast', label: 'Bulk Broadcast', sublabel: 'Media & Spintax', icon: <CampaignIcon /> },
+  { id: 'quickchat', label: 'Direct Quick Send', sublabel: '1-to-1 Instant Message', icon: <ChatIcon /> },
+  { id: 'templates', label: 'Message Templates', sublabel: 'Saved Message Library', icon: <DescriptionIcon /> },
+  { id: 'reports', label: 'Reports & Delivery Logs', sublabel: 'With CSV Export', icon: <AssessmentIcon /> },
+  { id: 'device', label: 'WhatsApp Device Link', sublabel: 'QR Code & Connection', icon: <QrCode2Icon /> },
 ];
 
 interface SidebarProps {
@@ -178,7 +177,7 @@ export default function Sidebar({
           />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', fontWeight: 600 }}>
-              কানেকশন স্ট্যাটাস
+              Connection Status
             </Typography>
             <Typography
               variant="body2"
@@ -191,7 +190,7 @@ export default function Sidebar({
                 fontSize: '0.8rem',
               }}
             >
-              {isConnected ? 'অনলাইন / সংযুক্ত' : isScanQr ? 'QR স্ক্যান প্রয়োজন' : 'ডিসকানেক্টেড'}
+              {isConnected ? 'Online / Connected' : isScanQr ? 'QR Scan Required' : 'Disconnected'}
             </Typography>
           </Box>
         </Stack>

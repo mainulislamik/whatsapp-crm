@@ -30,6 +30,8 @@ export interface Template {
   created_at: string;
 }
 
+export type MessageTemplate = Template;
+
 export interface Campaign {
   id: number;
   title: string;
