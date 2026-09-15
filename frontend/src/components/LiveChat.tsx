@@ -59,7 +59,7 @@ import {
   Pause as PauseIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { ChatService, ChatListItem, ChatMessage, Lead, LeadService } from '@/lib/api';
+import { ChatService, ChatListItem, ChatMessage, Lead, LeadService, WhatsAppService } from '@/lib/api';
 
 interface LiveChatProps {
   onBack?: () => void;
@@ -79,6 +79,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [tabFilter, setTabFilter] = useState<'all' | 'unread' | 'direct' | 'groups'>('all');
+  const [waConnected, setWaConnected] = useState(true);
   
   // Attachments state
   const [attachAnchorEl, setAttachAnchorEl] = useState<null | HTMLElement>(null);
@@ -113,6 +114,17 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   // Load chats list
   const fetchChats = async () => {
     try {
+      try {
+        const st = await WhatsAppService.getStatus();
+        const isConn = st.data?.status === 'CONNECTED';
+        setWaConnected(isConn);
+        if (!isConn) {
+          setChats([]);
+          setMessages([]);
+          setSelectedChat(null);
+          return;
+        }
+      } catch (e) {}
       const res = await ChatService.list();
       const rawChats: ChatListItem[] = res.data || [];
       const updated = rawChats.map((c) => {

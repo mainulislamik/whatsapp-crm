@@ -164,11 +164,44 @@ async def get_whatsapp_qr():
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Cannot reach WhatsApp engine: {str(e)}")
 
+@app.post("/api/whatsapp/wipe-history")
+async def wipe_whatsapp_history():
+    def _wipe():
+        ChatMessage.objects.all().delete()
+        chat_profile_cache.clear()
+        media_dir = "/app/media"
+        if os.path.exists(media_dir):
+            for f in os.listdir(media_dir):
+                fp = os.path.join(media_dir, f)
+                try:
+                    if os.path.isfile(fp):
+                        os.unlink(fp)
+                except Exception:
+                    pass
+    await sync_to_async(_wipe)()
+    return {"success": True, "message": "All chat history wiped"}
+
 @app.post("/api/whatsapp/logout")
 async def logout_whatsapp():
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             resp = await client.post(f"{WHATSAPP_ENGINE_URL}/logout")
+            
+            # Wipe all previous messages and media cache on logout
+            def _clean_all_chats():
+                ChatMessage.objects.all().delete()
+                chat_profile_cache.clear()
+                media_dir = "/app/media"
+                if os.path.exists(media_dir):
+                    for f in os.listdir(media_dir):
+                        fp = os.path.join(media_dir, f)
+                        try:
+                            if os.path.isfile(fp):
+                                os.unlink(fp)
+                        except Exception:
+                            pass
+            await sync_to_async(_clean_all_chats)()
+            
             return resp.json()
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Cannot logout: {str(e)}")
@@ -978,6 +1011,13 @@ _chat_meta_cache = {}
 # --- GET CHAT LIST (Recent Conversations) ---
 @app.get("/api/chats", response_model=List[ChatListItem])
 async def get_chat_list():
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            st = await client.get(f"{WHATSAPP_ENGINE_URL}/status")
+            if st.status_code == 200 and st.json().get("status") != "CONNECTED":
+                return []
+    except Exception:
+        return []
     def _get_chats_db():
         phones = list(set(ChatMessage.objects.values_list('phone', flat=True)))
         results = []
