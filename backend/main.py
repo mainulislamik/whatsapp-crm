@@ -972,36 +972,93 @@ async def update_chat_status(req: ChatStatusUpdateRequest):
 class BatchIncomingMessageWebhook(BaseModel):
     messages: List[IncomingMessageWebhook]
 
+# In-memory cache for WhatsApp profile pictures and names
+_chat_meta_cache = {}
+
 # --- GET CHAT LIST (Recent Conversations) ---
 @app.get("/api/chats", response_model=List[ChatListItem])
 async def get_chat_list():
-    def _get_chats():
-        # Get all distinct phone numbers in SQLite compatible way
+    def _get_chats_db():
         phones = list(set(ChatMessage.objects.values_list('phone', flat=True)))
-        chats = []
+        results = []
         for p in phones:
             latest = ChatMessage.objects.filter(phone=p).order_by('-timestamp').first()
             if not latest:
                 continue
             unread = ChatMessage.objects.filter(phone=p, is_from_me=False, is_read=False).count()
             lead = Lead.objects.filter(phone=p).first()
-            name = (lead.whatsapp_name if lead and lead.whatsapp_name else (lead.owner_name or lead.shop_name if lead else latest.sender_name)) or p
-            if name == "Me" and lead:
-                name = lead.whatsapp_name or lead.owner_name or lead.shop_name or p
-            chats.append({
-                "phone": p,
-                "name": name if name and name != "Me" else (latest.sender_name if not latest.is_from_me else p),
-                "jid": latest.jid,
-                "last_message": latest.message_text[:80] if latest.message_text else (latest.media_type or "Media"),
-                "last_message_time": latest.timestamp.isoformat(),
-                "unread_count": unread,
-                "is_on_whatsapp": lead.is_on_whatsapp if lead else False,
-                "profile_picture": lead.whatsapp_profile_pic if lead else None
+            
+            is_group = p.endswith('@g.us') or (latest.jid and latest.jid.endswith('@g.us'))
+            
+            # Resolve name
+            chat_name = ''
+            if is_group:
+                chat_name = getattr(latest, 'group_name', '') or latest.sender_name or 'WhatsApp Group'
+            elif lead and (lead.whatsapp_name or lead.owner_name or lead.shop_name):
+                chat_name = lead.whatsapp_name or lead.owner_name or lead.shop_name
+            else:
+                # Find incoming sender name from other party
+                incoming = ChatMessage.objects.filter(phone=p, is_from_me=False).exclude(sender_name='').exclude(sender_name='Me').order_by('-timestamp').first()
+                if incoming and incoming.sender_name:
+                    chat_name = incoming.sender_name
+                elif latest.sender_name and latest.sender_name != 'Me' and not latest.is_from_me:
+                    chat_name = latest.sender_name
+                else:
+                    chat_name = p
+                    
+            results.append({
+                'phone': p,
+                'name': chat_name,
+                'jid': latest.jid,
+                'last_message': latest.message_text[:80] if latest.message_text else (latest.media_type or 'Media'),
+                'last_message_time': latest.timestamp.isoformat(),
+                'unread_count': unread,
+                'is_on_whatsapp': lead.is_on_whatsapp if lead else True,
+                'lead_pic': lead.whatsapp_profile_pic if lead else None,
+                'is_group': is_group
             })
-        chats.sort(key=lambda x: x["last_message_time"], reverse=True)
-        return chats
+        return results
 
-    return await sync_to_async(_get_chats)()
+    db_chats = await sync_to_async(_get_chats_db)()
+    
+    # Enrich with live WhatsApp profile pictures & metadata
+    final_chats = []
+    async with httpx.AsyncClient(timeout=4.0) as client:
+        for c in db_chats:
+            jid = c.get('jid') or f"{c['phone']}@s.whatsapp.net"
+            pic = c.get('lead_pic')
+            name = c.get('name')
+            
+            if jid in _chat_meta_cache:
+                cached = _chat_meta_cache[jid]
+                pic = pic or cached.get('profilePictureUrl')
+                if not name or name == c['phone']:
+                    name = cached.get('name') or name
+            else:
+                try:
+                    resp = await client.get(f"{WHATSAPP_ENGINE_URL}/chat-profile?jid={jid}")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        _chat_meta_cache[jid] = data
+                        pic = pic or data.get('profilePictureUrl')
+                        if (not name or name == c['phone'] or name == 'WhatsApp Group') and data.get('name'):
+                            name = data.get('name')
+                except Exception:
+                    pass
+            
+            final_chats.append({
+                'phone': c['phone'],
+                'name': name or c['phone'],
+                'jid': jid,
+                'last_message': c['last_message'],
+                'last_message_time': c['last_message_time'],
+                'unread_count': c['unread_count'],
+                'is_on_whatsapp': c['is_on_whatsapp'],
+                'profile_picture': pic
+            })
+
+    final_chats.sort(key=lambda x: x['last_message_time'], reverse=True)
+    return final_chats
 
 
 # --- GET MESSAGE HISTORY FOR A CHAT ---

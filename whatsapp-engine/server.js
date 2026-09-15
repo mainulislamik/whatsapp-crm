@@ -483,6 +483,46 @@ app.get('/status', (req, res) => {
 });
 
 // Check contact on WhatsApp
+// Get chat profile picture and real name
+app.get('/chat-profile', async (req, res) => {
+  try {
+    const { jid } = req.query;
+    if (!jid || !sock) {
+      return res.status(400).json({ error: 'jid is required and socket must be active' });
+    }
+
+    let profilePictureUrl = null;
+    try {
+      profilePictureUrl = await sock.profilePictureUrl(jid, 'image');
+    } catch (err) {}
+
+    let name = null;
+    let isGroup = jid.endsWith('@g.us');
+
+    if (isGroup) {
+      try {
+        const meta = await sock.groupMetadata(jid);
+        name = meta.subject;
+      } catch (err) {
+        const stored = groupsStore.get(jid);
+        name = stored?.subject || 'WhatsApp Group';
+      }
+    } else {
+      const stored = contactsStore.get(jid) || contactsStore.get(jid.split('@')[0]);
+      name = stored?.name || stored?.notify || stored?.verifiedName || null;
+    }
+
+    res.json({
+      jid,
+      name,
+      profilePictureUrl,
+      isGroup
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/check-contact', async (req, res) => {
   try {
     const { phone } = req.query;
