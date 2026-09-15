@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "${WA_PORT:-5001}:5001"
+    environment:
+      - BACKEND_URL=http://backend:8000
     volumes:
       - wa_engine_auth:/app/auth_info_baileys
 

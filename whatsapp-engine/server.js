@@ -21,7 +21,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const PORT = process.env.PORT || 5001;
 const AUTH_DIR = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
-const BACKEND_URL = process.env.BACKEND_URL || 'http://wa-backend:8050';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:8000';
 
 if (!fs.existsSync(AUTH_DIR)) {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
