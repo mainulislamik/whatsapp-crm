@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -34,6 +34,8 @@ import {
   Divider,
   Paper,
   Grid,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import AddIcon from '@mui/icons-material/Add';
@@ -55,9 +57,13 @@ import PersonIcon from '@mui/icons-material/Person';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CategoryIcon from '@mui/icons-material/Category';
 import BusinessIcon from '@mui/icons-material/Business';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SendIcon from '@mui/icons-material/Send';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import StarsIcon from '@mui/icons-material/Stars';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+
 import { Lead, LeadCategory, LeadService, ChatService } from '@/lib/api';
 
 interface LeadManagerProps {
@@ -65,7 +71,15 @@ interface LeadManagerProps {
 }
 
 const SHOP_TYPES = ['Retail', 'Wholesale', 'Distributor', 'Online Store', 'Service Center', 'Corporate'];
-const LEAD_STATUSES = ['NEW', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'LOST'];
+const LEAD_STATUSES = [
+  { value: 'NEW', label: 'New Lead', bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' },
+  { value: 'CONTACTED', label: 'Contacted', bg: '#fef3c7', text: '#b45309', border: '#fde68a' },
+  { value: 'IN_PROGRESS', label: 'In Progress', bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
+  { value: 'INTERESTED', label: 'Interested', bg: '#e0e7ff', text: '#4338ca', border: '#a5b4fc' },
+  { value: 'QUALIFIED', label: 'Qualified', bg: '#dcfce7', text: '#15803d', border: '#86efac' },
+  { value: 'CONVERTED', label: 'Converted (Customer)', bg: '#f3e8ff', text: '#7e22ce', border: '#d8b4fe' },
+  { value: 'LOST', label: 'Lost / Closed', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' },
+];
 
 export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -74,6 +88,12 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
   const [search, setSearch] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  
+  // Segmented Outreach Tab: 'all' | 'contacted' | 'uncontacted' | 'converted'
+  const [activeTab, setActiveTab] = useState<'all' | 'contacted' | 'uncontacted' | 'converted'>('all');
+
+  // Updating lead status in-table state (leadId -> boolean)
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
   // Selected Lead for Modern Profile Popup
   const [profileLead, setProfileLead] = useState<Lead | null>(null);
@@ -157,6 +177,67 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     return () => clearTimeout(delayDebounceFn);
   }, [search]);
 
+  // Compute counts for tab badges
+  const counts = useMemo(() => {
+    let total = leads.length;
+    let contacted = 0;
+    let uncontacted = 0;
+    let converted = 0;
+
+    leads.forEach((l) => {
+      if (l.is_contacted || l.status === 'CONTACTED') {
+        contacted++;
+      } else {
+        uncontacted++;
+      }
+      if (l.status === 'CONVERTED' || l.status === 'QUALIFIED') {
+        converted++;
+      }
+    });
+
+    return { total, contacted, uncontacted, converted };
+  }, [leads]);
+
+  // Filter leads based on active tab
+  const filteredLeads = useMemo(() => {
+    if (activeTab === 'contacted') {
+      return leads.filter((l) => l.is_contacted || l.status === 'CONTACTED');
+    }
+    if (activeTab === 'uncontacted') {
+      return leads.filter((l) => !l.is_contacted && l.status !== 'CONTACTED');
+    }
+    if (activeTab === 'converted') {
+      return leads.filter((l) => l.status === 'CONVERTED' || l.status === 'QUALIFIED');
+    }
+    return leads;
+  }, [leads, activeTab]);
+
+  // Handle Quick Inline Status Change
+  const handleQuickStatusChange = async (leadId: number, newStatus: string) => {
+    setUpdatingStatusId(leadId);
+    try {
+      await LeadService.updateStatus(leadId, newStatus);
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId
+            ? {
+                ...l,
+                status: newStatus,
+                is_contacted: newStatus === 'CONTACTED' ? true : l.is_contacted,
+              }
+            : l
+        )
+      );
+      if (profileLead && profileLead.id === leadId) {
+        setProfileLead((prev) => (prev ? { ...prev, status: newStatus } : null));
+      }
+    } catch (err) {
+      alert('Failed to update lead status.');
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
   // Open Modern Profile Popup
   const handleOpenProfile = (lead: Lead) => {
     setProfileLead(lead);
@@ -178,6 +259,33 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
       await ChatService.send(profileLead.phone, { message: quickMsg.trim() });
       setQuickMsg('');
       setQuickMsgSuccess(true);
+      
+      // Update local lead to contacted
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === profileLead.id
+            ? {
+                ...l,
+                is_contacted: true,
+                status: l.status === 'NEW' ? 'CONTACTED' : l.status,
+                last_contacted_at: new Date().toISOString(),
+                sent_messages_count: (l.sent_messages_count || 0) + 1,
+              }
+            : l
+        )
+      );
+      setProfileLead((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_contacted: true,
+              status: prev.status === 'NEW' ? 'CONTACTED' : prev.status,
+              last_contacted_at: new Date().toISOString(),
+              sent_messages_count: (prev.sent_messages_count || 0) + 1,
+            }
+          : null
+      );
+
       setTimeout(() => setQuickMsgSuccess(false), 3000);
     } catch (err) {
       alert('Failed to send WhatsApp message. Make sure WhatsApp is connected.');
@@ -369,13 +477,30 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     }
   };
 
-  const getStatusColor = (st: string) => {
-    switch (st) {
-      case 'QUALIFIED': return { bg: '#dcfce7', text: '#15803d', border: '#86efac' };
-      case 'INTERESTED': return { bg: '#e0e7ff', text: '#4338ca', border: '#a5b4fc' };
-      case 'CONTACTED': return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
-      case 'LOST': return { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' };
-      default: return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' };
+  const getStatusConfig = (st: string) => {
+    return (
+      LEAD_STATUSES.find((s) => s.value === st) || {
+        value: st,
+        label: st,
+        bg: '#f1f5f9',
+        text: '#475569',
+        border: '#cbd5e1',
+      }
+    );
+  };
+
+  const formatRelativeTime = (dateStr?: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (diffSec < 60) return 'Just now';
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+      if (diffSec < 172800) return 'Yesterday';
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch {
+      return '';
     }
   };
 
@@ -389,10 +514,10 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
         >
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1, color: '#0f172a' }}>
-              <StorefrontIcon sx={{ color: '#10b981' }} /> Lead Management & CRM
+              <StorefrontIcon sx={{ color: '#10b981' }} /> Lead Management & WhatsApp CRM
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Click any shop row to view full profile, send instant WhatsApp messages, and manage customer leads.
+              Track customer outreach, manage WhatsApp message delivery status, and organize retail/wholesale leads.
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -401,7 +526,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
               size="small"
               startIcon={<DownloadIcon />}
               onClick={() => window.open(LeadService.getExportCsvUrl(), '_blank')}
-              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, color: '#334155', borderColor: '#cbd5e1' }}
             >
               Export CSV
             </Button>
@@ -422,6 +547,133 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
             </Button>
           </Stack>
         </Stack>
+
+        {/* ========================================================================= */}
+        {/* 🌟 MODERN OUTREACH & LIFECYCLE SEPARATION TABS */}
+        {/* ========================================================================= */}
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 2.5,
+            p: 0.5,
+            bgcolor: '#f1f5f9',
+            borderRadius: 2.5,
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1,
+          }}
+        >
+          <Tabs
+            value={activeTab}
+            onChange={(_, val) => setActiveTab(val)}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              minHeight: 44,
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+                bgcolor: '#10b981',
+              },
+            }}
+          >
+            {/* Tab 1: All Leads */}
+            <Tab
+              value="all"
+              label={
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <StorefrontIcon sx={{ fontSize: 18 }} />
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>All Leads</Typography>
+                  <Chip
+                    label={counts.total}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontWeight: 800,
+                      fontSize: '0.72rem',
+                      bgcolor: activeTab === 'all' ? '#0f172a' : '#cbd5e1',
+                      color: activeTab === 'all' ? '#ffffff' : '#334155',
+                    }}
+                  />
+                </Stack>
+              }
+              sx={{ textTransform: 'none', minHeight: 44, px: 2, borderRadius: 2 }}
+            />
+
+            {/* Tab 2: Messaged / Contacted */}
+            <Tab
+              value="contacted"
+              label={
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <MarkEmailReadIcon sx={{ fontSize: 18, color: '#10b981' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#047857' }}>💬 Messaged / Contacted</Typography>
+                  <Chip
+                    label={counts.contacted}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontWeight: 800,
+                      fontSize: '0.72rem',
+                      bgcolor: '#dcfce7',
+                      color: '#15803d',
+                      border: '1px solid #86efac',
+                    }}
+                  />
+                </Stack>
+              }
+              sx={{ textTransform: 'none', minHeight: 44, px: 2, borderRadius: 2 }}
+            />
+
+            {/* Tab 3: Not Messaged / Pending */}
+            <Tab
+              value="uncontacted"
+              label={
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <HourglassEmptyIcon sx={{ fontSize: 18, color: '#d97706' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#b45309' }}>⏳ Not Contacted Yet</Typography>
+                  <Chip
+                    label={counts.uncontacted}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontWeight: 800,
+                      fontSize: '0.72rem',
+                      bgcolor: '#fef3c7',
+                      color: '#b45309',
+                      border: '1px solid #fde68a',
+                    }}
+                  />
+                </Stack>
+              }
+              sx={{ textTransform: 'none', minHeight: 44, px: 2, borderRadius: 2 }}
+            />
+
+            {/* Tab 4: Converted / Qualified */}
+            <Tab
+              value="converted"
+              label={
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <StarsIcon sx={{ fontSize: 18, color: '#9333ea' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#7e22ce' }}>🎯 Converted</Typography>
+                  <Chip
+                    label={counts.converted}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontWeight: 800,
+                      fontSize: '0.72rem',
+                      bgcolor: '#f3e8ff',
+                      color: '#7e22ce',
+                      border: '1px solid #d8b4fe',
+                    }}
+                  />
+                </Stack>
+              }
+              sx={{ textTransform: 'none', minHeight: 44, px: 2, borderRadius: 2 }}
+            />
+          </Tabs>
+        </Paper>
 
         {/* Filters Bar */}
         <Box sx={{ mb: 2.5, p: 2, bgcolor: '#f8fafc', borderRadius: 2.5, border: '1px solid #e2e8f0' }}>
@@ -455,7 +707,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 140, bgcolor: '#ffffff', borderRadius: 1.5 }}>
+            <FormControl size="small" sx={{ minWidth: 150, bgcolor: '#ffffff', borderRadius: 1.5 }}>
               <InputLabel>Status</InputLabel>
               <Select
                 value={selectedStatus}
@@ -466,8 +718,8 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                   <em>All Statuses</em>
                 </MenuItem>
                 {LEAD_STATUSES.map((st) => (
-                  <MenuItem key={st} value={st}>
-                    {st}
+                  <MenuItem key={st.value} value={st.value}>
+                    {st.label}
                   </MenuItem>
                 ))}
               </Select>
@@ -483,27 +735,31 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
 
         {/* Uniform Sized Modern Leads Table */}
         <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 800 }}>
+          <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 920 }}>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f1f5f9' }}>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '28%', py: 1.5 }}>Shop & Profile</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '18%', py: 1.5 }}>Phone / WhatsApp</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '14%', py: 1.5 }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '13%', py: 1.5 }}>Shop Type</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '12%', py: 1.5 }}>Status</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800, color: '#0f172a', width: '15%', py: 1.5 }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '25%', py: 1.5 }}>Shop & Profile</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '17%', py: 1.5 }}>Phone / WhatsApp</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '18%', py: 1.5 }}>WhatsApp Outreach</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '12%', py: 1.5 }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '14%', py: 1.5 }}>Lead Status</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, color: '#0f172a', width: '14%', py: 1.5 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {leads.length === 0 ? (
+              {filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                    No leads found. Click "Add New Lead" to register a shop.
+                  <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                    <StorefrontIcon sx={{ fontSize: 40, color: '#cbd5e1', mb: 1, display: 'block', mx: 'auto' }} />
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>No leads found in this view.</Typography>
+                    <Typography variant="body2" color="text.secondary">Try switching tabs or click "Add New Lead" to register a shop.</Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                leads.map((lead) => {
-                  const statusStyle = getStatusColor(lead.status);
+                filteredLeads.map((lead) => {
+                  const statusStyle = getStatusConfig(lead.status);
+                  const isContacted = lead.is_contacted || lead.status === 'CONTACTED';
+
                   return (
                     <TableRow
                       key={lead.id}
@@ -511,12 +767,12 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                       onClick={() => handleOpenProfile(lead)}
                       sx={{
                         cursor: 'pointer',
-                        height: 64,
+                        height: 68,
                         transition: 'background-color 0.15s ease',
                         '&:hover': { bgcolor: '#f8fafc' },
                       }}
                     >
-                      {/* Shop Name & Avatar */}
+                      {/* 1. Shop Name & Avatar */}
                       <TableCell sx={{ py: 1 }}>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                           <Badge
@@ -560,95 +816,168 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                             </Typography>
                             <Typography
                               variant="caption"
-                              color="text.secondary"
                               sx={{
+                                color: 'text.secondary',
                                 display: 'block',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {lead.owner_name ? `Owner: ${lead.owner_name}` : (lead.address || '—')}
+                              {lead.owner_name || 'No Owner'} • {lead.shop_type || 'Retail'}
                             </Typography>
                           </Box>
                         </Stack>
                       </TableCell>
 
-                      {/* Phone & WhatsApp status */}
+                      {/* 2. Phone / WhatsApp */}
                       <TableCell sx={{ py: 1 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700, color: '#1e293b' }}>
-                          {lead.phone}
-                        </Typography>
-                        {lead.is_on_whatsapp ? (
-                          <Chip
-                            icon={<WhatsAppIcon sx={{ fontSize: '0.85rem !important' }} />}
-                            label="On WhatsApp"
-                            size="small"
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                          <Typography
+                            variant="body2"
                             sx={{
-                              fontSize: '0.68rem',
-                              height: 20,
+                              fontFamily: 'monospace',
                               fontWeight: 700,
-                              bgcolor: '#dcfce7',
-                              color: '#166534',
-                              border: '1px solid #86efac',
+                              color: '#1e293b',
+                              fontSize: '0.85rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
                             }}
-                          />
+                          >
+                            {lead.phone}
+                          </Typography>
+                          <Tooltip title="Open WhatsApp Chat">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`https://wa.me/${lead.phone.replace(/\D/g, '')}`, '_blank');
+                              }}
+                              sx={{ color: '#25D366', p: 0.3, '&:hover': { bgcolor: '#ecfdf5' } }}
+                            >
+                              <WhatsAppIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
+
+                      {/* 3. WhatsApp Outreach Status (Contacted / Pending) */}
+                      <TableCell sx={{ py: 1 }}>
+                        {isContacted ? (
+                          <Box>
+                            <Chip
+                              icon={<DoneAllIcon sx={{ fontSize: '14px !important', color: '#15803d !important' }} />}
+                              label={`Messaged ${lead.last_contacted_at ? `(${formatRelativeTime(lead.last_contacted_at)})` : ''}`}
+                              size="small"
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: '0.72rem',
+                                bgcolor: '#dcfce7',
+                                color: '#15803d',
+                                border: '1px solid #86efac',
+                                height: 24,
+                              }}
+                            />
+                            {lead.sent_messages_count ? (
+                              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem', mt: 0.2 }}>
+                                {lead.sent_messages_count} message{lead.sent_messages_count > 1 ? 's' : ''} sent
+                              </Typography>
+                            ) : null}
+                          </Box>
                         ) : (
-                          <Chip
-                            label="Not on WA"
-                            size="small"
-                            sx={{
-                              fontSize: '0.68rem',
-                              height: 20,
-                              fontWeight: 600,
-                              bgcolor: '#fee2e2',
-                              color: '#991b1b',
-                            }}
-                          />
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Chip
+                              label="Uncontacted"
+                              size="small"
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: '0.72rem',
+                                bgcolor: '#f1f5f9',
+                                color: '#64748b',
+                                border: '1px solid #e2e8f0',
+                                height: 24,
+                              }}
+                            />
+                            {onDirectMessage && (
+                              <Tooltip title="Send Intro Message">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDirectMessage(lead.phone);
+                                  }}
+                                  sx={{ color: '#10b981', p: 0.4, bgcolor: '#f0fdf4', '&:hover': { bgcolor: '#dcfce7' } }}
+                                >
+                                  <SendIcon sx={{ fontSize: 13 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Stack>
                         )}
                       </TableCell>
 
-                      {/* Category */}
+                      {/* 4. Category */}
                       <TableCell sx={{ py: 1 }}>
                         <Chip
                           label={lead.category || 'General'}
                           size="small"
                           sx={{
                             fontWeight: 600,
-                            fontSize: '0.75rem',
+                            fontSize: '0.72rem',
                             bgcolor: '#f1f5f9',
                             color: '#334155',
                             maxWidth: '100%',
+                            height: 24,
                           }}
                         />
                       </TableCell>
 
-                      {/* Shop Type */}
-                      <TableCell sx={{ py: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#475569' }}>
-                          {lead.shop_type || 'Retail'}
-                        </Typography>
+                      {/* 5. Status (1-Click Inline Dropdown) */}
+                      <TableCell sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            value={lead.status || 'NEW'}
+                            disabled={updatingStatusId === lead.id}
+                            onChange={(e) => handleQuickStatusChange(lead.id, e.target.value as string)}
+                            sx={{
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              height: 28,
+                              bgcolor: statusStyle.bg,
+                              color: statusStyle.text,
+                              border: `1px solid ${statusStyle.border}`,
+                              borderRadius: 1.5,
+                              '& .MuiSelect-select': {
+                                py: 0.5,
+                                px: 1,
+                              },
+                              '& fieldset': { border: 'none' },
+                            }}
+                          >
+                            {LEAD_STATUSES.map((st) => (
+                              <MenuItem key={st.value} value={st.value} sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                                <Box
+                                  sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: st.text,
+                                    display: 'inline-block',
+                                    mr: 1,
+                                  }}
+                                />
+                                {st.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
                       </TableCell>
 
-                      {/* Status */}
-                      <TableCell sx={{ py: 1 }}>
-                        <Chip
-                          label={lead.status}
-                          size="small"
-                          sx={{
-                            fontWeight: 800,
-                            fontSize: '0.7rem',
-                            bgcolor: statusStyle.bg,
-                            color: statusStyle.text,
-                            border: `1px solid ${statusStyle.border}`,
-                          }}
-                        />
-                      </TableCell>
-
-                      {/* Actions */}
+                      {/* 6. Actions */}
                       <TableCell align="right" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
                         <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                          <Tooltip title="View Profile">
+                          <Tooltip title="View Profile & Notes">
                             <IconButton
                               size="small"
                               onClick={() => handleOpenProfile(lead)}
@@ -699,7 +1028,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
       </CardContent>
 
       {/* ========================================================================= */}
-      {/* 🌟 MODERNIZED LEAD PROFILE POPUP (Full Details & WhatsApp Quick Actions) */}
+      {/* 🌟 MODERNIZED LEAD PROFILE POPUP (Full Details & WhatsApp Outreach) */}
       {/* ========================================================================= */}
       <Dialog
         open={Boolean(profileLead)}
@@ -773,12 +1102,12 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                       {profileLead.shop_name}
                     </Typography>
                     <Chip
-                      label={profileLead.status}
+                      label={getStatusConfig(profileLead.status).label}
                       size="small"
                       sx={{
                         fontWeight: 800,
                         fontSize: '0.7rem',
-                        ...getStatusColor(profileLead.status),
+                        ...getStatusConfig(profileLead.status),
                       }}
                     />
                   </Stack>
@@ -806,6 +1135,63 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
               </Stack>
             </Box>
 
+            {/* WhatsApp Outreach Status Banner */}
+            <Box
+              sx={{
+                px: 3,
+                py: 1.5,
+                bgcolor: profileLead.is_contacted || profileLead.status === 'CONTACTED' ? '#f0fdf4' : '#fffbeb',
+                borderBottom: '1px solid',
+                borderColor: profileLead.is_contacted || profileLead.status === 'CONTACTED' ? '#bbf7d0' : '#fef3c7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                {profileLead.is_contacted || profileLead.status === 'CONTACTED' ? (
+                  <>
+                    <MarkEmailReadIcon sx={{ color: '#15803d', fontSize: 20 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#15803d' }}>
+                      WhatsApp Message Sent{' '}
+                      {profileLead.last_contacted_at ? `(${new Date(profileLead.last_contacted_at).toLocaleString()})` : ''}
+                      {profileLead.sent_messages_count ? ` • ${profileLead.sent_messages_count} messages sent` : ''}
+                    </Typography>
+                  </>
+                ) : (
+                  <>
+                    <HourglassEmptyIcon sx={{ color: '#b45309', fontSize: 20 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#b45309' }}>
+                      Not contacted yet on WhatsApp. Send a quick intro message below!
+                    </Typography>
+                  </>
+                )}
+              </Stack>
+
+              {/* Fast Status Selector in Modal */}
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <Select
+                  value={profileLead.status || 'NEW'}
+                  onChange={(e) => handleQuickStatusChange(profileLead.id, e.target.value as string)}
+                  sx={{
+                    height: 30,
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    bgcolor: '#ffffff',
+                    borderRadius: 1.5,
+                  }}
+                >
+                  {LEAD_STATUSES.map((st) => (
+                    <MenuItem key={st.value} value={st.value} sx={{ fontSize: '0.8rem' }}>
+                      {st.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+
             <DialogContent sx={{ p: 3, bgcolor: '#f8fafc' }}>
               <Grid container spacing={2.5}>
                 {/* Left Column: Contact & Business Details */}
@@ -813,7 +1199,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                   {/* Phone & WhatsApp Intelligence Card */}
                   <Paper sx={{ p: 2.5, borderRadius: 2.5, mb: 2, border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PhoneIcon fontSize="small" sx={{ color: '#10b981' }} /> Contact & WhatsApp Verification
+                      <PhoneIcon fontSize="small" sx={{ color: '#10b981' }} /> Contact & WhatsApp Intelligence
                     </Typography>
 
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: '#f1f5f9', borderRadius: 2, mb: 1.5 }}>
@@ -900,7 +1286,7 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
 
                     {quickMsgSuccess && (
                       <Alert severity="success" sx={{ mb: 1.5, py: 0.5, fontSize: '0.8rem' }}>
-                        Message sent successfully via WhatsApp!
+                        Message sent successfully! Status updated to Contacted.
                       </Alert>
                     )}
 
@@ -1165,8 +1551,8 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                 onChange={(e) => setStatus(e.target.value)}
               >
                 {LEAD_STATUSES.map((st) => (
-                  <MenuItem key={st} value={st}>
-                    {st}
+                  <MenuItem key={st.value} value={st.value}>
+                    {st.label}
                   </MenuItem>
                 ))}
               </Select>

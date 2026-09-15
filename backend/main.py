@@ -31,10 +31,6 @@ WHATSAPP_ENGINE_URL = os.environ.get('WHATSAPP_ENGINE_URL', 'http://whatsapp-eng
 
 # --- SPINTAX HELPER ---
 def parse_spintax(text: str) -> str:
-    """
-    Parses Spintax format like {{Hello|Hi|Hey}} or {Hello|Hi|Hey} and randomly chooses one variant.
-    Repeats until all nested groups are resolved.
-    """
     pattern = re.compile(r'\{([^{}]+)\}')
     while True:
         match = pattern.search(text)
@@ -44,6 +40,36 @@ def parse_spintax(text: str) -> str:
         choice = random.choice(options)
         text = text[:match.start()] + choice + text[match.end():]
     return text
+
+# --- HELPER: LEAD CONTACTED TRACKER ---
+def normalize_phone_digits(phone: str) -> str:
+    cleaned = re.sub(r'\D', '', str(phone))
+    if cleaned.startswith('88') and len(cleaned) == 13:
+        cleaned = cleaned[2:]
+    return cleaned
+
+def mark_lead_contacted_by_phone(phone: str, msg_time: Optional[datetime] = None):
+    """
+    Finds lead matching the phone number and automatically marks:
+    - is_contacted = True
+    - if status == 'NEW' -> status = 'CONTACTED'
+    - last_contacted_at = now
+    - sent_messages_count += 1
+    """
+    if not phone:
+        return
+    norm = normalize_phone_digits(phone)
+    if not norm:
+        return
+    now_time = msg_time or django_tz.now()
+    for lead in Lead.objects.all():
+        if normalize_phone_digits(lead.phone) == norm:
+            lead.is_contacted = True
+            if lead.status == 'NEW':
+                lead.status = 'CONTACTED'
+            lead.last_contacted_at = now_time
+            lead.sent_messages_count = (lead.sent_messages_count or 0) + 1
+            lead.save(update_fields=['is_contacted', 'status', 'last_contacted_at', 'sent_messages_count', 'updated_at'])
 
 # --- BACKGROUND SCHEDULER ---
 async def scheduled_campaign_checker():
@@ -64,10 +90,8 @@ async def scheduled_campaign_checker():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Start background scheduler
     task = asyncio.create_task(scheduled_campaign_checker())
     yield
-    # Shutdown: Cancel scheduler
     task.cancel()
 
 app = FastAPI(title="WhatsApp CRM Backend API", version="2.0.0", lifespan=lifespan)
@@ -100,7 +124,7 @@ class DirectSendRequest(BaseModel):
     phone: str
     message: Optional[str] = ""
     media_base64: Optional[str] = None
-    media_type: Optional[str] = None # 'image' or 'document'
+    media_type: Optional[str] = None
     file_name: Optional[str] = None
     mime_type: Optional[str] = None
 
@@ -110,10 +134,10 @@ class BulkSendRequest(BaseModel):
     contact_ids: List[int]
     delay_seconds: Optional[int] = 5
     media_base64: Optional[str] = None
-    media_type: Optional[str] = None # 'image' or 'document'
+    media_type: Optional[str] = None
     file_name: Optional[str] = None
     mime_type: Optional[str] = None
-    scheduled_at: Optional[str] = None # ISO format string
+    scheduled_at: Optional[str] = None
 
 class LeadCategoryCreate(BaseModel):
     name: str
@@ -139,6 +163,10 @@ class LeadUpdate(BaseModel):
     address: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    is_contacted: Optional[bool] = None
+
+class LeadStatusUpdate(BaseModel):
+    status: str
 
 # --- HEALTH & WHATSAPP ENGINE PROXY ---
 
@@ -186,8 +214,6 @@ async def logout_whatsapp():
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             resp = await client.post(f"{WHATSAPP_ENGINE_URL}/logout")
-            
-            # Wipe all previous messages and media cache on logout
             def _clean_all_chats():
                 ChatMessage.objects.all().delete()
                 chat_profile_cache.clear()
@@ -201,7 +227,6 @@ async def logout_whatsapp():
                         except Exception:
                             pass
             await sync_to_async(_clean_all_chats)()
-            
             return resp.json()
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Cannot logout: {str(e)}")
@@ -241,7 +266,6 @@ async def list_contacts(search: Optional[str] = None, tag: Optional[str] = None)
 
 @app.get("/api/contacts/tags")
 async def list_contact_tags():
-    """Returns unique tags across all contacts with count."""
     def _get_tags():
         tag_counts = {}
         for c in Contact.objects.values_list('tags', flat=True):
@@ -377,6 +401,10 @@ async def send_direct_message(payload: DirectSendRequest):
             data = resp.json()
             if resp.status_code != 200 or not data.get("success"):
                 raise HTTPException(status_code=400, detail=data.get("error", "Failed to send"))
+
+            # Automatically track lead outreach
+            await sync_to_async(mark_lead_contacted_by_phone)(payload.phone)
+
             return data
         except HTTPException:
             raise
@@ -399,7 +427,6 @@ async def run_campaign_worker(campaign_id: int, base_delay: int):
 
     async with httpx.AsyncClient(timeout=35.0) as client:
         for log in logs:
-            # Check if campaign got cancelled mid-way
             def _is_cancelled():
                 return Campaign.objects.filter(id=campaign_id, status='CANCELLED').exists()
             if await sync_to_async(_is_cancelled)():
@@ -418,13 +445,14 @@ async def run_campaign_worker(campaign_id: int, base_delay: int):
                 data = resp.json()
 
                 if resp.status_code == 200 and data.get("success"):
-                    def _update_success(l_id):
+                    def _update_success(l_id, ph):
                         l = CampaignLog.objects.get(id=l_id)
                         l.status = 'SENT'
                         l.sent_at = datetime.now()
                         l.save()
                         Campaign.objects.filter(id=campaign_id).update(sent_count=django.db.models.F('sent_count') + 1)
-                    await sync_to_async(_update_success)(log.id)
+                        mark_lead_contacted_by_phone(ph)
+                    await sync_to_async(_update_success)(log.id, log.phone)
                 else:
                     def _update_fail(l_id, err):
                         l = CampaignLog.objects.get(id=l_id)
@@ -442,7 +470,6 @@ async def run_campaign_worker(campaign_id: int, base_delay: int):
                     Campaign.objects.filter(id=campaign_id).update(failed_count=django.db.models.F('failed_count') + 1)
                 await sync_to_async(_update_err)(log.id, e)
 
-            # Smart Anti-ban Sleep with Random Jitter (e.g. 5s -> random 3.5s to 6.5s)
             jitter = random.uniform(-1.5, 1.5)
             actual_delay = max(2.0, base_delay + jitter)
             await asyncio.sleep(actual_delay)
@@ -487,9 +514,7 @@ async def create_and_start_campaign(payload: BulkSendRequest, background_tasks: 
 
         logs_to_create = []
         for c in contacts:
-            # 1. Variable replacement FIRST: {name}, {phone} (must run before spintax so tags keep their braces)
             personalized = payload.message_template.replace("{name}", c.name).replace("{phone}", c.phone)
-            # 2. THEN spintax parsing for unique message variation per contact
             customized = parse_spintax(personalized)
 
             logs_to_create.append(CampaignLog(
@@ -596,7 +621,6 @@ async def get_campaign_logs(campaign_id: int):
 
 @app.get("/api/campaigns/{campaign_id}/export-csv")
 async def export_campaign_logs_csv(campaign_id: int):
-    """Exports campaign logs to downloadable CSV."""
     def _generate_csv():
         camp = Campaign.objects.filter(id=campaign_id).first()
         if not camp:
@@ -630,12 +654,6 @@ async def export_campaign_logs_csv(campaign_id: int):
     )
 
 # --- LEAD MANAGEMENT HELPERS & ENDPOINTS ---
-
-def normalize_phone_digits(phone: str) -> str:
-    cleaned = re.sub(r'\D', '', str(phone))
-    if cleaned.startswith('88') and len(cleaned) == 13:
-        cleaned = cleaned[2:]
-    return cleaned
 
 def check_phone_duplicate(phone: str, exclude_lead_id: Optional[int] = None):
     norm = normalize_phone_digits(phone)
@@ -715,7 +733,6 @@ async def ai_enrich_lead_phone(phone: str = Query(...)):
 @app.get("/api/lead-categories")
 async def list_lead_categories():
     def _get_cats():
-        # Seed default categories if none exist
         if not LeadCategory.objects.exists():
             default_cats = [
                 'Fashion', 'Supershop & Grocery', 'Mobile Repair & Tech',
@@ -748,9 +765,27 @@ async def list_leads(
     search: Optional[str] = "",
     category: Optional[str] = "",
     status: Optional[str] = "",
-    shop_type: Optional[str] = ""
+    shop_type: Optional[str] = "",
+    contacted: Optional[bool] = None
 ):
     def _query():
+        # Auto-sync contacted status from existing chat messages
+        all_leads = Lead.objects.all()
+        for l in all_leads:
+            if not l.is_contacted:
+                norm = normalize_phone_digits(l.phone)
+                # Check if there are outgoing messages for this phone
+                outgoing = ChatMessage.objects.filter(is_from_me=True)
+                for msg in outgoing:
+                    if normalize_phone_digits(msg.phone) == norm:
+                        l.is_contacted = True
+                        if l.status == 'NEW':
+                            l.status = 'CONTACTED'
+                        l.last_contacted_at = msg.timestamp
+                        l.sent_messages_count = (l.sent_messages_count or 0) + 1
+                        l.save(update_fields=['is_contacted', 'status', 'last_contacted_at', 'sent_messages_count'])
+                        break
+
         qs = Lead.objects.all()
         if search:
             qs = qs.filter(
@@ -765,9 +800,11 @@ async def list_leads(
             qs = qs.filter(status=status)
         if shop_type:
             qs = qs.filter(shop_type=shop_type)
+        if contacted is not None:
+            qs = qs.filter(is_contacted=contacted)
 
         leads = []
-        for l in qs:
+        for l in qs.order_by('-created_at'):
             leads.append({
                 "id": l.id,
                 "phone": l.phone,
@@ -782,6 +819,9 @@ async def list_leads(
                 "status": l.status,
                 "address": l.address,
                 "notes": l.notes,
+                "is_contacted": bool(l.is_contacted),
+                "last_contacted_at": l.last_contacted_at.isoformat() if l.last_contacted_at else None,
+                "sent_messages_count": l.sent_messages_count or 0,
                 "created_at": l.created_at.isoformat(),
                 "updated_at": l.updated_at.isoformat()
             })
@@ -791,6 +831,7 @@ async def list_leads(
     return result
 
 @app.post("/api/leads")
+@app.post("/api/leads/")
 async def create_lead(payload: LeadCreate):
     phone_clean = payload.phone.strip()
     shop_name_clean = payload.shop_name.strip()
@@ -798,7 +839,6 @@ async def create_lead(payload: LeadCreate):
     if not phone_clean or not shop_name_clean:
         raise HTTPException(status_code=400, detail="Phone number and Shop Name are required")
 
-    # Duplicate checking
     if not payload.force_save:
         dup = await sync_to_async(check_phone_duplicate)(phone_clean)
         if dup["is_duplicate"]:
@@ -813,7 +853,6 @@ async def create_lead(payload: LeadCreate):
                 }
             )
 
-    # WhatsApp contact enrichment scan
     wa_info = await fetch_whatsapp_contact_info(phone_clean)
     is_on_wa = bool(wa_info.get("exists", False))
     pic_url = wa_info.get("profilePictureUrl") or ""
@@ -849,11 +888,33 @@ async def create_lead(payload: LeadCreate):
             "whatsapp_profile_pic": lead.whatsapp_profile_pic,
             "whatsapp_about": lead.whatsapp_about,
             "status": lead.status,
+            "is_contacted": lead.is_contacted,
+            "last_contacted_at": lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
+            "sent_messages_count": lead.sent_messages_count,
             "created_at": lead.created_at.isoformat()
         }
 
     lead_data = await sync_to_async(_save)()
     return lead_data
+
+@app.patch("/api/leads/{lead_id}/status")
+@app.patch("/api/leads/{lead_id}/status/")
+async def update_lead_status(lead_id: int, payload: LeadStatusUpdate):
+    def _update_status():
+        lead = Lead.objects.filter(id=lead_id).first()
+        if not lead:
+            return None
+        lead.status = payload.status
+        lead.save(update_fields=['status', 'updated_at'])
+        return {
+            "id": lead.id,
+            "status": lead.status,
+            "updated_at": lead.updated_at.isoformat()
+        }
+    res = await sync_to_async(_update_status)()
+    if not res:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return res
 
 @app.put("/api/leads/{lead_id}")
 @app.put("/api/leads/{lead_id}/")
@@ -881,6 +942,8 @@ async def update_lead(lead_id: int, payload: LeadUpdate):
             lead.address = payload.address
         if payload.notes is not None:
             lead.notes = payload.notes
+        if payload.is_contacted is not None:
+            lead.is_contacted = payload.is_contacted
 
         lead.save()
         return {
@@ -893,6 +956,9 @@ async def update_lead(lead_id: int, payload: LeadUpdate):
             "status": lead.status,
             "is_on_whatsapp": lead.is_on_whatsapp,
             "whatsapp_profile_pic": lead.whatsapp_profile_pic,
+            "is_contacted": lead.is_contacted,
+            "last_contacted_at": lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
+            "sent_messages_count": lead.sent_messages_count,
             "updated_at": lead.updated_at.isoformat()
         }
 
@@ -917,7 +983,7 @@ async def export_leads_csv():
     def _gen_csv():
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["ID", "Shop Name", "Owner Name", "Phone", "Category", "Shop Type", "Status", "On WhatsApp", "Address", "Notes", "Created At"])
+        writer.writerow(["ID", "Shop Name", "Owner Name", "Phone", "Category", "Shop Type", "Status", "Contacted", "Last Contacted", "Sent Count", "On WhatsApp", "Address", "Notes", "Created At"])
         for l in Lead.objects.all():
             writer.writerow([
                 l.id,
@@ -927,6 +993,9 @@ async def export_leads_csv():
                 l.category,
                 l.shop_type,
                 l.status,
+                "Yes" if l.is_contacted else "No",
+                l.last_contacted_at.isoformat() if l.last_contacted_at else "",
+                l.sent_messages_count or 0,
                 "Yes" if l.is_on_whatsapp else "No",
                 l.address,
                 l.notes,
@@ -975,7 +1044,7 @@ class ChatMessageOut(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str = ""
-    media_type: str | None = None  # 'image', 'document', 'audio', 'video'
+    media_type: str | None = None
     media_url: str | None = None
     media_base64: str | None = None
     file_name: str | None = None
@@ -994,7 +1063,6 @@ class IncomingMessageWebhook(BaseModel):
     file_name: str = ""
     timestamp: str
 
-
 class ChatStatusUpdateRequest(BaseModel):
     whatsapp_msg_id: str
     status: str
@@ -1009,10 +1077,8 @@ async def update_chat_status(req: ChatStatusUpdateRequest):
 class BatchIncomingMessageWebhook(BaseModel):
     messages: List[IncomingMessageWebhook]
 
-# In-memory cache for WhatsApp profile pictures and names
 _chat_meta_cache = {}
 
-# --- GET CHAT LIST (Recent Conversations) ---
 @app.get("/api/chats", response_model=List[ChatListItem])
 async def get_chat_list():
     try:
@@ -1034,14 +1100,12 @@ async def get_chat_list():
             
             is_group = p.endswith('@g.us') or (latest.jid and latest.jid.endswith('@g.us'))
             
-            # Resolve name
             chat_name = ''
             if is_group:
                 chat_name = getattr(latest, 'group_name', '') or latest.sender_name or 'WhatsApp Group'
             elif lead and (lead.whatsapp_name or lead.owner_name or lead.shop_name):
                 chat_name = lead.whatsapp_name or lead.owner_name or lead.shop_name
             else:
-                # Find incoming sender name from other party
                 incoming = ChatMessage.objects.filter(phone=p, is_from_me=False).exclude(sender_name='').exclude(sender_name='Me').order_by('-timestamp').first()
                 if incoming and incoming.sender_name:
                     chat_name = incoming.sender_name
@@ -1065,7 +1129,6 @@ async def get_chat_list():
 
     db_chats = await sync_to_async(_get_chats_db)()
     
-    # Enrich with live WhatsApp profile pictures & metadata
     final_chats = []
     async with httpx.AsyncClient(timeout=4.0) as client:
         for c in db_chats:
@@ -1108,15 +1171,13 @@ async def get_chat_list():
     final_chats.sort(key=lambda x: x['last_message_time'], reverse=True)
     return final_chats
 
-
-# --- GET MESSAGE HISTORY FOR A CHAT ---
 @app.get("/api/chats/{phone}/messages", response_model=List[ChatMessageOut])
 async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None = None):
     def _get_msgs():
         qs = ChatMessage.objects.filter(phone=phone).order_by('-timestamp')
         if before_id:
             qs = qs.filter(id__lt=before_id)
-        return list(qs[:limit][::-1])  # Return oldest first for display
+        return list(qs[:limit][::-1])
 
     msgs = await sync_to_async(_get_msgs)()
     return [
@@ -1139,8 +1200,6 @@ async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None 
         for m in msgs
     ]
 
-
-# --- MARK MESSAGES AS READ ---
 @app.post("/api/chats/{phone}/read")
 async def mark_chat_read(phone: str):
     def _mark_read():
@@ -1151,7 +1210,6 @@ async def mark_chat_read(phone: str):
 
     keys = await sync_to_async(_mark_read)()
     
-    # Notify WhatsApp Engine to send read receipts (Blue Ticks) to WhatsApp
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             await client.post(f'{WHATSAPP_ENGINE_URL}/mark-read', json={'phone': phone, 'keys': keys})
@@ -1160,8 +1218,6 @@ async def mark_chat_read(phone: str):
 
     return {'success': True, 'phone': phone}
 
-
-# --- SEND MESSAGE (via WhatsApp Engine) ---
 @app.post("/api/chats/{phone}/send")
 async def send_chat_message(phone: str, req: SendMessageRequest):
     try:
@@ -1181,7 +1237,6 @@ async def send_chat_message(phone: str, req: SendMessageRequest):
             resp.raise_for_status()
             result = resp.json()
 
-        # Save outgoing message locally as well
         def _save_outgoing():
             local_phone = phone.replace('\D', '')
             if local_phone.startswith('8801'):
@@ -1200,12 +1255,13 @@ async def send_chat_message(phone: str, req: SendMessageRequest):
                 status="SENT",
                 timestamp=datetime.fromisoformat(result.get('timestamp', datetime.now().isoformat()))
             )
+            # Track lead contacted status
+            mark_lead_contacted_by_phone(local_phone)
 
         await sync_to_async(_save_outgoing)()
         return result
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"WhatsApp Engine error: {e}")
-
 
 # --- AUTH MODELS & ENDPOINTS ---
 class LoginRequest(BaseModel):
@@ -1233,17 +1289,16 @@ async def verify_token(token: str = Query(...)):
         }
     raise HTTPException(status_code=401, detail="Invalid session token")
 
-# --- INCOMING MESSAGE WEBHOOK (from WhatsApp Engine) ---
+# --- INCOMING MESSAGE WEBHOOK ---
 @app.post("/api/chats/incoming")
 async def incoming_message_webhook(payload: IncomingMessageWebhook):
     try:
         def _save_incoming():
-            # Clean phone number
             local_phone = re.sub(r'\D', '', payload.phone)
             if local_phone.startswith('8801'):
                 local_phone = '0' + local_phone[2:]
             
-            # Save the incoming message
+            msg_ts = datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00')) if 'T' in payload.timestamp else django_tz.now()
             msg, created = ChatMessage.objects.get_or_create(
                 whatsapp_msg_id=payload.whatsapp_msg_id,
                 defaults={
@@ -1258,9 +1313,11 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
                     "file_name": payload.file_name,
                     "status": "SENT" if payload.is_from_me else "RECEIVED",
                     "is_read": payload.is_from_me,
-                    "timestamp": datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00')) if 'T' in payload.timestamp else django_tz.now()
+                    "timestamp": msg_ts
                 }
             )
+            if payload.is_from_me:
+                mark_lead_contacted_by_phone(local_phone, msg_ts)
             return msg, created
 
         msg, created = await sync_to_async(_save_incoming)()
@@ -1268,15 +1325,13 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save incoming message: {e}")
 
-
-# --- BATCH INCOMING MESSAGE WEBHOOK (for Initial History Sync) ---
+# --- BATCH INCOMING MESSAGE WEBHOOK ---
 @app.post("/api/chats/incoming/batch")
 async def incoming_batch_messages_webhook(payload: BatchIncomingMessageWebhook):
     try:
         def _save_batch():
             saved_count = 0
             for item in payload.messages:
-                # Clean phone number
                 local_phone = re.sub(r'\D', '', item.phone)
                 if local_phone.startswith('8801'):
                     local_phone = '0' + local_phone[2:]
@@ -1303,6 +1358,8 @@ async def incoming_batch_messages_webhook(payload: BatchIncomingMessageWebhook):
                         "timestamp": ts
                     }
                 )
+                if item.is_from_me:
+                    mark_lead_contacted_by_phone(local_phone, ts)
                 if created:
                     saved_count += 1
             return saved_count
@@ -1311,4 +1368,3 @@ async def incoming_batch_messages_webhook(payload: BatchIncomingMessageWebhook):
         return {"success": True, "saved": saved, "total": len(payload.messages)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save batch incoming messages: {e}")
-

@@ -109,6 +109,9 @@ export interface Lead {
   status: string;
   address?: string;
   notes?: string;
+  is_contacted?: boolean;
+  last_contacted_at?: string | null;
+  sent_messages_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -180,12 +183,13 @@ export const BroadcastService = {
 };
 
 export const LeadService = {
-  list: (params?: { search?: string; category?: string; status?: string; shop_type?: string }) => {
+  list: (params?: { search?: string; category?: string; status?: string; shop_type?: string; contacted?: boolean }) => {
     const q = new URLSearchParams();
     if (params?.search) q.append('search', params.search);
     if (params?.category) q.append('category', params.category);
     if (params?.status) q.append('status', params.status);
     if (params?.shop_type) q.append('shop_type', params.shop_type);
+    if (params?.contacted !== undefined) q.append('contacted', String(params.contacted));
     const queryStr = q.toString() ? `?${q.toString()}` : '';
     return api.get<Lead[]>(`/leads${queryStr}`);
   },
@@ -201,6 +205,7 @@ export const LeadService = {
     force_save?: boolean;
   }) => api.post<Lead>('/leads/', data),
   update: (id: number, data: Partial<Lead>) => api.put<Lead>(`/leads/${id}/`, data),
+  updateStatus: (id: number, status: string) => api.patch<{ id: number; status: string }>(`/leads/${id}/status/`, { status }),
   delete: (id: number) => api.delete(`/leads/${id}/`),
   checkPhone: (phone: string, excludeId?: number) =>
     api.get<{

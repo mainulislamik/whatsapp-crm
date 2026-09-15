@@ -105,8 +105,10 @@ class Lead(models.Model):
     STATUS_CHOICES = [
         ('NEW', 'New'),
         ('CONTACTED', 'Contacted'),
+        ('IN_PROGRESS', 'In Progress'),
         ('INTERESTED', 'Interested'),
         ('QUALIFIED', 'Qualified'),
+        ('CONVERTED', 'Converted'),
         ('LOST', 'Lost'),
     ]
 
@@ -121,6 +123,11 @@ class Lead(models.Model):
     whatsapp_name = models.CharField(max_length=255, blank=True, default='')
     whatsapp_profile_pic = models.TextField(blank=True, default='')
     whatsapp_about = models.TextField(blank=True, default='')
+
+    # Outreach & Message Sent Tracking
+    is_contacted = models.BooleanField(default=False, db_index=True)
+    last_contacted_at = models.DateTimeField(null=True, blank=True)
+    sent_messages_count = models.IntegerField(default=0)
 
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NEW')
     address = models.TextField(blank=True, default='')
