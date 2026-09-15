@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from asgiref.sync import sync_to_async
 
@@ -70,6 +71,9 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 app = FastAPI(title="WhatsApp CRM Backend API", version="2.0.0", lifespan=lifespan)
+
+os.makedirs("/app/media", exist_ok=True)
+app.mount("/media", StaticFiles(directory="/app/media"), name="media")
 
 app.add_middleware(
     CORSMiddleware,
@@ -933,10 +937,12 @@ class ChatMessageOut(BaseModel):
     timestamp: str
 
 class SendMessageRequest(BaseModel):
-    message: str
+    message: str = ""
     media_type: str | None = None  # 'image', 'document', 'audio', 'video'
     media_url: str | None = None
+    media_base64: str | None = None
     file_name: str | None = None
+    mime_type: str | None = None
 
 class IncomingMessageWebhook(BaseModel):
     whatsapp_msg_id: str
@@ -951,6 +957,18 @@ class IncomingMessageWebhook(BaseModel):
     file_name: str = ""
     timestamp: str
 
+
+class ChatStatusUpdateRequest(BaseModel):
+    whatsapp_msg_id: str
+    status: str
+
+@app.post("/api/chats/status-update")
+async def update_chat_status(req: ChatStatusUpdateRequest):
+    def _update():
+        ChatMessage.objects.filter(whatsapp_msg_id=req.whatsapp_msg_id).update(status=req.status)
+    await sync_to_async(_update)()
+    return {"success": True}
+
 class BatchIncomingMessageWebhook(BaseModel):
     messages: List[IncomingMessageWebhook]
 
@@ -959,7 +977,7 @@ class BatchIncomingMessageWebhook(BaseModel):
 async def get_chat_list():
     def _get_chats():
         # Get all distinct phone numbers in SQLite compatible way
-        phones = list(ChatMessage.objects.values_list('phone', flat=True).distinct())
+        phones = list(set(ChatMessage.objects.values_list('phone', flat=True)))
         chats = []
         for p in phones:
             latest = ChatMessage.objects.filter(phone=p).order_by('-timestamp').first()

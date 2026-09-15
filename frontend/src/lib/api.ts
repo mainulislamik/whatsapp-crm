@@ -258,7 +258,7 @@ export const ChatService = {
     if (beforeId) q.append('before_id', String(beforeId));
     return api.get<ChatMessage[]>(`/chats/${encodeURIComponent(phone)}/messages?${q.toString()}`);
   },
-  send: (phone: string, data: { message: string; media_type?: string; media_url?: string; file_name?: string }) =>
+  send: (phone: string, data: { message?: string; media_type?: string; media_url?: string; media_base64?: string; file_name?: string; mime_type?: string }) =>
     api.post(`/chats/${encodeURIComponent(phone)}/send`, data),
   markRead: (phone: string) => api.post(`/chats/${encodeURIComponent(phone)}/read`),
 };

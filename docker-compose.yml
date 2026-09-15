@@ -9,6 +9,7 @@ services:
       - BACKEND_URL=http://backend:8000
     volumes:
       - ./wa_auth_data:/app/auth_info_baileys
+      - ./wa_media_data:/app/media
 
   backend:
     build: ./backend
@@ -22,6 +23,7 @@ services:
       - DEBUG=True
     volumes:
       - ./wa_backend_data:/app/data
+      - ./wa_media_data:/app/media
       - ./backend:/app
     depends_on: [whatsapp-engine]
 

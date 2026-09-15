@@ -11,7 +11,8 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
   getBinaryNodeChild,
-  downloadMediaMessage
+  downloadMediaMessage,
+  proto
 } = require('@whiskeysockets/baileys');
 
 const app = express();
@@ -21,11 +22,18 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const PORT = process.env.PORT || 5001;
 const AUTH_DIR = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'media');
 const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:8000';
 
 if (!fs.existsSync(AUTH_DIR)) {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
 }
+if (!fs.existsSync(MEDIA_DIR)) {
+  fs.mkdirSync(MEDIA_DIR, { recursive: true });
+}
+
+// Serve downloaded media files statically
+app.use('/media', express.static(MEDIA_DIR));
 
 let sock = null;
 let lastQr = null;
@@ -33,8 +41,10 @@ let lastQrDataUrl = null;
 let connectionStatus = 'DISCONNECTED'; // DISCONNECTED, CONNECTING, SCAN_QR, CONNECTED
 let connectedUser = null;
 
-// Synced contacts and sender pushNames store
+// Contacts & LID store
 const contactsStore = new Map();
+const lidToPhoneMap = new Map();
+const groupsStore = new Map();
 
 function saveContact(c) {
   if (!c || !c.id) return;
@@ -44,24 +54,68 @@ function saveContact(c) {
   if (numOnly.startsWith('8801')) {
     localNum = '0' + numOnly.slice(2);
   }
+
+  // Handle LID mapping
+  if (c.lid) {
+    const lidNum = c.lid.split('@')[0];
+    lidToPhoneMap.set(lidNum, localNum);
+    lidToPhoneMap.set(c.lid, rawId);
+  }
+
   const existing = contactsStore.get(rawId) || {};
   const merged = { ...existing, ...c };
   contactsStore.set(rawId, merged);
   contactsStore.set(numOnly, merged);
   contactsStore.set(localNum, merged);
+  if (c.lid) {
+    contactsStore.set(c.lid, merged);
+  }
 }
 
-function findContactInStore(phone) {
-  const cleaned = String(phone).replace(/\D/g, '');
-  let localNum = cleaned;
-  let intlNum = cleaned;
-  if (cleaned.startsWith('01') && cleaned.length === 11) {
-    intlNum = '88' + cleaned;
-  } else if (cleaned.startsWith('8801') && cleaned.length === 13) {
-    localNum = '0' + cleaned.slice(2);
+function resolvePhoneAndName(remoteJid, participantJid, pushName) {
+  let jid = remoteJid || '';
+  let phone = jid.split('@')[0];
+  let isGroup = jid.endsWith('@g.us');
+  let senderName = pushName || '';
+
+  if (isGroup) {
+    const groupInfo = groupsStore.get(jid);
+    const groupTitle = groupInfo?.subject || 'WhatsApp Group';
+    return {
+      phone: jid,
+      jid,
+      isGroup: true,
+      senderName: senderName || (participantJid ? participantJid.split('@')[0] : 'Member'),
+      groupTitle
+    };
   }
-  const jid = `${intlNum}@s.whatsapp.net`;
-  return contactsStore.get(jid) || contactsStore.get(intlNum) || contactsStore.get(localNum) || null;
+
+  if (jid.endsWith('@lid')) {
+    const lidNum = jid.split('@')[0];
+    const mappedPhone = lidToPhoneMap.get(lidNum) || lidToPhoneMap.get(jid);
+    if (mappedPhone) {
+      phone = mappedPhone;
+      jid = `${phone.startsWith('01') ? '88' + phone : phone}@s.whatsapp.net`;
+    }
+  }
+
+  let localPhone = phone;
+  if (phone.startsWith('8801') && phone.length === 13) {
+    localPhone = '0' + phone.slice(2);
+  }
+
+  const stored = contactsStore.get(jid) || contactsStore.get(phone) || contactsStore.get(localPhone);
+  if (stored) {
+    senderName = senderName || stored.name || stored.notify || stored.verifiedName || '';
+  }
+
+  return {
+    phone: localPhone,
+    jid,
+    isGroup: false,
+    senderName: senderName || localPhone,
+    groupTitle: ''
+  };
 }
 
 // Forward single received message to FastAPI backend
@@ -98,7 +152,7 @@ async function forwardMessageToBackend(msgData) {
   }
 }
 
-// Forward batch messages (for initial history sync) to FastAPI backend
+// Forward batch messages to FastAPI backend
 async function forwardBatchToBackend(messagesArray) {
   if (!messagesArray || messagesArray.length === 0) return;
   try {
@@ -133,14 +187,49 @@ async function forwardBatchToBackend(messagesArray) {
   }
 }
 
+// Download & save media files from message
+async function saveMediaLocally(m, msgId, type) {
+  try {
+    const buffer = await downloadMediaMessage(
+      m,
+      'buffer',
+      {},
+      {
+        logger: pino({ level: 'silent' }),
+        reuploadRequest: sock?.updateMediaMessage
+      }
+    );
+
+    let ext = 'bin';
+    if (type === 'image') ext = 'jpg';
+    else if (type === 'audio') ext = 'ogg';
+    else if (type === 'video') ext = 'mp4';
+    else if (type === 'document') {
+      const fn = m.message?.documentMessage?.fileName;
+      ext = fn ? path.extname(fn).replace('.', '') || 'pdf' : 'pdf';
+    } else if (type === 'sticker') ext = 'webp';
+
+    const filename = `${type}_${msgId.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+    const filePath = path.join(MEDIA_DIR, filename);
+    fs.writeFileSync(filePath, buffer);
+
+    return `/media/${filename}`;
+  } catch (err) {
+    console.error(`Failed to download ${type} media:`, err.message);
+    return '';
+  }
+}
+
 // Extract clean text and media info from a Baileys message object
-function extractMessageInfo(m) {
+async function extractMessageInfo(m) {
   if (!m || !m.message) return null;
   const msg = m.message;
   let text = '';
   let mediaType = '';
   let mediaUrl = '';
   let fileName = '';
+
+  const msgId = m.key?.id || `msg_${Date.now()}_${Math.random()}`;
 
   if (msg.conversation) {
     text = msg.conversation;
@@ -149,19 +238,24 @@ function extractMessageInfo(m) {
   } else if (msg.imageMessage) {
     mediaType = 'image';
     text = msg.imageMessage.caption || '';
-    mediaUrl = msg.imageMessage.url || '';
+    mediaUrl = await saveMediaLocally(m, msgId, 'image');
   } else if (msg.documentMessage) {
     mediaType = 'document';
     text = msg.documentMessage.caption || '';
-    fileName = msg.documentMessage.fileName || 'document';
-    mediaUrl = msg.documentMessage.url || '';
+    fileName = msg.documentMessage.fileName || 'document.pdf';
+    mediaUrl = await saveMediaLocally(m, msgId, 'document');
   } else if (msg.videoMessage) {
     mediaType = 'video';
     text = msg.videoMessage.caption || '';
-    mediaUrl = msg.videoMessage.url || '';
+    mediaUrl = await saveMediaLocally(m, msgId, 'video');
   } else if (msg.audioMessage) {
     mediaType = 'audio';
-    text = '🎵 Audio Voice Note';
+    text = '🎵 Voice Note';
+    mediaUrl = await saveMediaLocally(m, msgId, 'audio');
+  } else if (msg.stickerMessage) {
+    mediaType = 'sticker';
+    text = '🎨 Sticker';
+    mediaUrl = await saveMediaLocally(m, msgId, 'sticker');
   } else if (msg.templateButtonReplyMessage) {
     text = msg.templateButtonReplyMessage.selectedDisplayText || '';
   } else if (msg.buttonsResponseMessage) {
@@ -171,33 +265,38 @@ function extractMessageInfo(m) {
   }
 
   const rawJid = m.key?.remoteJid || '';
-  if (!rawJid || rawJid.includes('@g.us') || rawJid === 'status@broadcast') {
+  if (!rawJid || rawJid === 'status@broadcast') {
     return null;
   }
 
-  const phone = rawJid.split('@')[0];
-  let localPhone = phone;
-  if (phone.startsWith('8801')) {
-    localPhone = '0' + phone.slice(2);
-  }
+  const participantJid = m.key?.participant || m.participant || '';
+  const resolved = resolvePhoneAndName(rawJid, participantJid, m.pushName);
 
   const timestamp = m.messageTimestamp
     ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
     : new Date().toISOString();
 
-  const senderName = m.pushName || findContactInStore(localPhone)?.name || findContactInStore(localPhone)?.notify || '';
+  let status = 'DELIVERED';
+  if (m.key?.fromMe) {
+    if (m.status === 4) status = 'READ';
+    else if (m.status === 3) status = 'DELIVERED';
+    else status = 'SENT';
+  } else {
+    status = 'RECEIVED';
+  }
 
   return {
-    whatsapp_msg_id: m.key?.id || `msg_${Date.now()}_${Math.random()}`,
-    phone: localPhone,
-    jid: rawJid,
-    sender_name: senderName,
+    whatsapp_msg_id: msgId,
+    phone: resolved.phone,
+    jid: resolved.jid,
+    sender_name: resolved.isGroup ? `${resolved.senderName} (${resolved.groupTitle})` : resolved.senderName,
     is_from_me: Boolean(m.key?.fromMe),
     message_text: text || (mediaType ? `[${mediaType}]` : ''),
     media_type: mediaType,
     media_url: mediaUrl,
     media_caption: text,
     file_name: fileName,
+    status,
     timestamp
   };
 }
@@ -263,11 +362,18 @@ async function connectToWhatsApp() {
     }
   });
 
-  // Handle sync of history (contacts, chats, and recent messages)
+  // Handle sync of history
   sock.ev.on('messaging-history.set', async ({ chats, contacts, messages, isLatest }) => {
     console.log(`[History Sync] Received: ${contacts?.length || 0} contacts, ${chats?.length || 0} chats, ${messages?.length || 0} messages. isLatest: ${isLatest}`);
     if (Array.isArray(contacts)) {
       contacts.forEach(saveContact);
+    }
+    if (Array.isArray(chats)) {
+      chats.forEach(c => {
+        if (c.id?.endsWith('@g.us') && c.name) {
+          groupsStore.set(c.id, { subject: c.name });
+        }
+      });
     }
     if (Array.isArray(messages) && messages.length > 0) {
       const parsedBatch = [];
@@ -276,7 +382,7 @@ async function connectToWhatsApp() {
         if (sender && m.pushName) {
           saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
         }
-        const parsed = extractMessageInfo(m);
+        const parsed = await extractMessageInfo(m);
         if (parsed) {
           parsedBatch.push(parsed);
         }
@@ -307,9 +413,43 @@ async function connectToWhatsApp() {
         if (sender && m.pushName) {
           saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
         }
-        const parsed = extractMessageInfo(m);
+        const parsed = await extractMessageInfo(m);
         if (parsed) {
           await forwardMessageToBackend(parsed);
+        }
+      }
+    }
+  });
+
+  // Handle message delivery & read status updates (ticks)
+  sock.ev.on('messages.update', async (updates) => {
+    if (Array.isArray(updates)) {
+      for (const u of updates) {
+        if (u.key?.id && u.update?.status) {
+          let status = 'SENT';
+          if (u.update.status === 4) status = 'READ';
+          else if (u.update.status === 3) status = 'DELIVERED';
+          
+          try {
+            const postData = JSON.stringify({
+              whatsapp_msg_id: u.key.id,
+              status
+            });
+            const req = http.request({
+              hostname: 'backend',
+              port: 8000,
+              path: '/api/chats/status-update',
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+              },
+              timeout: 3000
+            }, () => {});
+            req.on('error', () => {});
+            req.write(postData);
+            req.end();
+          } catch (e) {}
         }
       }
     }
@@ -319,8 +459,10 @@ async function connectToWhatsApp() {
 // Format phone number to WhatsApp JID
 function formatJID(phone) {
   let cleaned = String(phone).replace(/\D/g, '');
+  if (phone.includes('@g.us')) {
+    return phone;
+  }
   if (cleaned.startsWith('01') && cleaned.length === 11) {
-    // Bangladesh local format (e.g. 017...) -> prefix 88
     cleaned = '88' + cleaned;
   }
   return `${cleaned}@s.whatsapp.net`;
@@ -340,7 +482,7 @@ app.get('/status', (req, res) => {
   });
 });
 
-// Check contact on WhatsApp (existence, profile picture, about, name)
+// Check contact on WhatsApp
 app.get('/check-contact', async (req, res) => {
   try {
     const { phone } = req.query;
@@ -382,17 +524,14 @@ app.get('/check-contact', async (req, res) => {
       about = statusRes?.status || null;
     } catch (err) {}
 
-    // 1. Check in-memory synced contacts store
-    const stored = findContactInStore(phone);
+    const stored = contactsStore.get(jid) || contactsStore.get(phone);
     let contactName = stored?.name || stored?.notify || stored?.verifiedName || stored?.pushName || null;
 
-    // 2. Query Business Profile
     let businessProfile = null;
     try {
       businessProfile = await sock.getBusinessProfile(match.jid);
     } catch (err) {}
 
-    // 3. Raw WhatsApp IQ query for business profile & verified name
     try {
       const bizRes = await sock.query({
         tag: 'iq',
@@ -416,16 +555,13 @@ app.get('/check-contact', async (req, res) => {
         if (bizIdentityNode?.attrs?.display_name && !contactName) {
           contactName = bizIdentityNode.attrs.display_name;
         }
-
         if (!contactName) {
           const vnameNode = getBinaryNodeChild(profiles, 'vname') || 
                             getBinaryNodeChild(profiles, 'name') || 
                             getBinaryNodeChild(profiles, 'tag');
           if (vnameNode && vnameNode.content) {
             const vnameStr = vnameNode.content.toString();
-            if (vnameStr) {
-              contactName = vnameStr;
-            }
+            if (vnameStr) contactName = vnameStr;
           }
         }
       }
@@ -448,7 +584,7 @@ app.get('/check-contact', async (req, res) => {
   }
 });
 
-// Send Message Endpoint (supports text + media)
+// Send Message Endpoint (supports text, image, audio, document, video)
 app.post('/send-message', async (req, res) => {
   try {
     const { phone, message, text, mediaType, mediaUrl, mediaBase64, fileName, mimeType } = req.body;
@@ -463,17 +599,48 @@ app.post('/send-message', async (req, res) => {
     }
 
     const jid = formatJID(phone);
-
     let sentResult = null;
+    let savedMediaUrl = mediaUrl || '';
 
     if (mediaType === 'image' && (mediaBase64 || mediaUrl)) {
-      const imgBuffer = mediaBase64 ? Buffer.from(mediaBase64, 'base64') : { url: mediaUrl };
+      let imgBuffer;
+      if (mediaBase64) {
+        imgBuffer = Buffer.from(mediaBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+        const fn = `out_img_${Date.now()}.jpg`;
+        fs.writeFileSync(path.join(MEDIA_DIR, fn), imgBuffer);
+        savedMediaUrl = `/media/${fn}`;
+      } else {
+        imgBuffer = { url: mediaUrl };
+      }
       sentResult = await sock.sendMessage(jid, {
         image: imgBuffer,
         caption: messageText || undefined
       });
+    } else if (mediaType === 'audio' && (mediaBase64 || mediaUrl)) {
+      let audioBuffer;
+      if (mediaBase64) {
+        audioBuffer = Buffer.from(mediaBase64.replace(/^data:audio\/\w+;base64,/, ''), 'base64');
+        const fn = `out_audio_${Date.now()}.mp3`;
+        fs.writeFileSync(path.join(MEDIA_DIR, fn), audioBuffer);
+        savedMediaUrl = `/media/${fn}`;
+      } else {
+        audioBuffer = { url: mediaUrl };
+      }
+      sentResult = await sock.sendMessage(jid, {
+        audio: audioBuffer,
+        mimetype: mimeType || 'audio/mp4',
+        ptt: true // Voice note mode
+      });
     } else if (mediaType === 'document' && (mediaBase64 || mediaUrl)) {
-      const docBuffer = mediaBase64 ? Buffer.from(mediaBase64, 'base64') : { url: mediaUrl };
+      let docBuffer;
+      if (mediaBase64) {
+        docBuffer = Buffer.from(mediaBase64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+        const fn = fileName || `out_doc_${Date.now()}.pdf`;
+        fs.writeFileSync(path.join(MEDIA_DIR, fn), docBuffer);
+        savedMediaUrl = `/media/${fn}`;
+      } else {
+        docBuffer = { url: mediaUrl };
+      }
       sentResult = await sock.sendMessage(jid, {
         document: docBuffer,
         fileName: fileName || 'document.pdf',
@@ -481,20 +648,20 @@ app.post('/send-message', async (req, res) => {
         caption: messageText || undefined
       });
     } else {
-      // Plain text message
       sentResult = await sock.sendMessage(jid, { text: messageText });
     }
 
     const timestamp = new Date().toISOString();
     const msgId = sentResult?.key?.id || `out_${Date.now()}`;
 
-    // Clean local phone
     let localPhone = phone.replace(/\D/g, '');
-    if (localPhone.startsWith('8801')) {
+    if (phone.includes('@g.us')) {
+      localPhone = phone;
+    } else if (localPhone.startsWith('8801')) {
       localPhone = '0' + localPhone.slice(2);
     }
 
-    // Immediately forward outgoing record to backend
+    // Forward to backend
     forwardMessageToBackend({
       whatsapp_msg_id: msgId,
       phone: localPhone,
@@ -503,9 +670,10 @@ app.post('/send-message', async (req, res) => {
       is_from_me: true,
       message_text: messageText,
       media_type: mediaType || '',
-      media_url: mediaUrl || '',
+      media_url: savedMediaUrl,
       media_caption: messageText,
       file_name: fileName || '',
+      status: 'SENT',
       timestamp
     });
 
@@ -514,6 +682,7 @@ app.post('/send-message', async (req, res) => {
       phone: localPhone,
       jid,
       whatsapp_msg_id: msgId,
+      media_url: savedMediaUrl,
       timestamp,
       message: 'Message sent successfully'
     });
