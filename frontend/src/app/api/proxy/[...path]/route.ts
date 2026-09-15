@@ -47,19 +47,22 @@ export async function POST(
 
   try {
     const contentType = request.headers.get("content-type") || "";
-    let body: any;
+    let body: any = undefined;
     let headers: Record<string, string> = { Accept: "application/json" };
 
     if (contentType.includes("application/json")) {
-      body = JSON.stringify(await request.json());
-      headers["Content-Type"] = "application/json";
-    } else {
+      const text = await request.text();
+      if (text && text.trim()) {
+        body = text;
+        headers["Content-Type"] = "application/json";
+      }
+    } else if (contentType.includes("multipart/form-data")) {
       body = await request.formData();
     }
 
     const res = await fetch(targetUrl, {
       method: "POST",
-      headers: contentType.includes("application/json") ? headers : undefined,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
       body,
     });
     const data = await res.json();

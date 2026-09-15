@@ -801,6 +801,78 @@ app.get('/qr', (req, res) => {
 // Start WhatsApp socket & server
 connectToWhatsApp();
 
+// Logout WhatsApp session
+app.post('/logout', async (req, res) => {
+  try {
+    console.log('[WhatsApp Engine] Initiating logout...');
+    connectionStatus = 'DISCONNECTED';
+    connectedUser = null;
+    lastQrDataUrl = null;
+
+    if (sock) {
+      try {
+        await sock.logout('User initiated logout');
+      } catch (e) {
+        console.warn('Error during sock.logout:', e.message);
+      }
+      try {
+        sock.end(undefined);
+      } catch (e) {}
+      sock = null;
+    }
+
+    // Clear auth credentials directory so a fresh QR is generated on next connect
+    try {
+      if (fs.existsSync(AUTH_DIR)) {
+        const authFiles = fs.readdirSync(AUTH_DIR);
+        for (const file of authFiles) {
+          fs.rmSync(path.join(AUTH_DIR, file), { recursive: true, force: true });
+        }
+        console.log('[WhatsApp Engine] Cleared auth_info_baileys directory');
+      }
+    } catch (e) {
+      console.warn('Error clearing auth dir:', e.message);
+    }
+
+    // Clear in-memory caches
+    contactsStore.clear();
+    lidToPhoneMap.clear();
+    groupsStore.clear();
+
+    // Re-initialize socket so new QR code is generated for the user immediately
+    setTimeout(() => {
+      connectToWhatsApp();
+    }, 1000);
+
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (err) {
+    console.error('Logout error:', err);
+    res.status(500).json({ error: err.message || 'Logout failed' });
+  }
+});
+
+// Restart WhatsApp connection
+app.post('/restart', async (req, res) => {
+  try {
+    console.log('[WhatsApp Engine] Restarting socket connection...');
+    if (sock) {
+      try {
+        sock.end(undefined);
+      } catch (e) {}
+      sock = null;
+    }
+    connectionStatus = 'CONNECTING';
+    lastQrDataUrl = null;
+    setTimeout(() => {
+      connectToWhatsApp();
+    }, 1000);
+    res.json({ success: true, message: 'Restarting connection' });
+  } catch (err) {
+    console.error('Restart error:', err);
+    res.status(500).json({ error: err.message || 'Restart failed' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`WhatsApp Engine running on port ${PORT}`);
 });
