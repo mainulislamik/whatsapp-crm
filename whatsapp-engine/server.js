@@ -64,7 +64,7 @@ function findContactInStore(phone) {
   return contactsStore.get(jid) || contactsStore.get(intlNum) || contactsStore.get(localNum) || null;
 }
 
-// Forward received message to FastAPI backend
+// Forward single received message to FastAPI backend
 async function forwardMessageToBackend(msgData) {
   try {
     const postData = JSON.stringify(msgData);
@@ -85,18 +85,51 @@ async function forwardMessageToBackend(msgData) {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData)
           },
-          timeout: 4000
-        }, (res) => {
-          // Success
-        });
+          timeout: 5000
+        }, (res) => {});
         req.on('error', () => {});
         req.write(postData);
         req.end();
-        break; // request dispatched
+        break;
       } catch (e) {}
     }
   } catch (err) {
     console.error('Error forwarding message to backend:', err.message);
+  }
+}
+
+// Forward batch messages (for initial history sync) to FastAPI backend
+async function forwardBatchToBackend(messagesArray) {
+  if (!messagesArray || messagesArray.length === 0) return;
+  try {
+    const postData = JSON.stringify({ messages: messagesArray });
+    const urls = [
+      `${BACKEND_URL}/api/chats/incoming/batch`,
+      'http://localhost:8050/api/chats/incoming/batch'
+    ];
+
+    for (const targetUrl of urls) {
+      try {
+        const u = new URL(targetUrl);
+        const req = http.request({
+          hostname: u.hostname,
+          port: u.port,
+          path: u.pathname,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData)
+          },
+          timeout: 15000
+        }, (res) => {});
+        req.on('error', () => {});
+        req.write(postData);
+        req.end();
+        break;
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error('Error forwarding batch messages to backend:', err.message);
   }
 }
 
@@ -139,7 +172,6 @@ function extractMessageInfo(m) {
 
   const rawJid = m.key?.remoteJid || '';
   if (!rawJid || rawJid.includes('@g.us') || rawJid === 'status@broadcast') {
-    // Skip group chats or broadcast status updates
     return null;
   }
 
@@ -153,13 +185,15 @@ function extractMessageInfo(m) {
     ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
     : new Date().toISOString();
 
+  const senderName = m.pushName || findContactInStore(localPhone)?.name || findContactInStore(localPhone)?.notify || '';
+
   return {
-    whatsapp_msg_id: m.key?.id || '',
+    whatsapp_msg_id: m.key?.id || `msg_${Date.now()}_${Math.random()}`,
     phone: localPhone,
     jid: rawJid,
-    sender_name: m.pushName || '',
+    sender_name: senderName,
     is_from_me: Boolean(m.key?.fromMe),
-    message_text: text,
+    message_text: text || (mediaType ? `[${mediaType}]` : ''),
     media_type: mediaType,
     media_url: mediaUrl,
     media_caption: text,
@@ -178,6 +212,8 @@ async function connectToWhatsApp() {
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     auth: state,
+    syncFullHistory: true,
+    shouldSyncHistoryMessage: () => true,
     generateHighQualityLinkPreview: true,
     browser: ['WhatsApp CRM Pro', 'Chrome', '124.0.0']
   });
@@ -227,22 +263,30 @@ async function connectToWhatsApp() {
     }
   });
 
-  // Handle sync of history (contacts and recent messages)
-  sock.ev.on('messaging-history.set', ({ chats, contacts, messages }) => {
+  // Handle sync of history (contacts, chats, and recent messages)
+  sock.ev.on('messaging-history.set', async ({ chats, contacts, messages, isLatest }) => {
+    console.log(`[History Sync] Received: ${contacts?.length || 0} contacts, ${chats?.length || 0} chats, ${messages?.length || 0} messages. isLatest: ${isLatest}`);
     if (Array.isArray(contacts)) {
       contacts.forEach(saveContact);
     }
-    if (Array.isArray(messages)) {
-      messages.forEach(m => {
+    if (Array.isArray(messages) && messages.length > 0) {
+      const parsedBatch = [];
+      for (const m of messages) {
         const sender = m.key?.remoteJid;
         if (sender && m.pushName) {
           saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
         }
         const parsed = extractMessageInfo(m);
         if (parsed) {
-          forwardMessageToBackend(parsed);
+          parsedBatch.push(parsed);
         }
-      });
+      }
+      
+      // Chunk batches of 50
+      for (let i = 0; i < parsedBatch.length; i += 50) {
+        const chunk = parsedBatch.slice(i, i + 50);
+        await forwardBatchToBackend(chunk);
+      }
     }
   });
 
@@ -368,13 +412,11 @@ app.get('/check-contact', async (req, res) => {
       const profileNode = getBinaryNodeChild(bizRes, 'business_profile');
       const profiles = getBinaryNodeChild(profileNode, 'profile');
       if (profiles) {
-        // Check biz_identity_info display_name
         const bizIdentityNode = getBinaryNodeChild(profiles, 'biz_identity_info');
         if (bizIdentityNode?.attrs?.display_name && !contactName) {
           contactName = bizIdentityNode.attrs.display_name;
         }
 
-        // Check vname / name / tag
         if (!contactName) {
           const vnameNode = getBinaryNodeChild(profiles, 'vname') || 
                             getBinaryNodeChild(profiles, 'name') || 

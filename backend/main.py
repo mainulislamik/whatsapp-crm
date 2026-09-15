@@ -928,6 +928,9 @@ class IncomingMessageWebhook(BaseModel):
     file_name: str = ""
     timestamp: str
 
+class BatchIncomingMessageWebhook(BaseModel):
+    messages: List[IncomingMessageWebhook]
+
 # --- GET CHAT LIST (Recent Conversations) ---
 @app.get("/api/chats", response_model=List[ChatListItem])
 async def get_chat_list():
@@ -1079,7 +1082,7 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
     try:
         def _save_incoming():
             # Clean phone number
-            local_phone = payload.phone.replace('\D', '')
+            local_phone = re.sub(r'\D', '', payload.phone)
             if local_phone.startswith('8801'):
                 local_phone = '0' + local_phone[2:]
             
@@ -1096,8 +1099,8 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
                     "media_url": payload.media_url,
                     "media_caption": payload.media_caption,
                     "file_name": payload.file_name,
-                    "status": "RECEIVED",
-                    "is_read": False,
+                    "status": "SENT" if payload.is_from_me else "RECEIVED",
+                    "is_read": payload.is_from_me,
                     "timestamp": datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00')) if 'T' in payload.timestamp else django_tz.now()
                 }
             )
@@ -1107,4 +1110,48 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
         return {"success": True, "created": created, "id": msg.id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save incoming message: {e}")
+
+
+# --- BATCH INCOMING MESSAGE WEBHOOK (for Initial History Sync) ---
+@app.post("/api/chats/incoming/batch")
+async def incoming_batch_messages_webhook(payload: BatchIncomingMessageWebhook):
+    try:
+        def _save_batch():
+            saved_count = 0
+            for item in payload.messages:
+                # Clean phone number
+                local_phone = re.sub(r'\D', '', item.phone)
+                if local_phone.startswith('8801'):
+                    local_phone = '0' + local_phone[2:]
+                
+                try:
+                    ts = datetime.fromisoformat(item.timestamp.replace('Z', '+00:00')) if 'T' in item.timestamp else django_tz.now()
+                except Exception:
+                    ts = django_tz.now()
+
+                _, created = ChatMessage.objects.get_or_create(
+                    whatsapp_msg_id=item.whatsapp_msg_id,
+                    defaults={
+                        "phone": local_phone,
+                        "jid": item.jid,
+                        "sender_name": item.sender_name,
+                        "is_from_me": item.is_from_me,
+                        "message_text": item.message_text,
+                        "media_type": item.media_type,
+                        "media_url": item.media_url,
+                        "media_caption": item.media_caption,
+                        "file_name": item.file_name,
+                        "status": "SENT" if item.is_from_me else "RECEIVED",
+                        "is_read": item.is_from_me,
+                        "timestamp": ts
+                    }
+                )
+                if created:
+                    saved_count += 1
+            return saved_count
+
+        saved = await sync_to_async(_save_batch)()
+        return {"success": True, "saved": saved, "total": len(payload.messages)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save batch incoming messages: {e}")
 
