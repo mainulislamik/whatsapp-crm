@@ -11,19 +11,24 @@ const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#25D366', // WhatsApp Green
+      main: '#128C7E', // WhatsApp Dark Teal
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#128C7E', // WhatsApp Dark Teal
+      main: '#25D366', // WhatsApp Green
+      contrastText: '#ffffff',
     },
     background: {
       default: '#f8fafc',
       paper: '#ffffff',
     },
+    text: {
+      primary: '#0f172a',
+      secondary: '#64748b',
+    },
   },
   shape: {
-    borderRadius: 10,
+    borderRadius: 12,
   },
   typography: {
     fontFamily: '"Inter", "Segoe UI", Roboto, sans-serif',
@@ -39,7 +44,7 @@ const theme = createTheme({
           borderRadius: 8,
           boxShadow: 'none',
           '&:hover': {
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           },
         },
       },
@@ -48,7 +53,21 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          borderRadius: 12,
+          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+        },
+      },
+    },
+    MuiTableHead: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#f1f5f9',
+          '& .MuiTableCell-head': {
+            backgroundColor: '#f1f5f9',
+            color: '#0f172a',
+            fontWeight: 700,
+            borderBottom: '2px solid #cbd5e1',
+          },
         },
       },
     },
