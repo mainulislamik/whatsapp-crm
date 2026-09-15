@@ -115,17 +115,20 @@ class Lead(models.Model):
     owner_name = models.CharField(max_length=255, blank=True, default='')
     category = models.CharField(max_length=100, blank=True, default='General')
     shop_type = models.CharField(max_length=100, blank=True, default='Retail')
-    
+
     # WhatsApp Scanned Enrichment
     is_on_whatsapp = models.BooleanField(default=False)
     whatsapp_name = models.CharField(max_length=255, blank=True, default='')
     whatsapp_profile_pic = models.TextField(blank=True, default='')
     whatsapp_about = models.TextField(blank=True, default='')
-    
+
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NEW')
     address = models.TextField(blank=True, default='')
     notes = models.TextField(blank=True, default='')
-    
+
+    # Live Chat Integration
+    whatsapp_jid = models.CharField(max_length=100, blank=True, default='')  # e.g. 88018xxxx@s.whatsapp.net
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -134,3 +137,43 @@ class Lead(models.Model):
 
     def __str__(self):
         return f"{self.shop_name} - {self.phone}"
+
+
+class ChatMessage(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('SENT', 'Sent'),
+        ('DELIVERED', 'Delivered'),
+        ('READ', 'Read'),
+        ('RECEIVED', 'Received'),
+        ('FAILED', 'Failed'),
+    ]
+
+    whatsapp_msg_id = models.CharField(max_length=255, blank=True, db_index=True)
+    phone = models.CharField(max_length=50, db_index=True)
+    jid = models.CharField(max_length=100, db_index=True)
+    sender_name = models.CharField(max_length=255, blank=True, default='')
+    is_from_me = models.BooleanField(default=False)
+    message_text = models.TextField(blank=True, default='')
+    
+    # Media support
+    media_type = models.CharField(max_length=50, blank=True, default='')  # 'image', 'document', 'audio', 'video'
+    media_url = models.TextField(blank=True, default='')
+    media_caption = models.TextField(blank=True, default='')
+    file_name = models.CharField(max_length=255, blank=True, default='')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DELIVERED')
+    is_read = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']
+        indexes = [
+            models.Index(fields=['phone', 'timestamp']),
+            models.Index(fields=['jid', 'timestamp']),
+        ]
+
+    def __str__(self):
+        direction = "OUT" if self.is_from_me else "IN"
+        return f"[{direction}] {self.phone}: {self.message_text[:30]}"

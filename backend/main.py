@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from asgiref.sync import sync_to_async
 
-from crm_core.models import Contact, MessageTemplate, Campaign, CampaignLog, Lead, LeadCategory
+from crm_core.models import Contact, MessageTemplate, Campaign, CampaignLog, Lead, LeadCategory, ChatMessage
 
 WHATSAPP_ENGINE_URL = os.environ.get('WHATSAPP_ENGINE_URL', 'http://whatsapp-engine:5001')
 
@@ -877,4 +877,234 @@ async def export_leads_csv():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=leads_export.csv"}
     )
+
+
+# ============================================================
+# LIVE CHAT ENDPOINTS
+# ============================================================
+
+class ChatListItem(BaseModel):
+    phone: str
+    name: str
+    jid: str
+    last_message: str
+    last_message_time: str
+    unread_count: int
+    is_on_whatsapp: bool
+    profile_picture: str | None = None
+
+class ChatMessageOut(BaseModel):
+    id: int
+    whatsapp_msg_id: str
+    phone: str
+    jid: str
+    sender_name: str
+    is_from_me: bool
+    message_text: str
+    media_type: str
+    media_url: str
+    media_caption: str
+    file_name: str
+    status: str
+    is_read: bool
+    timestamp: str
+
+class SendMessageRequest(BaseModel):
+    message: str
+    media_type: str | None = None  # 'image', 'document', 'audio', 'video'
+    media_url: str | None = None
+    file_name: str | None = None
+
+class IncomingMessageWebhook(BaseModel):
+    whatsapp_msg_id: str
+    phone: str
+    jid: str
+    sender_name: str
+    is_from_me: bool
+    message_text: str
+    media_type: str = ""
+    media_url: str = ""
+    media_caption: str = ""
+    file_name: str = ""
+    timestamp: str
+
+# --- GET CHAT LIST (Recent Conversations) ---
+@app.get("/api/chats", response_model=List[ChatListItem])
+async def get_chat_list():
+    def _get_chats():
+        # Get all distinct phone numbers in SQLite compatible way
+        phones = list(ChatMessage.objects.values_list('phone', flat=True).distinct())
+        chats = []
+        for p in phones:
+            latest = ChatMessage.objects.filter(phone=p).order_by('-timestamp').first()
+            if not latest:
+                continue
+            unread = ChatMessage.objects.filter(phone=p, is_from_me=False, is_read=False).count()
+            lead = Lead.objects.filter(phone=p).first()
+            name = (lead.whatsapp_name if lead and lead.whatsapp_name else (lead.owner_name or lead.shop_name if lead else latest.sender_name)) or p
+            if name == "Me" and lead:
+                name = lead.whatsapp_name or lead.owner_name or lead.shop_name or p
+            chats.append({
+                "phone": p,
+                "name": name if name and name != "Me" else (latest.sender_name if not latest.is_from_me else p),
+                "jid": latest.jid,
+                "last_message": latest.message_text[:80] if latest.message_text else (latest.media_type or "Media"),
+                "last_message_time": latest.timestamp.isoformat(),
+                "unread_count": unread,
+                "is_on_whatsapp": lead.is_on_whatsapp if lead else False,
+                "profile_picture": lead.whatsapp_profile_pic if lead else None
+            })
+        chats.sort(key=lambda x: x["last_message_time"], reverse=True)
+        return chats
+
+    return await sync_to_async(_get_chats)()
+
+
+# --- GET MESSAGE HISTORY FOR A CHAT ---
+@app.get("/api/chats/{phone}/messages", response_model=List[ChatMessageOut])
+async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None = None):
+    def _get_msgs():
+        qs = ChatMessage.objects.filter(phone=phone).order_by('-timestamp')
+        if before_id:
+            qs = qs.filter(id__lt=before_id)
+        return list(qs[:limit][::-1])  # Return oldest first for display
+
+    msgs = await sync_to_async(_get_msgs)()
+    return [
+        {
+            "id": m.id,
+            "whatsapp_msg_id": m.whatsapp_msg_id,
+            "phone": m.phone,
+            "jid": m.jid,
+            "sender_name": m.sender_name,
+            "is_from_me": m.is_from_me,
+            "message_text": m.message_text,
+            "media_type": m.media_type,
+            "media_url": m.media_url,
+            "media_caption": m.media_caption,
+            "file_name": m.file_name,
+            "status": m.status,
+            "is_read": m.is_read,
+            "timestamp": m.timestamp.isoformat()
+        }
+        for m in msgs
+    ]
+
+
+# --- MARK MESSAGES AS READ ---
+@app.post("/api/chats/{phone}/read")
+async def mark_chat_read(phone: str):
+    def _mark_read():
+        ChatMessage.objects.filter(phone=phone, is_from_me=False, is_read=False).update(is_read=True)
+
+    await sync_to_async(_mark_read)()
+    return {"success": True, "phone": phone}
+
+
+# --- SEND MESSAGE (via WhatsApp Engine) ---
+@app.post("/api/chats/{phone}/send")
+async def send_chat_message(phone: str, req: SendMessageRequest):
+    try:
+        payload = {
+            "phone": phone,
+            "text": req.message,
+        }
+        if req.media_type:
+            payload["mediaType"] = req.media_type
+        if req.media_url:
+            payload["mediaUrl"] = req.media_url
+        if req.file_name:
+            payload["fileName"] = req.file_name
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(f"{WHATSAPP_ENGINE_URL}/send-message", json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+
+        # Save outgoing message locally as well
+        def _save_outgoing():
+            local_phone = phone.replace('\D', '')
+            if local_phone.startswith('8801'):
+                local_phone = '0' + local_phone[2:]
+            ChatMessage.objects.create(
+                whatsapp_msg_id=result.get('whatsapp_msg_id', f"out_{datetime.now().timestamp()}"),
+                phone=local_phone,
+                jid=result.get('jid', f"{local_phone}@s.whatsapp.net"),
+                sender_name="Me",
+                is_from_me=True,
+                message_text=req.message,
+                media_type=req.media_type or "",
+                media_url=req.media_url or "",
+                media_caption=req.message,
+                file_name=req.file_name or "",
+                status="SENT",
+                timestamp=datetime.fromisoformat(result.get('timestamp', datetime.now().isoformat()))
+            )
+
+        await sync_to_async(_save_outgoing)()
+        return result
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"WhatsApp Engine error: {e}")
+
+
+# --- AUTH MODELS & ENDPOINTS ---
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    if req.username == "stockwhisk" and req.password == "imontouhid4992":
+        return {
+            "success": True,
+            "token": "wa_crm_token_stockwhisk_sec_4992",
+            "username": "stockwhisk",
+            "name": "StockWhisk Admin"
+        }
+    raise HTTPException(status_code=401, detail="Invalid username or password")
+
+@app.get("/api/auth/verify")
+async def verify_token(token: str = Query(...)):
+    if token == "wa_crm_token_stockwhisk_sec_4992":
+        return {
+            "valid": True,
+            "username": "stockwhisk",
+            "name": "StockWhisk Admin"
+        }
+    raise HTTPException(status_code=401, detail="Invalid session token")
+
+# --- INCOMING MESSAGE WEBHOOK (from WhatsApp Engine) ---
+@app.post("/api/chats/incoming")
+async def incoming_message_webhook(payload: IncomingMessageWebhook):
+    try:
+        def _save_incoming():
+            # Clean phone number
+            local_phone = payload.phone.replace('\D', '')
+            if local_phone.startswith('8801'):
+                local_phone = '0' + local_phone[2:]
+            
+            # Save the incoming message
+            msg, created = ChatMessage.objects.get_or_create(
+                whatsapp_msg_id=payload.whatsapp_msg_id,
+                defaults={
+                    "phone": local_phone,
+                    "jid": payload.jid,
+                    "sender_name": payload.sender_name,
+                    "is_from_me": payload.is_from_me,
+                    "message_text": payload.message_text,
+                    "media_type": payload.media_type,
+                    "media_url": payload.media_url,
+                    "media_caption": payload.media_caption,
+                    "file_name": payload.file_name,
+                    "status": "RECEIVED",
+                    "is_read": False,
+                    "timestamp": datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00')) if 'T' in payload.timestamp else django_tz.now()
+                }
+            )
+            return msg, created
+
+        msg, created = await sync_to_async(_save_incoming)()
+        return {"success": True, "created": created, "id": msg.id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save incoming message: {e}")
 

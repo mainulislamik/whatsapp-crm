@@ -30,6 +30,10 @@ import CampaignHistory from '@/components/CampaignHistory';
 import QuickChat from '@/components/QuickChat';
 import WhatsAppConnect from '@/components/WhatsAppConnect';
 import LeadManager from '@/components/LeadManager';
+import LiveChat from '@/components/LiveChat';
+import LoginPage from '@/components/LoginPage';
+import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { WhatsAppService } from '@/lib/api';
 
 const DRAWER_WIDTH = 280;
@@ -38,7 +42,52 @@ export default function Dashboard() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const [activeSection, setActiveSection] = useState<string>('overview');
+  const [activeSection, setActiveSectionState] = useState<string>('overview');
+  const [currentUser, setCurrentUser] = useState<{ username: string; name: string; token: string } | null>(null);
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('wa_crm_token');
+      const savedUser = localStorage.getItem('wa_crm_user');
+      if (token && savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          setCurrentUser({ token, username: parsed.username, name: parsed.name });
+        } catch {
+          // invalid json
+        }
+      }
+      setAuthChecking(false);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('wa_crm_token');
+      localStorage.removeItem('wa_crm_user');
+    }
+    setCurrentUser(null);
+  };
+
+  const updateSection = (sec: string) => {
+    setActiveSectionState(sec);
+    if (typeof window !== 'undefined') {
+      window.location.hash = sec;
+      localStorage.setItem('wa_crm_active_section', sec);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '');
+      const saved = localStorage.getItem('wa_crm_active_section');
+      const target = hash || saved;
+      if (target && navItems.some((item) => item.id === target)) {
+        setActiveSectionState(target);
+      }
+    }
+  }, []);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [messageText, setMessageText] = useState<string>('');
@@ -67,6 +116,18 @@ export default function Dashboard() {
 
   const currentNav = navItems.find((n) => n.id === activeSection) || navItems[0];
 
+  if (authChecking) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Chip label="Loading WhatsApp CRM..." sx={{ bgcolor: '#128C7E', color: '#ffffff', fontWeight: 700 }} />
+      </Box>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={(user) => setCurrentUser(user)} />;
+  }
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f8fafc' }}>
       {/* 1. Sidebar for Desktop */}
@@ -90,7 +151,7 @@ export default function Dashboard() {
         >
           <Sidebar
             currentSection={activeSection}
-            onSelectSection={setActiveSection}
+            onSelectSection={updateSection}
             waStatus={waStatus}
           />
         </Box>
@@ -109,7 +170,7 @@ export default function Dashboard() {
       >
         <Sidebar
           currentSection={activeSection}
-          onSelectSection={setActiveSection}
+          onSelectSection={updateSection}
           waStatus={waStatus}
           onCloseMobile={() => setMobileOpen(false)}
         />
@@ -184,11 +245,34 @@ export default function Dashboard() {
                   variant="outlined"
                   color="secondary"
                   startIcon={<QrCodeScannerIcon />}
-                  onClick={() => setActiveSection('device')}
+                  onClick={() => updateSection('device')}
                   sx={{ fontWeight: 700, display: { xs: 'none', sm: 'inline-flex' } }}
                 >
                   Connect
                 </Button>
+              )}
+
+              {/* Logged in User Profile & Logout */}
+              {currentUser && (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: 1 }}>
+                  <Chip
+                    icon={<AccountCircleIcon style={{ color: '#128C7E' }} />}
+                    label={currentUser.name || currentUser.username}
+                    variant="outlined"
+                    size="small"
+                    sx={{ fontWeight: 700, borderColor: '#cbd5e1', bgcolor: '#f1f5f9' }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    startIcon={<LogoutIcon fontSize="small" />}
+                    onClick={handleLogout}
+                    sx={{ fontWeight: 700, borderRadius: 2 }}
+                  >
+                    Logout
+                  </Button>
+                </Stack>
               )}
 
               <IconButton size="small" onClick={fetchStatus} sx={{ color: '#64748b' }}>
@@ -205,7 +289,7 @@ export default function Dashboard() {
             <Alert
               severity="warning"
               action={
-                <Button color="inherit" size="small" onClick={() => setActiveSection('device')}>
+                <Button color="inherit" size="small" onClick={() => updateSection('device')}>
                   View QR Code
                 </Button>
               }
@@ -217,7 +301,7 @@ export default function Dashboard() {
 
           {/* 1. Dashboard Overview */}
           {activeSection === 'overview' && (
-            <Overview onNavigate={(sec) => setActiveSection(sec)} />
+            <Overview onNavigate={(sec) => updateSection(sec)} />
           )}
 
           {/* 2. Contacts CRM */}
@@ -234,7 +318,7 @@ export default function Dashboard() {
                     color="primary"
                     size="large"
                     startIcon={<SendIcon />}
-                    onClick={() => setActiveSection('broadcast')}
+                    onClick={() => updateSection('broadcast')}
                     sx={{ px: 3, fontWeight: 700 }}
                   >
                     Send Bulk Broadcast to {selectedContactIds.length} Selected
@@ -249,9 +333,16 @@ export default function Dashboard() {
             <LeadManager
               onDirectMessage={(phone) => {
                 setDirectChatPhone(phone);
-                setActiveSection('quickchat');
+                updateSection('quickchat');
               }}
             />
+          )}
+
+          {/* Live Chat */}
+          {activeSection === 'livechat' && (
+            <Box sx={{ maxWidth: '100%', mx: 0 }}>
+              <LiveChat onBack={() => updateSection('overview')} />
+            </Box>
           )}
 
           {/* 3. Bulk Broadcast */}
@@ -261,7 +352,7 @@ export default function Dashboard() {
                 <Alert
                   severity="info"
                   action={
-                    <Button color="inherit" size="small" startIcon={<PeopleIcon />} onClick={() => setActiveSection('contacts')}>
+                    <Button color="inherit" size="small" startIcon={<PeopleIcon />} onClick={() => updateSection('contacts')}>
                       Select Contacts
                     </Button>
                   }
@@ -279,7 +370,7 @@ export default function Dashboard() {
                   onMessageChange={setMessageText}
                   onCampaignStarted={() => {
                     setHistoryRefreshKey((prev) => prev + 1);
-                    setActiveSection('reports');
+                    updateSection('reports');
                   }}
                 />
               </Box>
@@ -299,7 +390,7 @@ export default function Dashboard() {
               <TemplateManager
                 onSelectTemplate={(content) => {
                   setMessageText(content);
-                  setActiveSection('broadcast');
+                  updateSection('broadcast');
                 }}
               />
             </Box>

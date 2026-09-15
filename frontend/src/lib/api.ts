@@ -63,8 +63,36 @@ export interface CampaignLog {
 export interface LeadCategory {
   id: number;
   name: string;
-  description?: string;
+  description: string;
   created_at: string;
+}
+
+export interface ChatListItem {
+  phone: string;
+  name: string;
+  jid: string;
+  last_message: string;
+  last_message_time: string;
+  unread_count: number;
+  is_on_whatsapp: boolean;
+  profile_picture?: string | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  whatsapp_msg_id: string;
+  phone: string;
+  jid: string;
+  sender_name: string;
+  is_from_me: boolean;
+  message_text: string;
+  media_type: string;
+  media_url: string;
+  media_caption: string;
+  file_name: string;
+  status: string;
+  is_read: boolean;
+  timestamp: string;
 }
 
 export interface Lead {
@@ -205,6 +233,25 @@ export const LeadService = {
   createCategory: (data: { name: string; description?: string }) =>
     api.post<LeadCategory>('/lead-categories', data),
   getExportCsvUrl: () => '/api/proxy/leads/export-csv',
+};
+
+export const ChatService = {
+  list: () => api.get<ChatListItem[]>('/chats'),
+  messages: (phone: string, limit = 100, beforeId?: number) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (beforeId) q.append('before_id', String(beforeId));
+    return api.get<ChatMessage[]>(`/chats/${encodeURIComponent(phone)}/messages?${q.toString()}`);
+  },
+  send: (phone: string, data: { message: string; media_type?: string; media_url?: string; file_name?: string }) =>
+    api.post(`/chats/${encodeURIComponent(phone)}/send`, data),
+  markRead: (phone: string) => api.post(`/chats/${encodeURIComponent(phone)}/read`),
+};
+
+export const AuthService = {
+  login: (data: { username: string; password: string }) =>
+    api.post<{ success: boolean; token: string; username: string; name: string }>('/auth/login', data),
+  verify: (token: string) =>
+    api.get<{ valid: boolean; username: string; name: string }>(`/auth/verify?token=${encodeURIComponent(token)}`),
 };
 
 export default api;

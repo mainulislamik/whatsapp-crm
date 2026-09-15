@@ -21,6 +21,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import MarkChatReadIcon from '@mui/icons-material/MarkChatRead';
 
 export interface NavItem {
   id: string;
@@ -34,6 +35,7 @@ export const navItems: NavItem[] = [
   { id: 'contacts', label: 'Contacts & Audience', sublabel: 'Filter & Import', icon: <PeopleIcon /> },
   { id: 'leads', label: 'Lead Management', sublabel: 'Shops & WhatsApp Scan', icon: <StorefrontIcon /> },
   { id: 'broadcast', label: 'Bulk Broadcast', sublabel: 'Media & Spintax', icon: <CampaignIcon /> },
+  { id: 'livechat', label: 'Live Chat', sublabel: 'Real-time Conversations', icon: <MarkChatReadIcon /> },
   { id: 'quickchat', label: 'Direct Quick Send', sublabel: '1-to-1 Instant Message', icon: <ChatIcon /> },
   { id: 'templates', label: 'Message Templates', sublabel: 'Saved Message Library', icon: <DescriptionIcon /> },
   { id: 'reports', label: 'Reports & Delivery Logs', sublabel: 'With CSV Export', icon: <AssessmentIcon /> },

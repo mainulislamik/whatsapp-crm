@@ -4,12 +4,14 @@ const QRCode = require('qrcode');
 const pino = require('pino');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  getBinaryNodeChild
+  getBinaryNodeChild,
+  downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 
 const app = express();
@@ -19,6 +21,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const PORT = process.env.PORT || 5001;
 const AUTH_DIR = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+const BACKEND_URL = process.env.BACKEND_URL || 'http://wa-backend:8050';
 
 if (!fs.existsSync(AUTH_DIR)) {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
@@ -61,6 +64,110 @@ function findContactInStore(phone) {
   return contactsStore.get(jid) || contactsStore.get(intlNum) || contactsStore.get(localNum) || null;
 }
 
+// Forward received message to FastAPI backend
+async function forwardMessageToBackend(msgData) {
+  try {
+    const postData = JSON.stringify(msgData);
+    const urls = [
+      `${BACKEND_URL}/api/chats/incoming`,
+      'http://localhost:8050/api/chats/incoming'
+    ];
+
+    for (const targetUrl of urls) {
+      try {
+        const u = new URL(targetUrl);
+        const req = http.request({
+          hostname: u.hostname,
+          port: u.port,
+          path: u.pathname,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData)
+          },
+          timeout: 4000
+        }, (res) => {
+          // Success
+        });
+        req.on('error', () => {});
+        req.write(postData);
+        req.end();
+        break; // request dispatched
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error('Error forwarding message to backend:', err.message);
+  }
+}
+
+// Extract clean text and media info from a Baileys message object
+function extractMessageInfo(m) {
+  if (!m || !m.message) return null;
+  const msg = m.message;
+  let text = '';
+  let mediaType = '';
+  let mediaUrl = '';
+  let fileName = '';
+
+  if (msg.conversation) {
+    text = msg.conversation;
+  } else if (msg.extendedTextMessage?.text) {
+    text = msg.extendedTextMessage.text;
+  } else if (msg.imageMessage) {
+    mediaType = 'image';
+    text = msg.imageMessage.caption || '';
+    mediaUrl = msg.imageMessage.url || '';
+  } else if (msg.documentMessage) {
+    mediaType = 'document';
+    text = msg.documentMessage.caption || '';
+    fileName = msg.documentMessage.fileName || 'document';
+    mediaUrl = msg.documentMessage.url || '';
+  } else if (msg.videoMessage) {
+    mediaType = 'video';
+    text = msg.videoMessage.caption || '';
+    mediaUrl = msg.videoMessage.url || '';
+  } else if (msg.audioMessage) {
+    mediaType = 'audio';
+    text = '🎵 Audio Voice Note';
+  } else if (msg.templateButtonReplyMessage) {
+    text = msg.templateButtonReplyMessage.selectedDisplayText || '';
+  } else if (msg.buttonsResponseMessage) {
+    text = msg.buttonsResponseMessage.selectedDisplayText || '';
+  } else if (msg.listResponseMessage) {
+    text = msg.listResponseMessage.title || '';
+  }
+
+  const rawJid = m.key?.remoteJid || '';
+  if (!rawJid || rawJid.includes('@g.us') || rawJid === 'status@broadcast') {
+    // Skip group chats or broadcast status updates
+    return null;
+  }
+
+  const phone = rawJid.split('@')[0];
+  let localPhone = phone;
+  if (phone.startsWith('8801')) {
+    localPhone = '0' + phone.slice(2);
+  }
+
+  const timestamp = m.messageTimestamp
+    ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
+    : new Date().toISOString();
+
+  return {
+    whatsapp_msg_id: m.key?.id || '',
+    phone: localPhone,
+    jid: rawJid,
+    sender_name: m.pushName || '',
+    is_from_me: Boolean(m.key?.fromMe),
+    message_text: text,
+    media_type: mediaType,
+    media_url: mediaUrl,
+    media_caption: text,
+    file_name: fileName,
+    timestamp
+  };
+}
+
 async function connectToWhatsApp() {
   connectionStatus = 'CONNECTING';
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -72,7 +179,7 @@ async function connectToWhatsApp() {
     printQRInTerminal: false,
     auth: state,
     generateHighQualityLinkPreview: true,
-    browser: ['WhatsApp CRM', 'Chrome', '1.0.0']
+    browser: ['WhatsApp CRM Pro', 'Chrome', '124.0.0']
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -131,6 +238,10 @@ async function connectToWhatsApp() {
         if (sender && m.pushName) {
           saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
         }
+        const parsed = extractMessageInfo(m);
+        if (parsed) {
+          forwardMessageToBackend(parsed);
+        }
       });
     }
   });
@@ -144,15 +255,19 @@ async function connectToWhatsApp() {
     if (Array.isArray(updates)) updates.forEach(saveContact);
   });
 
-  // Handle incoming / new messages to capture sender pushNames
-  sock.ev.on('messages.upsert', ({ messages }) => {
+  // Handle real-time incoming and outgoing messages
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (Array.isArray(messages)) {
-      messages.forEach(m => {
+      for (const m of messages) {
         const sender = m.key?.remoteJid;
         if (sender && m.pushName) {
           saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
         }
-      });
+        const parsed = extractMessageInfo(m);
+        if (parsed) {
+          await forwardMessageToBackend(parsed);
+        }
+      }
     }
   });
 }
@@ -181,7 +296,7 @@ app.get('/status', (req, res) => {
   });
 });
 
-// Check contact on WhatsApp (existence, profile picture, about)
+// Check contact on WhatsApp (existence, profile picture, about, name)
 app.get('/check-contact', async (req, res) => {
   try {
     const { phone } = req.query;
@@ -215,9 +330,7 @@ app.get('/check-contact', async (req, res) => {
     let profilePictureUrl = null;
     try {
       profilePictureUrl = await sock.profilePictureUrl(match.jid, 'image');
-    } catch (err) {
-      // Profile picture is private, contacts-only, or not set
-    }
+    } catch (err) {}
 
     let about = null;
     try {
@@ -255,13 +368,13 @@ app.get('/check-contact', async (req, res) => {
       const profileNode = getBinaryNodeChild(bizRes, 'business_profile');
       const profiles = getBinaryNodeChild(profileNode, 'profile');
       if (profiles) {
-        // 1. Check biz_identity_info display_name (official / SMB WhatsApp Business name)
+        // Check biz_identity_info display_name
         const bizIdentityNode = getBinaryNodeChild(profiles, 'biz_identity_info');
         if (bizIdentityNode?.attrs?.display_name && !contactName) {
           contactName = bizIdentityNode.attrs.display_name;
         }
 
-        // 2. Check vname / name / tag
+        // Check vname / name / tag
         if (!contactName) {
           const vnameNode = getBinaryNodeChild(profiles, 'vname') || 
                             getBinaryNodeChild(profiles, 'name') || 
@@ -293,6 +406,81 @@ app.get('/check-contact', async (req, res) => {
   }
 });
 
+// Send Message Endpoint (supports text + media)
+app.post('/send-message', async (req, res) => {
+  try {
+    const { phone, message, text, mediaType, mediaUrl, mediaBase64, fileName, mimeType } = req.body;
+    const messageText = text || message || '';
+
+    if (!phone || (!messageText && !mediaBase64 && !mediaUrl)) {
+      return res.status(400).json({ error: 'phone and message or media are required' });
+    }
+
+    if (connectionStatus !== 'CONNECTED' || !sock) {
+      return res.status(503).json({ error: 'WhatsApp engine is not connected. Scan QR code first.' });
+    }
+
+    const jid = formatJID(phone);
+
+    let sentResult = null;
+
+    if (mediaType === 'image' && (mediaBase64 || mediaUrl)) {
+      const imgBuffer = mediaBase64 ? Buffer.from(mediaBase64, 'base64') : { url: mediaUrl };
+      sentResult = await sock.sendMessage(jid, {
+        image: imgBuffer,
+        caption: messageText || undefined
+      });
+    } else if (mediaType === 'document' && (mediaBase64 || mediaUrl)) {
+      const docBuffer = mediaBase64 ? Buffer.from(mediaBase64, 'base64') : { url: mediaUrl };
+      sentResult = await sock.sendMessage(jid, {
+        document: docBuffer,
+        fileName: fileName || 'document.pdf',
+        mimetype: mimeType || 'application/pdf',
+        caption: messageText || undefined
+      });
+    } else {
+      // Plain text message
+      sentResult = await sock.sendMessage(jid, { text: messageText });
+    }
+
+    const timestamp = new Date().toISOString();
+    const msgId = sentResult?.key?.id || `out_${Date.now()}`;
+
+    // Clean local phone
+    let localPhone = phone.replace(/\D/g, '');
+    if (localPhone.startsWith('8801')) {
+      localPhone = '0' + localPhone.slice(2);
+    }
+
+    // Immediately forward outgoing record to backend
+    forwardMessageToBackend({
+      whatsapp_msg_id: msgId,
+      phone: localPhone,
+      jid,
+      sender_name: 'Me',
+      is_from_me: true,
+      message_text: messageText,
+      media_type: mediaType || '',
+      media_url: mediaUrl || '',
+      media_caption: messageText,
+      file_name: fileName || '',
+      timestamp
+    });
+
+    return res.json({
+      success: true,
+      phone: localPhone,
+      jid,
+      whatsapp_msg_id: msgId,
+      timestamp,
+      message: 'Message sent successfully'
+    });
+  } catch (err) {
+    console.error('Error in send-message endpoint:', err);
+    return res.status(500).json({ error: err.message || 'Failed to send message' });
+  }
+});
+
 // QR Code endpoint
 app.get('/qr', (req, res) => {
   res.json({
@@ -302,96 +490,9 @@ app.get('/qr', (req, res) => {
   });
 });
 
-// Send message (text, image, or document)
-app.post('/send', async (req, res) => {
-  try {
-    const { to, text, mediaBase64, mediaType, fileName, mimeType } = req.body;
-    if (!to) {
-      return res.status(400).json({ error: '"to" (phone number) is required' });
-    }
+// Start WhatsApp socket & server
+connectToWhatsApp();
 
-    if (connectionStatus !== 'CONNECTED' || !sock) {
-      return res.status(503).json({ error: 'WhatsApp is not connected. Please scan the QR code first.' });
-    }
-
-    const jid = formatJID(to);
-    let messagePayload = {};
-
-    if (mediaBase64) {
-      const buffer = Buffer.from(mediaBase64, 'base64');
-      if (mediaType === 'image') {
-        messagePayload = {
-          image: buffer,
-          caption: text || '',
-          mimetype: mimeType || 'image/jpeg'
-        };
-      } else {
-        // Document / PDF
-        messagePayload = {
-          document: buffer,
-          mimetype: mimeType || 'application/pdf',
-          fileName: fileName || 'document.pdf',
-          caption: text || ''
-        };
-      }
-    } else {
-      if (!text) {
-        return res.status(400).json({ error: 'Either "text" or "mediaBase64" is required' });
-      }
-      messagePayload = { text };
-    }
-
-    const result = await sock.sendMessage(jid, messagePayload);
-
-    res.json({
-      success: true,
-      messageId: result.key.id,
-      to: jid,
-      timestamp: result.messageTimestamp
-    });
-  } catch (error) {
-    console.error('Error sending WhatsApp message:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to send message'
-    });
-  }
-});
-
-// Logout
-app.post('/logout', async (req, res) => {
-  try {
-    if (sock) {
-      await sock.logout();
-    }
-    try {
-      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-    } catch (e) {}
-    connectionStatus = 'DISCONNECTED';
-    connectedUser = null;
-    lastQr = null;
-    lastQrDataUrl = null;
-    setTimeout(connectToWhatsApp, 1000);
-    res.json({ success: true, message: 'Logged out successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Restart socket
-app.post('/restart', async (req, res) => {
-  try {
-    if (sock) {
-      sock.end(undefined);
-    }
-    setTimeout(connectToWhatsApp, 1000);
-    res.json({ success: true, message: 'Reconnecting...' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`WhatsApp Engine running on port ${PORT}`);
-  connectToWhatsApp();
 });
