@@ -161,12 +161,17 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
     setScanningWa(true);
     try {
       const res = await LeadService.aiEnrich(p);
-      const data = res.data;
+      let data = res.data;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {}
+      }
 
       setWaScanResult({
         scanned: true,
         connected: true,
-        exists: data.is_on_whatsapp,
+        exists: !!data?.is_on_whatsapp,
         name: data.owner_name || data.shop_name || null,
         profilePictureUrl: data.profile_picture_url,
         about: data.whatsapp_about,

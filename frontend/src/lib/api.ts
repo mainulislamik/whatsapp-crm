@@ -210,7 +210,7 @@ export const LeadService = {
       phone?: string;
       id?: number;
       category?: string;
-    }>(`/leads/check-phone?phone=${encodeURIComponent(phone)}${excludeId ? `&exclude_id=${excludeId}` : ''}`),
+    }>(`/leads/check-phone/?phone=${encodeURIComponent(phone)}${excludeId ? `&exclude_id=${excludeId}` : ''}`),
   scanWhatsApp: (phone: string) =>
     api.get<{
       connected: boolean;
@@ -228,7 +228,7 @@ export const LeadService = {
       profilePictureUrl?: string | null;
       about?: string | null;
       message?: string;
-    }>(`/leads/scan-phone?phone=${encodeURIComponent(phone)}`),
+    }>(`/leads/scan-phone/?phone=${encodeURIComponent(phone)}`),
   aiEnrich: (phone: string) =>
     api.get<{
       phone: string;
@@ -244,7 +244,7 @@ export const LeadService = {
       sources_found: string[];
       confidence: string;
       error?: string;
-    }>(`/leads/ai-enrich?phone=${encodeURIComponent(phone)}`),
+    }>(`/leads/ai-enrich/?phone=${encodeURIComponent(phone)}`),
   listCategories: () => api.get<LeadCategory[]>('/lead-categories'),
   createCategory: (data: { name: string; description?: string }) =>
     api.post<LeadCategory>('/lead-categories', data),
