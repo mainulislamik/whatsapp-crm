@@ -108,17 +108,38 @@ const LEAD_STATUSES = [
 
 
 const getLeadAvatarSrc = (lead: { shop_name?: string; whatsapp_profile_pic?: string | null; profile_pic?: string | null; website?: string | null; facebook_url?: string | null }) => {
-  const pic = lead.whatsapp_profile_pic || lead.profile_pic;
-  if (pic && !pic.includes('searxng:8080')) return pic;
-  if (lead.website) {
+  // 1. WhatsApp Profile Photo FIRST (highest priority)
+  if (lead.whatsapp_profile_pic && lead.whatsapp_profile_pic.trim() && !lead.whatsapp_profile_pic.includes('searxng:8080')) {
+    return lead.whatsapp_profile_pic;
+  }
+  // 2. Pre-resolved profile pic
+  if (lead.profile_pic && lead.profile_pic.trim() && !lead.profile_pic.includes('searxng:8080')) {
+    return lead.profile_pic;
+  }
+  // 3. Fallback: Website Favicon / HQ Logo
+  if (lead.website && lead.website.trim()) {
     try {
-      const url = new URL(lead.website.startsWith('http') ? lead.website : `https://${lead.website}`);
+      const rawUrl = lead.website.trim();
+      const url = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`);
       const domain = url.hostname.replace(/^www\./, '');
-      if (domain && domain.includes('.')) {
+      if (domain && domain.includes('.') && !domain.includes('facebook.com') && !domain.includes('google.com')) {
         return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
       }
     } catch {}
   }
+  // 4. Fallback: Facebook Page Avatar
+  if (lead.facebook_url && lead.facebook_url.includes('facebook.com')) {
+    try {
+      const parts = lead.facebook_url.split('facebook.com/')[1]?.split('/').filter(Boolean);
+      if (parts && parts.length > 0) {
+        const handle = parts[0].split('?')[0];
+        if (handle && !['posts', 'videos', 'photos', 'groups', 'events', 'stories', 'pages', 'p'].includes(handle) && isNaN(Number(handle))) {
+          return `https://unavatar.io/facebook/${handle}`;
+        }
+      }
+    } catch {}
+  }
+  // 5. Fallback: Brand UI Avatar with Colorful Initials
   const safeName = encodeURIComponent((lead.shop_name || 'Shop').slice(0, 20));
   return `https://ui-avatars.com/api/?name=${safeName}&background=6366f1&color=fff&size=128&bold=true`;
 };
@@ -1478,14 +1499,15 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                       }
                     >
                       <Avatar
-                        src={profileLead.whatsapp_profile_pic || undefined}
+                        src={getLeadAvatarSrc(profileLead)}
+                        alt={profileLead.shop_name}
                         sx={{
                           width: 72,
                           height: 72,
                           bgcolor: '#10b981',
                           fontSize: '1.8rem',
                           fontWeight: 800,
-                          border: '3px solid rgba(255,255,255,0.2)',
+                          border: profileLead.whatsapp_profile_pic ? '3px solid #10b981' : '3px solid rgba(255,255,255,0.2)',
                           boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
                         }}
                       >
