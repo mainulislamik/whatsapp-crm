@@ -893,6 +893,7 @@ from crm_core.lead_generator import LeadScraperEngine
 
 class AutoLeadGenerateRequest(BaseModel):
     query: str
+    country: Optional[str] = "BD"
     limit: int = 50
     only_whatsapp: bool = False
     category: Optional[str] = None
@@ -911,6 +912,7 @@ async def generate_leads_endpoint(payload: AutoLeadGenerateRequest):
         engine = LeadScraperEngine(wa_engine_url="http://wa-engine:5001")
         results = await engine.search_and_generate_leads(
             query=payload.query,
+            country=payload.country or "BD",
             limit=payload.limit,
             only_whatsapp=payload.only_whatsapp,
             category=payload.category,

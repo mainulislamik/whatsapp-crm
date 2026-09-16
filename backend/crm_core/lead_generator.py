@@ -14,9 +14,92 @@ logger = logging.getLogger(__name__)
 SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://searxng:8080")
 WHATSAPP_ENGINE_URL = os.environ.get("WHATSAPP_ENGINE_URL", "http://whatsapp-engine:5001")
 
-# Regex to catch Bangladeshi mobile numbers in any formatting (English & Bengali numerals)
+# Numeral translations for Bengali & Arabic
 BN_DIGIT_MAP = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
-BD_PHONE_REGEX = re.compile(r'(?:\+?880\s*|0)?1[3-9](?:[\s-]?\d){8}')
+AR_DIGIT_MAP = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+
+COUNTRY_CONFIGS = {
+    "BD": {
+        "name": "Bangladesh",
+        "code": "BD",
+        "dial_code": "+880",
+        "regex": re.compile(r'(?:\+?880\s*|0)?1[3-9](?:[\s-]?\d){8}'),
+        "phone_cleaner": lambda digits: "0" + digits[3:] if digits.startswith("880") else digits,
+        "is_valid": lambda digits: len(digits) == 11 and digits.startswith("01") and digits[2] in "3456789",
+        "search_suffix": "Bangladesh",
+        "query_operators": "017 OR 018 OR 019 OR 016 OR 013 OR 014",
+    },
+    "IN": {
+        "name": "India",
+        "code": "IN",
+        "dial_code": "+91",
+        "regex": re.compile(r'(?:\+?91\s*|0)?[6-9](?:[\s-]?\d){9}'),
+        "phone_cleaner": lambda digits: digits[2:] if digits.startswith("91") and len(digits) == 12 else (digits[1:] if digits.startswith("0") and len(digits) == 11 else digits),
+        "is_valid": lambda digits: len(digits) == 10 and digits[0] in "6789",
+        "search_suffix": "India",
+        "query_operators": "phone OR mobile OR contact",
+    },
+    "AE": {
+        "name": "United Arab Emirates",
+        "code": "AE",
+        "dial_code": "+971",
+        "regex": re.compile(r'(?:\+?971\s*|0)?5(?:[\s-]?\d){8}'),
+        "phone_cleaner": lambda digits: "0" + digits[3:] if digits.startswith("971") else digits,
+        "is_valid": lambda digits: (len(digits) == 10 and digits.startswith("05")) or (len(digits) == 9 and digits.startswith("5")),
+        "search_suffix": "UAE Dubai",
+        "query_operators": "phone OR mobile OR WhatsApp",
+    },
+    "SA": {
+        "name": "Saudi Arabia",
+        "code": "SA",
+        "dial_code": "+966",
+        "regex": re.compile(r'(?:\+?966\s*|0)?5(?:[\s-]?\d){8}'),
+        "phone_cleaner": lambda digits: "0" + digits[3:] if digits.startswith("966") else digits,
+        "is_valid": lambda digits: (len(digits) == 10 and digits.startswith("05")) or (len(digits) == 9 and digits.startswith("5")),
+        "search_suffix": "Saudi Arabia Riyadh",
+        "query_operators": "phone OR mobile OR WhatsApp",
+    },
+    "PK": {
+        "name": "Pakistan",
+        "code": "PK",
+        "dial_code": "+92",
+        "regex": re.compile(r'(?:\+?92\s*|0)?3(?:[\s-]?\d){9}'),
+        "phone_cleaner": lambda digits: "0" + digits[2:] if digits.startswith("92") else digits,
+        "is_valid": lambda digits: len(digits) == 11 and digits.startswith("03"),
+        "search_suffix": "Pakistan",
+        "query_operators": "phone OR mobile OR WhatsApp",
+    },
+    "US": {
+        "name": "United States",
+        "code": "US",
+        "dial_code": "+1",
+        "regex": re.compile(r'(?:\+?1\s*)?[2-9]\d{2}(?:[\s-]?\d{3})(?:[\s-]?\d{4})'),
+        "phone_cleaner": lambda digits: digits[1:] if digits.startswith("1") and len(digits) == 11 else digits,
+        "is_valid": lambda digits: len(digits) == 10 and digits[0] in "23456789",
+        "search_suffix": "USA",
+        "query_operators": "phone OR contact OR store",
+    },
+    "GB": {
+        "name": "United Kingdom",
+        "code": "GB",
+        "dial_code": "+44",
+        "regex": re.compile(r'(?:\+?44\s*|0)?7(?:[\s-]?\d){9}'),
+        "phone_cleaner": lambda digits: "0" + digits[2:] if digits.startswith("44") else digits,
+        "is_valid": lambda digits: len(digits) == 11 and digits.startswith("07"),
+        "search_suffix": "UK London",
+        "query_operators": "phone OR mobile OR contact",
+    },
+    "GLOBAL": {
+        "name": "Global",
+        "code": "GLOBAL",
+        "dial_code": "",
+        "regex": re.compile(r'(?:\+?\d{1,3}\s*)?\(?\d{2,4}\)?(?:[\s-]?\d){6,10}'),
+        "phone_cleaner": lambda digits: digits,
+        "is_valid": lambda digits: 8 <= len(digits) <= 15,
+        "search_suffix": "",
+        "query_operators": "phone OR mobile OR contact",
+    }
+}
 
 CATEGORY_KEYWORDS = {
     "Clothing": [
@@ -73,35 +156,32 @@ class LeadScraperEngine:
         self.searxng_url = searxng_url or SEARXNG_URL
 
     @staticmethod
-    def clean_bd_phone(text: str) -> Optional[str]:
+    def extract_phone(text: str, country_code: str = "BD") -> Optional[str]:
         if not text:
             return None
-        normalized = text.translate(BN_DIGIT_MAP)
-        matches = BD_PHONE_REGEX.findall(normalized)
+        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
+        normalized = text.translate(BN_DIGIT_MAP).translate(AR_DIGIT_MAP)
+        matches = cfg["regex"].findall(normalized)
         for m in matches:
             digits = re.sub(r'\D', '', m)
-            if digits.startswith('880'):
-                digits = '0' + digits[3:]
-            if len(digits) == 11 and digits.startswith('01'):
-                # Valid operator check: 013, 014, 015, 016, 017, 018, 019
-                if digits[2] in "3456789":
-                    return digits
+            cleaned = cfg["phone_cleaner"](digits)
+            if cfg["is_valid"](cleaned):
+                return cleaned
         return None
 
     @staticmethod
-    def extract_all_phones(text: str) -> List[str]:
+    def extract_all_phones(text: str, country_code: str = "BD") -> List[str]:
         if not text:
             return []
-        normalized = text.translate(BN_DIGIT_MAP)
+        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
+        normalized = text.translate(BN_DIGIT_MAP).translate(AR_DIGIT_MAP)
         phones = []
-        matches = BD_PHONE_REGEX.findall(normalized)
+        matches = cfg["regex"].findall(normalized)
         for m in matches:
             digits = re.sub(r'\D', '', m)
-            if digits.startswith('880'):
-                digits = '0' + digits[3:]
-            if len(digits) == 11 and digits.startswith('01') and digits[2] in "3456789":
-                if digits not in phones:
-                    phones.append(digits)
+            cleaned = cfg["phone_cleaner"](digits)
+            if cfg["is_valid"](cleaned) and cleaned not in phones:
+                phones.append(cleaned)
         return phones
 
     @staticmethod
@@ -135,45 +215,45 @@ class LeadScraperEngine:
         return default
 
     @staticmethod
-    def extract_location_from_query(query: str) -> str:
+    def extract_location_from_query(query: str, country_name: str = "Bangladesh") -> str:
         """Extract searched location/district/upazila from user query."""
         q_clean = query.lower()
-        # Remove common query prefixes
         for prefix in ["electronics shop in", "shop in", "store in", "showroom in", "dealer in", "boutique in", "wholesale in", "in"]:
             q_clean = re.sub(r'\b' + re.escape(prefix) + r'\b', '', q_clean, flags=re.IGNORECASE).strip()
         
-        # Capitalize words for clean display
         location = " ".join([word.capitalize() for word in q_clean.split() if len(word) > 1])
-        return location if location else "Bangladesh"
+        return location if location else country_name
 
     @staticmethod
     def clean_shop_title(title: str) -> str:
         """Clean raw web or Facebook titles to extract genuine business name."""
         clean = title
-        # Strip trailing branding like | Facebook, - Facebook, | Official Page, etc.
-        clean = re.sub(r'\s*[\|\-–—]\s*(Facebook|Official Page|Home|Instagram|YouTube|Website|BD|Bangladesh).*', '', clean, flags=re.IGNORECASE).strip()
+        clean = re.sub(r'\s*[\|\-–—]\s*(Facebook|Official Page|Home|Instagram|YouTube|Website|BD|Bangladesh|India|UAE|USA|UK).*', '', clean, flags=re.IGNORECASE).strip()
         clean = re.sub(r'^(Grand opening of|Welcome to|Visit us at|Visit our|Official)\s*', '', clean, flags=re.IGNORECASE).strip()
         clean = re.sub(r'\s*\|\s*.*', '', clean).strip()
-        
-        # Remove trailing status suffixes
         clean = re.sub(r'\s*\.\.\.$', '', clean).strip()
         if len(clean) < 3 or clean.lower() in ["log in", "sign up", "facebook", "home", "about us", "contact us", "used products"]:
             return ""
         return clean
 
-    async def fetch_searxng_multi_source(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
+    async def fetch_searxng_multi_source(self, query: str, country_code: str = "BD", limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Execute multiple targeted search passes via local SearXNG:
-        1. General web and business directory search for the exact query.
+        Execute multiple targeted search passes via local SearXNG scoped to chosen country:
+        1. General web and business directory search.
         2. Facebook business pages & verified stores.
         3. Contact & phone number specific search.
         """
-        location = self.extract_location_from_query(query)
+        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
+        country_name = cfg["name"]
+        suffix = cfg["search_suffix"]
+        operators = cfg["query_operators"]
+        location = self.extract_location_from_query(query, country_name)
+
         search_queries = [
-            f"{query} Bangladesh",
-            f"site:facebook.com {query} Bangladesh",
-            f"{query} showroom address phone 017 OR 018 OR 019 OR 016 OR 013 OR 014 Bangladesh",
-            f"{query} contact number store Bangladesh",
+            f"{query} {suffix}".strip(),
+            f"site:facebook.com {query} {country_name}".strip(),
+            f"{query} showroom address {operators} {suffix}".strip(),
+            f"{query} contact number store {suffix}".strip(),
         ]
 
         raw_leads = []
@@ -221,22 +301,17 @@ class LeadScraperEngine:
                         seen_titles.add(shop_name.lower())
 
                         combined_text = f"{title} {content}"
-                        phone = self.clean_bd_phone(combined_text)
+                        phone = self.extract_phone(combined_text, country_code=country_code)
                         email = self.extract_email(combined_text)
                         website = self.extract_website(combined_text)
                         fb_url = clean_url if "facebook.com" in clean_url else None
 
-                        # Clean address extraction from content snippet
-                        extracted_address = None
-                        if location and location.lower() != "bangladesh":
-                            extracted_address = f"{location}, Bangladesh"
-                        
-                        # Look for specific address markers in content (e.g. Market, Road, Holding, Bazar)
-                        addr_match = re.search(r'([A-Za-z0-9\s,\-\.]{5,60}(?:Market|Bazar|Road|Holding|Ward|Showroom|Center|Plaza|Complex|Town|Division)[A-Za-z0-9\s,\-\.]*)', content, flags=re.IGNORECASE)
+                        extracted_address = f"{location}, {country_name}"
+                        addr_match = re.search(r'([A-Za-z0-9\s,\-\.]{5,60}(?:Market|Bazar|Road|Holding|Ward|Showroom|Center|Plaza|Complex|Town|Street|Avenue|Sector|Block|City)[A-Za-z0-9\s,\-\.]*)', content, flags=re.IGNORECASE)
                         if addr_match:
                             found_addr = addr_match.group(1).strip()
-                            if len(found_addr) > 10:
-                                extracted_address = found_addr
+                            if len(found_addr) > 8:
+                                extracted_address = f"{found_addr}, {country_name}"
 
                         raw_leads.append({
                             "shop_name": shop_name,
@@ -247,7 +322,7 @@ class LeadScraperEngine:
                             "source_url": clean_url,
                             "content": content,
                             "thumbnail": thumbnail if thumbnail and not thumbnail.startswith("http://searxng") else None,
-                            "address": extracted_address or f"{location}, Bangladesh",
+                            "address": extracted_address,
                         })
 
                         if len(raw_leads) >= limit:
@@ -264,23 +339,26 @@ class LeadScraperEngine:
         self,
         query: str,
         category: Optional[str] = None,
+        country: str = "BD",
         limit: int = 20,
         only_whatsapp: bool = False,
         exclude_existing: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         AI Discovery Engine:
-        1. Query local SearXNG with multi-pass search across Web, Facebook & Local Directories.
-        2. Extract REAL phone numbers, exact shop names, and accurate local addresses.
+        1. Query local SearXNG across Web, Facebook & Local Directories scoped to chosen country.
+        2. Extract REAL phone numbers according to country format, exact shop names, and accurate local addresses.
         3. Verify each phone on live WhatsApp Engine (sock.onWhatsApp & profile picture).
         4. Synthesize Google Maps Search URLs for direct navigation.
         """
         detected_category = self.detect_category(query, default="Retail")
         selected_category = category if category and category != "All" else detected_category
-        location = self.extract_location_from_query(query)
+        cfg = COUNTRY_CONFIGS.get(country.upper(), COUNTRY_CONFIGS["BD"])
+        country_name = cfg["name"]
+        location = self.extract_location_from_query(query, country_name)
 
         # 1. Fetch Real Multi-Source Leads via SearXNG
-        raw_leads = await self.fetch_searxng_multi_source(query=query, limit=max(limit * 2, 40))
+        raw_leads = await self.fetch_searxng_multi_source(query=query, country_code=country, limit=max(limit * 2, 40))
 
         leads: List[Dict[str, Any]] = []
         seen_phones: Set[str] = set()
@@ -292,7 +370,7 @@ class LeadScraperEngine:
             email = r.get("email") or ""
             website = r.get("website") or ""
             fb_url = r.get("facebook_url")
-            address = r.get("address") or f"{location}, Bangladesh"
+            address = r.get("address") or f"{location}, {country_name}"
             thumb = r.get("thumbnail")
             content = r.get("content") or ""
 
@@ -300,7 +378,6 @@ class LeadScraperEngine:
                 continue
             seen_names.add(name.lower())
 
-            # If no phone was in the snippet, we keep phone empty or check if there is a number
             if phone:
                 if phone in seen_phones:
                     continue
@@ -308,9 +385,9 @@ class LeadScraperEngine:
             else:
                 phone = ""
 
-            gmaps_query = urllib.parse.quote(f"{name} {location} Bangladesh")
+            gmaps_query = urllib.parse.quote(f"{name} {location} {country_name}")
             gmaps_url = f"https://www.google.com/maps/search/?api=1&query={gmaps_query}"
-            lead_id = hashlib.md5(f"{phone}_{name}_{location}".encode()).hexdigest()[:12]
+            lead_id = hashlib.md5(f"{phone}_{name}_{location}_{country}".encode()).hexdigest()[:12]
 
             leads.append({
                 "id": lead_id,
@@ -318,13 +395,14 @@ class LeadScraperEngine:
                 "phone": phone,
                 "email": email,
                 "website": website,
+                "country": country.upper(),
                 "category": selected_category,
                 "shop_type": "Verified Business",
                 "address": address,
                 "facebook_url": fb_url,
                 "google_maps_url": gmaps_url,
                 "profile_pic": thumb,
-                "notes": f"{content[:160]}..." if content else f"Business located in {location}",
+                "notes": f"{content[:160]}..." if content else f"Business located in {location}, {country_name}",
                 "is_on_whatsapp": False,
                 "whatsapp_profile_pic": None,
                 "selected": True,
@@ -338,7 +416,7 @@ class LeadScraperEngine:
         leads_without_phones = [l for l in leads if not l["phone"]]
 
         if leads_with_phones:
-            verified_leads = await self._verify_whatsapp_batch(leads_with_phones)
+            verified_leads = await self._verify_whatsapp_batch(leads_with_phones, country_code=country)
         else:
             verified_leads = []
 
@@ -350,8 +428,11 @@ class LeadScraperEngine:
 
         return combined[:limit]
 
-    async def _verify_whatsapp_batch(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def _verify_whatsapp_batch(self, leads: List[Dict[str, Any]], country_code: str = "BD") -> List[Dict[str, Any]]:
         """Verify contact numbers on Baileys WhatsApp Engine in parallel."""
+        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
+        dial_prefix = cfg["dial_code"]
+
         async with httpx.AsyncClient(timeout=4.0) as client:
             tasks = []
             for lead in leads:
@@ -359,10 +440,20 @@ class LeadScraperEngine:
                 if not phone:
                     tasks.append(asyncio.sleep(0))
                     continue
+                
+                # Format phone for international WhatsApp check
+                check_phone = phone
+                if country_code == "BD" and phone.startswith("01"):
+                    check_phone = "880" + phone[1:]
+                elif dial_prefix and not phone.startswith("+") and not phone.startswith(dial_prefix.replace("+", "")):
+                    clean_dial = dial_prefix.replace("+", "")
+                    clean_local = phone.lstrip("0")
+                    check_phone = f"{clean_dial}{clean_local}"
+
                 tasks.append(
                     client.get(
                         f"{self.wa_engine_url}/check-contact",
-                        params={"phone": phone}
+                        params={"phone": check_phone}
                     )
                 )
 

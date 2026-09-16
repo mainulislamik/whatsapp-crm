@@ -78,6 +78,18 @@ import LinkIcon from '@mui/icons-material/Link';
 
 import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead } from '@/lib/api';
 
+// Supported Target Countries for Lead Discovery
+const DISCOVERY_COUNTRIES = [
+  { code: 'BD', name: 'Bangladesh', dial: '+880', flag: '🇧🇩' },
+  { code: 'IN', name: 'India', dial: '+91', flag: '🇮🇳' },
+  { code: 'AE', name: 'UAE', dial: '+971', flag: '🇦🇪' },
+  { code: 'SA', name: 'Saudi Arabia', dial: '+966', flag: '🇸🇦' },
+  { code: 'PK', name: 'Pakistan', dial: '+92', flag: '🇵🇰' },
+  { code: 'US', name: 'United States', dial: '+1', flag: '🇺🇸' },
+  { code: 'GB', name: 'United Kingdom', dial: '+44', flag: '🇬🇧' },
+  { code: 'GLOBAL', name: 'Global / Any', dial: 'Worldwide', flag: '🌐' },
+];
+
 interface LeadManagerProps {
   onDirectMessage?: (phone: string) => void;
   onSelectForBroadcast?: (leadIds: number[]) => void;
@@ -122,6 +134,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   // 🤖 Auto Lead Generator Hub State
   const [openAutoGenerator, setOpenAutoGenerator] = useState<boolean>(false);
   const [genQuery, setGenQuery] = useState<string>('clothing shop in dhaka');
+  const [genCountry, setGenCountry] = useState<string>('BD');
   const [genLimit, setGenLimit] = useState<number>(50);
   const [genOnlyWhatsapp, setGenOnlyWhatsapp] = useState<boolean>(false);
   const [genCategory, setGenCategory] = useState<string>('All');
@@ -351,6 +364,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
     try {
       const res = await LeadService.autoGenerate({
         query: genQuery.trim(),
+        country: genCountry,
         limit: genLimit,
         only_whatsapp: genOnlyWhatsapp,
         category: genCategory !== 'All' ? genCategory : undefined,
@@ -2219,12 +2233,12 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
             </Typography>
 
             <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-              <Grid item xs={12} md={5}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
-                  label="Search Tag / Keyword / Location"
-                  placeholder="e.g. electronics shop in mirpur, clothing store in uttara"
+                  label="Search Keyword & Location"
+                  placeholder="e.g. electronics shop in bakerganj, clothing store in gulshan"
                   value={genQuery}
                   onChange={(e) => setGenQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -2233,7 +2247,33 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                 />
               </Grid>
 
-              <Grid item xs={6} sm={3} md={2}>
+              <Grid item xs={6} sm={4} md={2.5}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="discovery-country-label">Target Country</InputLabel>
+                  <Select
+                    labelId="discovery-country-label"
+                    value={genCountry}
+                    label="Target Country"
+                    onChange={(e) => setGenCountry(e.target.value)}
+                  >
+                    {DISCOVERY_COUNTRIES.map((c) => (
+                      <MenuItem key={c.code} value={c.code}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                            <Typography component="span" sx={{ fontSize: '1.1rem' }}>{c.flag}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{c.name}</Typography>
+                          </Box>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', bgcolor: '#f1f5f9', px: 0.8, py: 0.2, borderRadius: 1, fontWeight: 700 }}>
+                            {c.dial}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={6} sm={4} md={1.7}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Result Limit</InputLabel>
                   <Select
@@ -2243,18 +2283,18 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                   >
                     <MenuItem value={10}>10 Shops</MenuItem>
                     <MenuItem value={25}>25 Shops</MenuItem>
-                    <MenuItem value={50}>50 Shops (Standard)</MenuItem>
-                    <MenuItem value={100}>100 Shops (Deep Scan)</MenuItem>
+                    <MenuItem value={50}>50 Shops (Std)</MenuItem>
+                    <MenuItem value={100}>100 Deep</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
 
-              <Grid item xs={6} sm={3} md={2.5}>
+              <Grid item xs={6} sm={4} md={1.8}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Default Category</InputLabel>
+                  <InputLabel>Category</InputLabel>
                   <Select
                     value={genCategory}
-                    label="Default Category"
+                    label="Category"
                     onChange={(e) => {
                       setGenCategory(e.target.value);
                       setBatchCategoryAssign(e.target.value);
@@ -2270,26 +2310,25 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12} sm={6} md={2.5}>
+              <Grid item xs={6} sm={12} md={2}>
                 <Button
                   fullWidth
                   variant="contained"
+                  size="medium"
                   disabled={generatingLeads || !genQuery.trim()}
                   onClick={handleStartLeadGeneration}
-                  startIcon={generatingLeads ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <AutoAwesomeIcon />}
+                  startIcon={generatingLeads ? <CircularProgress size={16} color="inherit" /> : <SearchIcon />}
                   sx={{
-                    py: 1,
+                    bgcolor: '#6366f1',
+                    color: '#ffffff',
                     fontWeight: 700,
-                    borderRadius: 2,
                     textTransform: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    boxShadow: '0 3px 10px rgba(99, 102, 241, 0.3)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
-                    },
+                    borderRadius: 2,
+                    py: 1,
+                    '&:hover': { bgcolor: '#4f46e5' },
                   }}
                 >
-                  {generatingLeads ? 'Scanning Web...' : 'Start Discovery'}
+                  {generatingLeads ? 'Scanning...' : 'Discover'}
                 </Button>
               </Grid>
             </Grid>

@@ -127,9 +127,10 @@ export interface GeneratedLead {
   id: string;
   shop_name: string;
   phone: string;
-  formatted_phone: string;
+  formatted_phone?: string;
   email?: string;
   website?: string;
+  country?: string;
   facebook_url?: string;
   google_maps_url?: string;
   address?: string;
@@ -307,6 +308,7 @@ export const LeadService = {
   getExportCsvUrl: () => '/api/proxy/leads/export-csv',
   autoGenerate: (data: {
     query: string;
+    country?: string;
     limit?: number;
     only_whatsapp?: boolean;
     category?: string;
