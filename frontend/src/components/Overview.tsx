@@ -21,6 +21,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import DescriptionIcon from '@mui/icons-material/Description';
 import { ContactService, BroadcastService, WhatsAppService, LeadService, Campaign } from '@/lib/api';
 
 interface OverviewProps {
@@ -283,11 +284,11 @@ export default function Overview({ onNavigate }: OverviewProps) {
             <Button
               variant="outlined"
               color="primary"
-              startIcon={<PeopleIcon />}
-              onClick={() => onNavigate('contacts')}
+              startIcon={<DescriptionIcon />}
+              onClick={() => onNavigate('templates')}
               sx={{ py: 1.5, justifyContent: 'flex-start', fontWeight: 700 }}
             >
-              Contacts & Audience
+              Message Templates
             </Button>
             <Button
               variant="outlined"

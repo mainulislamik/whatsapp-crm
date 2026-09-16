@@ -32,7 +32,6 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { id: 'overview', label: 'Dashboard Overview', sublabel: 'Summary & Metrics', icon: <DashboardIcon /> },
-  { id: 'contacts', label: 'Contacts & Audience', sublabel: 'Filter & Import', icon: <PeopleIcon /> },
   { id: 'leads', label: 'Lead Management', sublabel: 'Shops & WhatsApp Scan', icon: <StorefrontIcon /> },
   { id: 'broadcast', label: 'Bulk Broadcast', sublabel: 'Media & Spintax', icon: <CampaignIcon /> },
   { id: 'livechat', label: 'Live Chat', sublabel: 'Real-time Conversations', icon: <MarkChatReadIcon /> },

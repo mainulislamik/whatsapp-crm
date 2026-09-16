@@ -23,7 +23,6 @@ import PeopleIcon from '@mui/icons-material/People';
 
 import Sidebar, { navItems } from '@/components/Sidebar';
 import Overview from '@/components/Overview';
-import ContactManager from '@/components/ContactManager';
 import TemplateManager from '@/components/TemplateManager';
 import BroadcastSender from '@/components/BroadcastSender';
 import CampaignHistory from '@/components/CampaignHistory';
@@ -305,36 +304,16 @@ export default function Dashboard() {
             <Overview onNavigate={(sec) => updateSection(sec)} />
           )}
 
-          {/* 2. Contacts CRM */}
-          {activeSection === 'contacts' && (
-            <Box>
-              <ContactManager
-                selectedIds={selectedContactIds}
-                onSelectionChange={setSelectedContactIds}
-              />
-              {selectedContactIds.length > 0 && (
-                <Box sx={{ mt: 2, textAlign: 'right' }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    size="large"
-                    startIcon={<SendIcon />}
-                    onClick={() => updateSection('broadcast')}
-                    sx={{ px: 3, fontWeight: 700 }}
-                  >
-                    Send Bulk Broadcast to {selectedContactIds.length} Selected
-                  </Button>
-                </Box>
-              )}
-            </Box>
-          )}
-
-          {/* 2.1 Lead Management */}
+          {/* 2. Lead Management (Unified Contact & Lead Directory) */}
           {activeSection === 'leads' && (
             <LeadManager
               onDirectMessage={(phone) => {
                 setDirectChatPhone(phone);
                 updateSection('quickchat');
+              }}
+              onSelectForBroadcast={(leadIds) => {
+                setSelectedContactIds(leadIds);
+                updateSection('broadcast');
               }}
             />
           )}
@@ -353,13 +332,13 @@ export default function Dashboard() {
                 <Alert
                   severity="info"
                   action={
-                    <Button color="inherit" size="small" startIcon={<PeopleIcon />} onClick={() => updateSection('contacts')}>
-                      Select Contacts
+                    <Button color="inherit" size="small" startIcon={<PeopleIcon />} onClick={() => updateSection('leads')}>
+                      Select from Leads
                     </Button>
                   }
                   sx={{ mb: 3 }}
                 >
-                  No contacts selected. You can select contacts or filter by tag from the "Contacts & Audience" page.
+                  No leads selected. Click "Select Leads" or pick shops from the "Lead Management" page to broadcast.
                 </Alert>
               )}
 
@@ -373,6 +352,7 @@ export default function Dashboard() {
                 <BroadcastSender
                   selectedContactIds={selectedContactIds}
                   onSelectedContactIdsChange={setSelectedContactIds}
+                  onGoToLeads={() => updateSection('leads')}
                   messageText={messageText}
                   onMessageChange={setMessageText}
                   templateMedia={templateMedia}

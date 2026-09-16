@@ -80,6 +80,7 @@ import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead } from '@/l
 
 interface LeadManagerProps {
   onDirectMessage?: (phone: string) => void;
+  onSelectForBroadcast?: (leadIds: number[]) => void;
 }
 
 const SHOP_TYPES = ['Retail', 'Wholesale', 'Distributor', 'Online Store', 'Service Center', 'Corporate'];
@@ -93,13 +94,14 @@ const LEAD_STATUSES = [
   { value: 'LOST', label: 'Lost / Closed', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' },
 ];
 
-export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
+export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: LeadManagerProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [categories, setCategories] = useState<LeadCategory[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [search, setSearch] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedActiveLeadIds, setSelectedActiveLeadIds] = useState<Set<number>>(new Set());
   
   // Segmented Outreach Tab: 'all' | 'contacted' | 'uncontacted' | 'converted'
   const [activeTab, setActiveTab] = useState<'all' | 'contacted' | 'uncontacted' | 'converted'>('all');
@@ -920,6 +922,60 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
           </Stack>
         </Box>
 
+        {/* Bulk Action Bar when Leads are Selected */}
+        {selectedActiveLeadIds.size > 0 && (
+          <Paper
+            elevation={3}
+            sx={{
+              mb: 2.5,
+              p: 1.5,
+              bgcolor: '#0f172a',
+              color: '#ffffff',
+              borderRadius: 2.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 1.5,
+            }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Chip
+                label={`${selectedActiveLeadIds.size} Leads Selected`}
+                color="secondary"
+                sx={{ fontWeight: 800, bgcolor: '#128C7E' }}
+              />
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                Ready for bulk messaging
+              </Typography>
+            </Stack>
+
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setSelectedActiveLeadIds(new Set())}
+                sx={{ color: '#cbd5e1', borderColor: '#475569', textTransform: 'none' }}
+              >
+                Clear
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<SendIcon />}
+                onClick={() => {
+                  if (onSelectForBroadcast) {
+                    onSelectForBroadcast(Array.from(selectedActiveLeadIds));
+                  }
+                }}
+                sx={{ bgcolor: '#128C7E', '&:hover': { bgcolor: '#0e7063' }, fontWeight: 700, textTransform: 'none' }}
+              >
+                🚀 Send Selected ({selectedActiveLeadIds.size}) to Bulk Broadcast
+              </Button>
+            </Stack>
+          </Paper>
+        )}
+
         {loading && <LinearProgress sx={{ mb: 1.5, borderRadius: 1 }} />}
 
         {/* Uniform Sized Modern Leads Table */}
@@ -927,18 +983,35 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
           <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 920 }}>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f1f5f9' }}>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '25%', py: 1.5 }}>Shop & Profile</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '17%', py: 1.5 }}>Phone / WhatsApp</TableCell>
+                <TableCell padding="checkbox" sx={{ width: '5%', py: 1.5 }}>
+                  <Checkbox
+                    checked={filteredLeads.length > 0 && filteredLeads.every((l) => selectedActiveLeadIds.has(l.id))}
+                    indeterminate={filteredLeads.some((l) => selectedActiveLeadIds.has(l.id)) && !filteredLeads.every((l) => selectedActiveLeadIds.has(l.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const newSet = new Set(selectedActiveLeadIds);
+                        filteredLeads.forEach((l) => newSet.add(l.id));
+                        setSelectedActiveLeadIds(newSet);
+                      } else {
+                        const newSet = new Set(selectedActiveLeadIds);
+                        filteredLeads.forEach((l) => newSet.delete(l.id));
+                        setSelectedActiveLeadIds(newSet);
+                      }
+                    }}
+                  />
+                </TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '23%', py: 1.5 }}>Shop & Profile</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '16%', py: 1.5 }}>Phone / WhatsApp</TableCell>
                 <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '18%', py: 1.5 }}>WhatsApp Outreach</TableCell>
                 <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '12%', py: 1.5 }}>Category</TableCell>
                 <TableCell sx={{ fontWeight: 800, color: '#0f172a', width: '14%', py: 1.5 }}>Lead Status</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800, color: '#0f172a', width: '14%', py: 1.5 }}>Actions</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, color: '#0f172a', width: '12%', py: 1.5 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                     <StorefrontIcon sx={{ fontSize: 40, color: '#cbd5e1', mb: 1, display: 'block', mx: 'auto' }} />
                     <Typography variant="body1" sx={{ fontWeight: 600 }}>No leads found in this view.</Typography>
                     <Typography variant="body2" color="text.secondary">Try switching tabs or click "Add New Lead" to register a shop.</Typography>
@@ -948,11 +1021,13 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                 filteredLeads.map((lead) => {
                   const statusStyle = getStatusConfig(lead.status);
                   const isContacted = lead.is_contacted || lead.status === 'CONTACTED';
+                  const isLeadSelected = selectedActiveLeadIds.has(lead.id);
 
                   return (
                     <TableRow
                       key={lead.id}
                       hover
+                      selected={isLeadSelected}
                       onClick={() => handleOpenProfile(lead)}
                       sx={{
                         cursor: 'pointer',
@@ -961,6 +1036,20 @@ export default function LeadManager({ onDirectMessage }: LeadManagerProps) {
                         '&:hover': { bgcolor: '#f8fafc' },
                       }}
                     >
+                      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isLeadSelected}
+                          onChange={() => {
+                            const newSet = new Set(selectedActiveLeadIds);
+                            if (isLeadSelected) {
+                              newSet.delete(lead.id);
+                            } else {
+                              newSet.add(lead.id);
+                            }
+                            setSelectedActiveLeadIds(newSet);
+                          }}
+                        />
+                      </TableCell>
                       {/* 1. Shop Name & Avatar */}
                       <TableCell sx={{ py: 1 }}>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>

@@ -144,7 +144,8 @@ class DirectSendRequest(BaseModel):
 class BulkSendRequest(BaseModel):
     title: str
     message_template: str
-    contact_ids: List[int]
+    contact_ids: Optional[List[int]] = []
+    lead_ids: Optional[List[int]] = []
     delay_seconds: Optional[int] = 5
     media_base64: Optional[str] = None
     media_type: Optional[str] = None
@@ -600,9 +601,23 @@ async def run_campaign_worker(campaign_id: int, base_delay: int):
 @app.post("/api/campaigns")
 async def create_and_start_campaign(payload: BulkSendRequest, background_tasks: BackgroundTasks):
     def _create_campaign_records():
-        contacts = list(Contact.objects.filter(id__in=payload.contact_ids))
-        if not contacts:
-            return None, False, "No valid contacts selected"
+        target_ids = payload.lead_ids or payload.contact_ids or []
+        recipients = []
+        
+        # 1. Resolve from Lead model
+        leads = list(Lead.objects.filter(id__in=target_ids))
+        if leads:
+            for l in leads:
+                name = l.shop_name or l.owner_name or f"Lead {l.phone[-4:]}"
+                recipients.append({"name": name, "phone": l.phone})
+        else:
+            # 2. Fallback to Contact model
+            contacts = list(Contact.objects.filter(id__in=target_ids))
+            for c in contacts:
+                recipients.append({"name": c.name, "phone": c.phone})
+
+        if not recipients:
+            return None, False, "No valid recipients selected"
 
         is_scheduled = False
         parsed_schedule = None
@@ -616,7 +631,7 @@ async def create_and_start_campaign(payload: BulkSendRequest, background_tasks: 
         campaign = Campaign.objects.create(
             title=payload.title,
             template_content=payload.message_template,
-            total_recipients=len(contacts),
+            total_recipients=len(recipients),
             delay_seconds=payload.delay_seconds or 5,
             status='SCHEDULED' if is_scheduled else 'PENDING',
             media_base64=payload.media_base64,
@@ -627,14 +642,14 @@ async def create_and_start_campaign(payload: BulkSendRequest, background_tasks: 
         )
 
         logs_to_create = []
-        for c in contacts:
-            personalized = payload.message_template.replace("{name}", c.name).replace("{phone}", c.phone)
+        for r in recipients:
+            personalized = payload.message_template.replace("{name}", r["name"]).replace("{phone}", r["phone"])
             customized = parse_spintax(personalized)
 
             logs_to_create.append(CampaignLog(
                 campaign=campaign,
-                contact_name=c.name,
-                phone=c.phone,
+                contact_name=r["name"],
+                phone=r["phone"],
                 message=customized,
                 has_media=bool(payload.media_base64),
                 status='PENDING'

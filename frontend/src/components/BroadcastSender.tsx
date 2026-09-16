@@ -43,11 +43,13 @@ import {
   Paper,
   IconButton,
 } from '@mui/material';
-import { BroadcastService, Contact, ContactService } from '@/lib/api';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import { BroadcastService, Contact, Lead, LeadService } from '@/lib/api';
 
 interface BroadcastSenderProps {
   selectedContactIds: number[];
   onSelectedContactIdsChange?: (ids: number[]) => void;
+  onGoToLeads?: () => void;
   messageText: string;
   onMessageChange: (text: string) => void;
   onCampaignStarted: () => void;
@@ -62,6 +64,7 @@ interface BroadcastSenderProps {
 export default function BroadcastSender({
   selectedContactIds,
   onSelectedContactIdsChange,
+  onGoToLeads,
   messageText,
   onMessageChange,
   onCampaignStarted,
@@ -75,43 +78,25 @@ export default function BroadcastSender({
 
   // Audience Modal State
   const [openContactModal, setOpenContactModal] = useState<boolean>(false);
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [contactSearch, setContactSearch] = useState<string>('');
-  const [contactTagFilter, setContactTagFilter] = useState<string>('');
   const [contactLoading, setContactLoading] = useState<boolean>(false);
-  const [syncingContacts, setSyncingContacts] = useState<boolean>(false);
 
-  const loadContacts = async () => {
+  const loadLeads = async () => {
     setContactLoading(true);
     try {
-      const res = await ContactService.list();
-      setContacts(res.data || []);
+      const res = await LeadService.list();
+      setLeads(res.data || []);
     } catch (err) {
-      console.error('Failed to load contacts in BroadcastSender:', err);
+      console.error('Failed to load leads in BroadcastSender:', err);
     } finally {
       setContactLoading(false);
     }
   };
 
   useEffect(() => {
-    loadContacts();
+    loadLeads();
   }, []);
-
-  const handleSyncContactsFromWA = async () => {
-    setSyncingContacts(true);
-    try {
-      const res = await ContactService.syncWhatsApp();
-      await loadContacts();
-      setStatusMsg({
-        type: 'success',
-        text: `Synced ${res.data.synced} contacts from WhatsApp chats & leads! (Total: ${res.data.total})`,
-      });
-    } catch (err: any) {
-      alert('Failed to sync contacts.');
-    } finally {
-      setSyncingContacts(false);
-    }
-  };
 
   const toggleSelectOne = (id: number) => {
     if (!onSelectedContactIdsChange) return;
@@ -122,7 +107,7 @@ export default function BroadcastSender({
     }
   };
 
-  const toggleSelectAll = (filtered: Contact[]) => {
+  const toggleSelectAll = (filtered: Lead[]) => {
     if (!onSelectedContactIdsChange) return;
     const filteredIds = filtered.map((c) => c.id);
     const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedContactIds.includes(id));
@@ -257,7 +242,7 @@ export default function BroadcastSender({
               size="small"
               startIcon={<PeopleIcon />}
               onClick={() => {
-                loadContacts();
+                loadLeads();
                 setOpenContactModal(true);
               }}
               sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
@@ -477,7 +462,7 @@ export default function BroadcastSender({
           </DialogActions>
         </Dialog>
 
-        {/* Quick Contact Selection Modal */}
+        {/* Quick Lead Selection Modal */}
         <Dialog
           open={openContactModal}
           onClose={() => setOpenContactModal(false)}
@@ -486,7 +471,7 @@ export default function BroadcastSender({
         >
           <DialogTitle sx={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PeopleIcon color="primary" /> Select Broadcast Recipients ({selectedContactIds.length} Selected)
+              <StorefrontIcon color="primary" /> Select Broadcast Recipients from Leads ({selectedContactIds.length} Selected)
             </Box>
             <IconButton size="small" onClick={() => setOpenContactModal(false)}>
               <CloseIcon fontSize="small" />
@@ -497,7 +482,7 @@ export default function BroadcastSender({
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
               <TextField
                 size="small"
-                placeholder="Search by name, phone, or tag..."
+                placeholder="Search leads by shop name, phone, or category..."
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
                 sx={{ flexGrow: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
@@ -507,14 +492,16 @@ export default function BroadcastSender({
               />
 
               <Button
-                variant="contained"
+                variant="outlined"
                 size="small"
-                startIcon={syncingContacts ? <SyncIcon sx={{ animation: 'spin 1s linear infinite' }} /> : <SyncIcon />}
-                onClick={handleSyncContactsFromWA}
-                disabled={syncingContacts}
-                sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                startIcon={<StorefrontIcon />}
+                onClick={() => {
+                  setOpenContactModal(false);
+                  if (onGoToLeads) onGoToLeads();
+                }}
+                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
               >
-                {syncingContacts ? 'Syncing...' : 'Sync WhatsApp & Leads'}
+                Go to Lead Management
               </Button>
             </Stack>
 
@@ -523,36 +510,38 @@ export default function BroadcastSender({
                 <LinearProgress sx={{ width: '100%' }} />
               </Box>
             ) : (() => {
-              const filtered = contacts.filter((c) => {
+              const filtered = leads.filter((l) => {
                 const s = contactSearch.toLowerCase();
-                return (
-                  c.name.toLowerCase().includes(s) ||
-                  c.phone.includes(s) ||
-                  (c.tags && c.tags.toLowerCase().includes(s))
-                );
+                const shop = (l.shop_name || '').toLowerCase();
+                const phone = (l.phone || '').toLowerCase();
+                const cat = (l.category || '').toLowerCase();
+                return shop.includes(s) || phone.includes(s) || cat.includes(s);
               });
 
               const allFilteredSelected =
-                filtered.length > 0 && filtered.every((c) => selectedContactIds.includes(c.id));
+                filtered.length > 0 && filtered.every((l) => selectedContactIds.includes(l.id));
 
-              if (contacts.length === 0) {
+              if (leads.length === 0) {
                 return (
                   <Box sx={{ textAlign: 'center', py: 4, bgcolor: '#f8fafc', borderRadius: 2 }}>
-                    <PeopleIcon sx={{ fontSize: 40, color: '#94a3b8', mb: 1 }} />
+                    <StorefrontIcon sx={{ fontSize: 40, color: '#94a3b8', mb: 1 }} />
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#1e293b' }}>
-                      No contacts in directory
+                      No leads found in directory
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Click below to instantly pull all WhatsApp chats & lead numbers.
+                      Go to Lead Management to scan new leads or add shops.
                     </Typography>
                     <Button
                       variant="contained"
                       size="small"
-                      startIcon={<SyncIcon />}
-                      onClick={handleSyncContactsFromWA}
+                      startIcon={<StorefrontIcon />}
+                      onClick={() => {
+                        setOpenContactModal(false);
+                        if (onGoToLeads) onGoToLeads();
+                      }}
                       sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 700 }}
                     >
-                      Sync from WhatsApp
+                      Open Lead Manager
                     </Button>
                   </Box>
                 );
@@ -566,37 +555,43 @@ export default function BroadcastSender({
                         <TableCell padding="checkbox">
                           <Checkbox
                             checked={allFilteredSelected}
-                            indeterminate={filtered.some((c) => selectedContactIds.includes(c.id)) && !allFilteredSelected}
+                            indeterminate={filtered.some((l) => selectedContactIds.includes(l.id)) && !allFilteredSelected}
                             onChange={() => toggleSelectAll(filtered)}
                           />
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Phone Number</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Tags</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Shop / Name</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Phone / WhatsApp</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filtered.map((c) => {
-                        const isSelected = selectedContactIds.includes(c.id);
+                      {filtered.map((l) => {
+                        const isSelected = selectedContactIds.includes(l.id);
                         return (
                           <TableRow
-                            key={c.id}
+                            key={l.id}
                             hover
-                            onClick={() => toggleSelectOne(c.id)}
+                            onClick={() => toggleSelectOne(l.id)}
                             selected={isSelected}
                             sx={{ cursor: 'pointer' }}
                           >
                             <TableCell padding="checkbox">
                               <Checkbox checked={isSelected} />
                             </TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace' }}>{c.phone}</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>{l.shop_name || `Lead ${l.phone.slice(-4)}`}</TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace' }}>{l.phone}</TableCell>
                             <TableCell>
-                              {c.tags ? (
-                                <Chip label={c.tags} size="small" sx={{ fontSize: '0.7rem', height: 20 }} />
-                              ) : (
-                                '—'
-                              )}
+                              <Chip label={l.category || 'Retail'} size="small" sx={{ fontSize: '0.7rem', height: 20 }} />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={l.status || 'NEW'}
+                                size="small"
+                                color={l.is_contacted ? 'success' : 'default'}
+                                variant="outlined"
+                                sx={{ fontSize: '0.7rem', height: 20 }}
+                              />
                             </TableCell>
                           </TableRow>
                         );
@@ -610,7 +605,7 @@ export default function BroadcastSender({
 
           <DialogActions sx={{ px: 3, py: 1.5, justifyContent: 'space-between' }}>
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-              {selectedContactIds.length} contact(s) selected for broadcast
+              {selectedContactIds.length} lead(s) selected for broadcast
             </Typography>
             <Button
               variant="contained"
