@@ -372,6 +372,7 @@ export default function Dashboard() {
                 />
                 <BroadcastSender
                   selectedContactIds={selectedContactIds}
+                  onSelectedContactIdsChange={setSelectedContactIds}
                   messageText={messageText}
                   onMessageChange={setMessageText}
                   templateMedia={templateMedia}

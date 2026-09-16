@@ -27,10 +27,27 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import { BroadcastService } from '@/lib/api';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import SyncIcon from '@mui/icons-material/Sync';
+import SearchIcon from '@mui/icons-material/Search';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Checkbox,
+  Paper,
+  IconButton,
+} from '@mui/material';
+import { BroadcastService, Contact, ContactService } from '@/lib/api';
 
 interface BroadcastSenderProps {
   selectedContactIds: number[];
+  onSelectedContactIdsChange?: (ids: number[]) => void;
   messageText: string;
   onMessageChange: (text: string) => void;
   onCampaignStarted: () => void;
@@ -39,11 +56,12 @@ interface BroadcastSenderProps {
     type: string;
     fileName: string;
     mimeType: string;
-  } | null;
+  };
 }
 
 export default function BroadcastSender({
   selectedContactIds,
+  onSelectedContactIdsChange,
   messageText,
   onMessageChange,
   onCampaignStarted,
@@ -54,6 +72,67 @@ export default function BroadcastSender({
   const [loading, setLoading] = useState<boolean>(false);
   const [openConfirm, setOpenConfirm] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Audience Modal State
+  const [openContactModal, setOpenContactModal] = useState<boolean>(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactSearch, setContactSearch] = useState<string>('');
+  const [contactTagFilter, setContactTagFilter] = useState<string>('');
+  const [contactLoading, setContactLoading] = useState<boolean>(false);
+  const [syncingContacts, setSyncingContacts] = useState<boolean>(false);
+
+  const loadContacts = async () => {
+    setContactLoading(true);
+    try {
+      const res = await ContactService.list();
+      setContacts(res.data || []);
+    } catch (err) {
+      console.error('Failed to load contacts in BroadcastSender:', err);
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  const handleSyncContactsFromWA = async () => {
+    setSyncingContacts(true);
+    try {
+      const res = await ContactService.syncWhatsApp();
+      await loadContacts();
+      setStatusMsg({
+        type: 'success',
+        text: `Synced ${res.data.synced} contacts from WhatsApp chats & leads! (Total: ${res.data.total})`,
+      });
+    } catch (err: any) {
+      alert('Failed to sync contacts.');
+    } finally {
+      setSyncingContacts(false);
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    if (!onSelectedContactIdsChange) return;
+    if (selectedContactIds.includes(id)) {
+      onSelectedContactIdsChange(selectedContactIds.filter((x) => x !== id));
+    } else {
+      onSelectedContactIdsChange([...selectedContactIds, id]);
+    }
+  };
+
+  const toggleSelectAll = (filtered: Contact[]) => {
+    if (!onSelectedContactIdsChange) return;
+    const filteredIds = filtered.map((c) => c.id);
+    const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedContactIds.includes(id));
+    if (allSelected) {
+      onSelectedContactIdsChange(selectedContactIds.filter((id) => !filteredIds.includes(id)));
+    } else {
+      const merged = Array.from(new Set([...selectedContactIds, ...filteredIds]));
+      onSelectedContactIdsChange(merged);
+    }
+  };
 
   // Media Attachment State
   const [attachedFile, setAttachedFile] = useState<{
@@ -171,11 +250,26 @@ export default function BroadcastSender({
               Send personalized text, images, and documents to multiple users.
             </Typography>
           </Box>
-          <Chip
-            label={`${selectedContactIds.length} Recipients Selected`}
-            color={selectedContactIds.length > 0 ? 'primary' : 'default'}
-            sx={{ fontWeight: 700, fontSize: '0.9rem' }}
-          />
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button
+              variant={selectedContactIds.length === 0 ? "contained" : "outlined"}
+              color="primary"
+              size="small"
+              startIcon={<PeopleIcon />}
+              onClick={() => {
+                loadContacts();
+                setOpenContactModal(true);
+              }}
+              sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
+            >
+              {selectedContactIds.length === 0 ? 'Select Contacts / Audience' : 'Change Audience'}
+            </Button>
+            <Chip
+              label={`${selectedContactIds.length} Recipients Selected`}
+              color={selectedContactIds.length > 0 ? 'primary' : 'default'}
+              sx={{ fontWeight: 700, fontSize: '0.85rem' }}
+            />
+          </Stack>
         </Stack>
 
         {statusMsg && (
@@ -379,6 +473,151 @@ export default function BroadcastSender({
             <Button onClick={() => setOpenConfirm(false)}>Cancel</Button>
             <Button variant="contained" color="primary" onClick={handleStartBroadcast}>
               Yes, Confirm & Start
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Quick Contact Selection Modal */}
+        <Dialog
+          open={openContactModal}
+          onClose={() => setOpenContactModal(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PeopleIcon color="primary" /> Select Broadcast Recipients ({selectedContactIds.length} Selected)
+            </Box>
+            <IconButton size="small" onClick={() => setOpenContactModal(false)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent dividers sx={{ py: 2 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+              <TextField
+                size="small"
+                placeholder="Search by name, phone, or tag..."
+                value={contactSearch}
+                onChange={(e) => setContactSearch(e.target.value)}
+                sx={{ flexGrow: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                InputProps={{
+                  startAdornment: <SearchIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} />,
+                }}
+              />
+
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={syncingContacts ? <SyncIcon sx={{ animation: 'spin 1s linear infinite' }} /> : <SyncIcon />}
+                onClick={handleSyncContactsFromWA}
+                disabled={syncingContacts}
+                sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+              >
+                {syncingContacts ? 'Syncing...' : 'Sync WhatsApp & Leads'}
+              </Button>
+            </Stack>
+
+            {contactLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <LinearProgress sx={{ width: '100%' }} />
+              </Box>
+            ) : (() => {
+              const filtered = contacts.filter((c) => {
+                const s = contactSearch.toLowerCase();
+                return (
+                  c.name.toLowerCase().includes(s) ||
+                  c.phone.includes(s) ||
+                  (c.tags && c.tags.toLowerCase().includes(s))
+                );
+              });
+
+              const allFilteredSelected =
+                filtered.length > 0 && filtered.every((c) => selectedContactIds.includes(c.id));
+
+              if (contacts.length === 0) {
+                return (
+                  <Box sx={{ textAlign: 'center', py: 4, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                    <PeopleIcon sx={{ fontSize: 40, color: '#94a3b8', mb: 1 }} />
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#1e293b' }}>
+                      No contacts in directory
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Click below to instantly pull all WhatsApp chats & lead numbers.
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<SyncIcon />}
+                      onClick={handleSyncContactsFromWA}
+                      sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 700 }}
+                    >
+                      Sync from WhatsApp
+                    </Button>
+                  </Box>
+                );
+              }
+
+              return (
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 380, borderRadius: 2 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={allFilteredSelected}
+                            indeterminate={filtered.some((c) => selectedContactIds.includes(c.id)) && !allFilteredSelected}
+                            onChange={() => toggleSelectAll(filtered)}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Phone Number</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Tags</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filtered.map((c) => {
+                        const isSelected = selectedContactIds.includes(c.id);
+                        return (
+                          <TableRow
+                            key={c.id}
+                            hover
+                            onClick={() => toggleSelectOne(c.id)}
+                            selected={isSelected}
+                            sx={{ cursor: 'pointer' }}
+                          >
+                            <TableCell padding="checkbox">
+                              <Checkbox checked={isSelected} />
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace' }}>{c.phone}</TableCell>
+                            <TableCell>
+                              {c.tags ? (
+                                <Chip label={c.tags} size="small" sx={{ fontSize: '0.7rem', height: 20 }} />
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              );
+            })()}
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 1.5, justifyContent: 'space-between' }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+              {selectedContactIds.length} contact(s) selected for broadcast
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={() => setOpenContactModal(false)}
+              sx={{ fontWeight: 700, borderRadius: 2 }}
+            >
+              Done / Apply ({selectedContactIds.length})
             </Button>
           </DialogActions>
         </Dialog>
