@@ -10,272 +10,224 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://searxng:8080")
-WHATSAPP_ENGINE_URL = os.environ.get("WHATSAPP_ENGINE_URL", "http://whatsapp-engine:5001")
-
-# Numeral translations for Bengali & Arabic
-BN_DIGIT_MAP = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
-AR_DIGIT_MAP = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+SEARXNG_INTERNAL_URL = os.getenv("SEARXNG_URL", "http://searxng:8080")
+WA_ENGINE_URL = os.getenv("WA_ENGINE_URL", "http://wa-engine:5001")
 
 COUNTRY_CONFIGS = {
     "BD": {
         "name": "Bangladesh",
-        "code": "BD",
         "dial_code": "+880",
-        "regex": re.compile(r'(?:(?:\+|00)?880\s*|0)?1[3-9](?:[\s\-\.\(\)]?\d){8}'),
-        "phone_cleaner": lambda digits: "0" + digits[3:] if digits.startswith("880") else digits,
-        "is_valid": lambda digits: len(digits) == 11 and digits.startswith("01") and digits[2] in "3456789",
-        "search_suffix": "Bangladesh",
-        "operators": ["017", "018", "019", "016", "013", "015", "014"],
-        "directories": ["bikroy.com", "bdstall.com", "bdtradeinfo.com", "yellowpages.com.bd"],
+        "default_city": "Dhaka",
+        "phone_pattern": r'(?:(?:\+|00)?880\s*|0)?1[3-9](?:[\s\-\.\(\)]?\d){8}',
+        "phone_clean": lambda p: "01" + re.sub(r'\D', '', p)[-9:] if len(re.sub(r'\D', '', p)) >= 10 else p,
+        "phone_prefixes": ["017", "018", "019", "016", "013", "015", "014"],
+        "directories": ["bikroy.com", "bdstall.com", "bdtradeinfo.com", "yellowpages.com.bd"]
     },
     "IN": {
         "name": "India",
-        "code": "IN",
         "dial_code": "+91",
-        "regex": re.compile(r'(?:(?:\+|00)?91\s*|0)?[6-9](?:[\s\-\.\(\)]?\d){9}'),
-        "phone_cleaner": lambda digits: digits[2:] if digits.startswith("91") and len(digits) == 12 else (digits[1:] if digits.startswith("0") and len(digits) == 11 else digits),
-        "is_valid": lambda digits: len(digits) == 10 and digits[0] in "6789",
-        "search_suffix": "India",
-        "operators": ["phone", "mobile", "contact", "WhatsApp"],
-        "directories": ["justdial.com", "indiamart.com", "tradeindia.com"],
+        "default_city": "Delhi",
+        "phone_pattern": r'(?:(?:\+|00)?91\s*|0)?[6-9](?:[\s\-\.\(\)]?\d){9}',
+        "phone_clean": lambda p: "+91" + re.sub(r'\D', '', p)[-10:] if len(re.sub(r'\D', '', p)) >= 10 else p,
+        "phone_prefixes": ["98", "99", "97", "96", "91", "88", "87", "70"],
+        "directories": ["justdial.com", "indiamart.com", "tradeindia.com"]
     },
     "AE": {
         "name": "United Arab Emirates",
-        "code": "AE",
         "dial_code": "+971",
-        "regex": re.compile(r'(?:(?:\+|00)?971\s*|0)?5(?:[\s\-\.\(\)]?\d){8}'),
-        "phone_cleaner": lambda digits: "0" + digits[3:] if digits.startswith("971") else digits,
-        "is_valid": lambda digits: (len(digits) == 10 and digits.startswith("05")) or (len(digits) == 9 and digits.startswith("5")),
-        "search_suffix": "UAE Dubai",
-        "operators": ["phone", "mobile", "WhatsApp", "contact"],
-        "directories": ["yellowpages.ae", "dubaibizdirectory.com"],
+        "default_city": "Dubai",
+        "phone_pattern": r'(?:(?:\+|00)?971\s*|0)?5[0-9](?:[\s\-\.\(\)]?\d){7}',
+        "phone_clean": lambda p: "+971" + re.sub(r'\D', '', p)[-9:] if len(re.sub(r'\D', '', p)) >= 9 else p,
+        "phone_prefixes": ["050", "052", "054", "055", "056", "058"],
+        "directories": ["yellowpages.ae", "dcciinfo.ae"]
     },
     "SA": {
         "name": "Saudi Arabia",
-        "code": "SA",
         "dial_code": "+966",
-        "regex": re.compile(r'(?:(?:\+|00)?966\s*|0)?5(?:[\s\-\.\(\)]?\d){8}'),
-        "phone_cleaner": lambda digits: "0" + digits[3:] if digits.startswith("966") else digits,
-        "is_valid": lambda digits: (len(digits) == 10 and digits.startswith("05")) or (len(digits) == 9 and digits.startswith("5")),
-        "search_suffix": "Saudi Arabia Riyadh",
-        "operators": ["phone", "mobile", "WhatsApp", "contact"],
-        "directories": ["saudiyellowpages.net"],
+        "default_city": "Riyadh",
+        "phone_pattern": r'(?:(?:\+|00)?966\s*|0)?5[0-9](?:[\s\-\.\(\)]?\d){7}',
+        "phone_clean": lambda p: "+966" + re.sub(r'\D', '', p)[-9:] if len(re.sub(r'\D', '', p)) >= 9 else p,
+        "phone_prefixes": ["050", "053", "055", "054", "056", "059"],
+        "directories": ["saudiayellowpages.com"]
     },
     "PK": {
         "name": "Pakistan",
-        "code": "PK",
         "dial_code": "+92",
-        "regex": re.compile(r'(?:(?:\+|00)?92\s*|0)?3(?:[\s\-\.\(\)]?\d){9}'),
-        "phone_cleaner": lambda digits: "0" + digits[2:] if digits.startswith("92") else digits,
-        "is_valid": lambda digits: len(digits) == 11 and digits.startswith("03"),
-        "search_suffix": "Pakistan",
-        "operators": ["0300", "0301", "0321", "0333", "0345"],
-        "directories": ["olx.com.pk", "pakbiz.com"],
+        "default_city": "Karachi",
+        "phone_pattern": r'(?:(?:\+|00)?92\s*|0)?3[0-9]{2}(?:[\s\-\.\(\)]?\d){7}',
+        "phone_clean": lambda p: "+92" + re.sub(r'\D', '', p)[-10:] if len(re.sub(r'\D', '', p)) >= 10 else p,
+        "phone_prefixes": ["0300", "0301", "0312", "0321", "0333", "0345"],
+        "directories": ["pakistanphones.com", "yellowpages.biz.pk"]
     },
     "US": {
         "name": "United States",
-        "code": "US",
         "dial_code": "+1",
-        "regex": re.compile(r'(?:(?:\+|00)?1\s*)?[2-9]\d{2}(?:[\s\-\.\(\)]?\d{3})(?:[\s\-\.\(\)]?\d{4})'),
-        "phone_cleaner": lambda digits: digits[1:] if digits.startswith("1") and len(digits) == 11 else digits,
-        "is_valid": lambda digits: len(digits) == 10 and digits[0] in "23456789",
-        "search_suffix": "USA",
-        "operators": ["phone", "contact", "store"],
-        "directories": ["yellowpages.com", "yelp.com"],
+        "default_city": "New York",
+        "phone_pattern": r'(?:(?:\+|00)?1\s*)?(?:\([2-9]\d{2}\)|[2-9]\d{2})[\s\-\.]?[2-9]\d{2}[\s\-\.]?\d{4}',
+        "phone_clean": lambda p: "+1" + re.sub(r'\D', '', p)[-10:] if len(re.sub(r'\D', '', p)) >= 10 else p,
+        "phone_prefixes": [],
+        "directories": ["yellowpages.com", "yelp.com", "manta.com"]
     },
     "GB": {
         "name": "United Kingdom",
-        "code": "GB",
         "dial_code": "+44",
-        "regex": re.compile(r'(?:(?:\+|00)?44\s*|0)?7(?:[\s\-\.\(\)]?\d){9}'),
-        "phone_cleaner": lambda digits: "0" + digits[2:] if digits.startswith("44") else digits,
-        "is_valid": lambda digits: len(digits) == 11 and digits.startswith("07"),
-        "search_suffix": "UK London",
-        "operators": ["phone", "mobile", "contact"],
-        "directories": ["yell.com"],
+        "default_city": "London",
+        "phone_pattern": r'(?:(?:\+|00)?44\s*|0)?7[0-9]{3}[\s\-\.]?\d{6}',
+        "phone_clean": lambda p: "+44" + re.sub(r'\D', '', p)[-10:] if len(re.sub(r'\D', '', p)) >= 10 else p,
+        "phone_prefixes": [],
+        "directories": ["yell.com", "scoot.co.uk"]
     },
     "GLOBAL": {
         "name": "Global",
-        "code": "GLOBAL",
         "dial_code": "",
-        "regex": re.compile(r'(?:(?:\+|00)?\d{1,3}\s*)?\(?\d{2,4}\)?(?:[\s\-\.\(\)]?\d){6,10}'),
-        "phone_cleaner": lambda digits: digits,
-        "is_valid": lambda digits: 8 <= len(digits) <= 15,
-        "search_suffix": "",
-        "operators": ["phone", "mobile", "contact", "WhatsApp"],
-        "directories": [],
+        "default_city": "",
+        "phone_pattern": r'(?:\+|00)?[1-9]\d{1,3}[\s\-\.\(\)]?\d{2,4}[\s\-\.\(\)]?\d{3,4}',
+        "phone_clean": lambda p: "+" + re.sub(r'\D', '', p) if len(re.sub(r'\D', '', p)) >= 8 else p,
+        "phone_prefixes": [],
+        "directories": []
     }
 }
 
 CATEGORY_KEYWORDS = {
-    "Clothing": [
-        "cloth", "fashion", "wear", "boutique", "sharee", "panjabi", "dress",
-        "attire", "garment", "textile", "tailor", "apparel", "lehenga", "kurti",
-        "lungee", "shoe", "footwear", "collection", "lifestyle", "closet"
-    ],
-    "Mobile & Gadgets": [
-        "phone", "mobile", "gadget", "smartphone", "iphone", "android",
-        "cellular", "telecom", "sim", "device"
-    ],
-    "Electronics": [
-        "electronic", "electronics", "appliance", "tv", "fridge", "refrigerator", "ac",
-        "air condition", "washing machine", "sound system", "generator", "oven", "fan",
-        "walton", "singer", "minister", "vision", "butterfly", "rfl", "havells"
-    ],
-    "Grocery": [
-        "grocery", "super shop", "super store", "bazar", "vegetable", "fruit",
-        "meat", "dairy", "daily needs", "halal", "food market", "departmental", "shwapno"
-    ],
-    "Pharmacy": [
-        "pharmacy", "pharma", "medicine", "drug", "medicos", "health",
-        "surgical", "clinic", "diagnostic", "doctor", "dispensary"
-    ],
-    "Computer & IT": [
-        "computer", "laptop", "pc", "hardware", "it solutions", "cctv",
-        "printer", "networking", "cyber", "software", "tech", "star tech", "ryans"
-    ],
-    "Cosmetics & Beauty": [
-        "cosmetic", "beauty", "makeup", "skincare", "parlour", "salon", "perfume"
-    ],
-    "Jewellery": [
-        "jewel", "gold", "diamond", "silver", "ornament", "gem"
-    ],
-    "Restaurant & Cafe": [
-        "restaurant", "cafe", "food", "biryani", "coffee", "bakery", "sweets",
-        "fast food", "catering", "kitchen"
-    ],
-    "Automobile & Motors": [
-        "auto", "motor", "bike", "motorcycle", "car", "mechanic", "garage", "tyre", "parts"
-    ],
-    "Furniture & Decor": [
-        "furniture", "interior", "wood", "sofa", "bed", "decor", "home decor", "hatil", "regal", "otobi"
-    ],
-    "Wholesale": [
-        "wholesale", "wholesaler", "dealer", "importer", "distributor", "bulk", "supply"
-    ],
+    "Electronics": ["electronics", "gadget", "mobile", "computer", "laptop", "tv", "camera", "appliance", "phone", "ac", "refrigerator", "accessories"],
+    "Fashion": ["clothing", "fashion", "boutique", "apparel", "tailor", "saree", "panjabi", "shoes", "garments", "wear"],
+    "Food & Grocery": ["grocery", "supermarket", "food", "restaurant", "cafe", "bakery", "sweet", "catering", "meat", "fish", "spices"],
+    "Healthcare": ["pharmacy", "medicine", "clinic", "hospital", "doctor", "dental", "diagnostic", "chemist", "optics"],
+    "Services": ["agency", "consultancy", "travel", "courier", "cleaning", "repair", "service", "lawyer", "accounting"],
+    "Real Estate": ["real estate", "property", "builder", "developer", "flat", "plot", "rent"],
+    "Automotive": ["auto", "car", "bike", "motorcycle", "garage", "workshop", "parts", "tyre", "lubricant"],
 }
 
 
 class LeadScraperEngine:
-    def __init__(self, wa_engine_url: Optional[str] = None, searxng_url: Optional[str] = None):
-        self.wa_engine_url = wa_engine_url or WHATSAPP_ENGINE_URL
-        self.searxng_url = searxng_url or SEARXNG_URL
+    def __init__(self, searxng_url: str = SEARXNG_INTERNAL_URL, wa_engine_url: str = WA_ENGINE_URL):
+        self.searxng_url = searxng_url
+        self.wa_engine_url = wa_engine_url
 
     @staticmethod
-    def extract_phone(text: str, country_code: str = "BD") -> Optional[str]:
-        if not text:
-            return None
-        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
-        normalized = text.translate(BN_DIGIT_MAP).translate(AR_DIGIT_MAP)
-        matches = cfg["regex"].findall(normalized)
-        for m in matches:
-            digits = re.sub(r'\D', '', m)
-            cleaned = cfg["phone_cleaner"](digits)
-            if cfg["is_valid"](cleaned):
-                return cleaned
-        return None
-
-    @staticmethod
-    def extract_all_phones(text: str, country_code: str = "BD") -> List[str]:
-        if not text:
-            return []
-        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
-        normalized = text.translate(BN_DIGIT_MAP).translate(AR_DIGIT_MAP)
-        phones = []
-        matches = cfg["regex"].findall(normalized)
-        for m in matches:
-            digits = re.sub(r'\D', '', m)
-            cleaned = cfg["phone_cleaner"](digits)
-            if cfg["is_valid"](cleaned) and cleaned not in phones:
-                phones.append(cleaned)
-        return phones
-
-    @staticmethod
-    def extract_email(text: str) -> Optional[str]:
-        if not text:
-            return None
-        email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
-        if email_match:
-            email = email_match.group(0).lower()
-            if not any(skip in email for skip in ['example.com', 'domain.com', 'email.com', 'sentry.io']):
-                return email
-        return None
-
-    @staticmethod
-    def extract_website(text: str) -> Optional[str]:
-        if not text:
-            return None
-        url_match = re.search(r'https?://(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})+(?:/[^\s,;]*)?', text)
-        if url_match:
-            url = url_match.group(0)
-            if not any(skip in url.lower() for skip in ['facebook.com', 'google.com', 'youtube.com', 'instagram.com', 'twitter.com']):
-                return url
-        return None
-
-    @staticmethod
-    def detect_category(query: str, default: str = "Retail") -> str:
-        q_lower = query.lower()
-        for cat, keywords in CATEGORY_KEYWORDS.items():
-            if any(kw in q_lower for kw in keywords):
-                return cat
-        return default
-
-    @staticmethod
-    def extract_location_from_query(query: str, country_name: str = "Bangladesh") -> str:
-        """Extract searched location/district/upazila from user query."""
-        q_clean = query.lower()
-        for prefix in ["electronics shop in", "shop in", "store in", "showroom in", "dealer in", "boutique in", "wholesale in", "in", "near"]:
-            q_clean = re.sub(r'\b' + re.escape(prefix) + r'\b', '', q_clean, flags=re.IGNORECASE).strip()
+    def generate_avatar_url(shop_name: str, website: Optional[str] = None, facebook_url: Optional[str] = None, thumbnail: Optional[str] = None) -> str:
+        """Generate high-quality visual avatar / logo URL for business."""
+        if thumbnail and not thumbnail.startswith("http://searxng") and "searxng:8080" not in thumbnail:
+            return thumbnail
+        if website:
+            try:
+                domain = urllib.parse.urlparse(website if website.startswith("http") else f"https://{website}").netloc.replace("www.", "").strip()
+                if domain and "." in domain and not any(skip in domain.lower() for skip in ["facebook.com", "google.com", "youtube.com"]):
+                    return f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+            except Exception:
+                pass
+        if facebook_url and "facebook.com" in facebook_url:
+            try:
+                parts = [p for p in facebook_url.split("facebook.com/")[-1].split("/") if p and p not in ["posts", "videos", "photos", "groups", "events", "stories", "pages", "p"]]
+                if parts:
+                    handle = parts[0].split("?")[0].strip()
+                    if len(handle) > 2 and not handle.isdigit():
+                        return f"https://unavatar.io/facebook/{handle}"
+            except Exception:
+                pass
         
-        location = " ".join([word.capitalize() for word in q_clean.split() if len(word) > 1])
+        # High contrast UI Avatar with colorful styling
+        safe_name = urllib.parse.quote(shop_name[:25].strip() if shop_name else "Shop")
+        return f"https://ui-avatars.com/api/?name={safe_name}&background=random&color=fff&size=128&bold=true&font-size=0.4"
+
+    def clean_shop_name(self, raw_title: str) -> str:
+        """Extract clean human-readable shop name from web title."""
+        title = re.sub(r'https?://\S+', '', raw_title)
+        separators = ['|', '-', '–', '—', '•', ':', '>', '–']
+        for sep in separators:
+            if sep in title:
+                parts = [p.strip() for p in title.split(sep) if p.strip()]
+                if parts:
+                    for part in parts:
+                        if not any(stop in part.lower() for stop in ['home', 'login', 'about us', 'contact', 'facebook', 'yellow pages', 'top 10', 'best']):
+                            title = part
+                            break
+                    else:
+                        title = parts[0]
+        title = re.sub(r'[^\w\s\.\&\,\'\-\(\)]', '', title)
+        title = re.sub(r'\s+', ' ', title).strip()
+        return title[:70] if title else "Discovered Business"
+
+    def extract_location_from_query(self, query: str, country_name: str) -> str:
+        """Extract target city/area from query string."""
+        q = query.lower()
+        stopwords = ["in", "at", "near", "for", "shop", "shops", "store", "stores", "showroom", "business", "dealer", "wholesaler", "supplier", "best", "top", "online", "market", "plaza", "centre", "center"]
+        for cat_list in CATEGORY_KEYWORDS.values():
+            stopwords.extend([w.lower() for w in cat_list])
+        
+        words = q.split()
+        location_words = [w for w in words if w not in stopwords and w != country_name.lower()]
+        location = " ".join(location_words).strip().title()
         return location if location else country_name
 
-    @staticmethod
-    def clean_shop_title(title: str) -> str:
-        """Clean raw web or Facebook titles to extract genuine business name."""
-        clean = title
-        clean = re.sub(r'\s*[\|\-–—]\s*(Facebook|Official Page|Home|Instagram|YouTube|Website|BD|Bangladesh|India|UAE|USA|UK).*', '', clean, flags=re.IGNORECASE).strip()
-        clean = re.sub(r'^(Grand opening of|Welcome to|Visit us at|Visit our|Official)\s*', '', clean, flags=re.IGNORECASE).strip()
-        clean = re.sub(r'\s*\|\s*.*', '', clean).strip()
-        clean = re.sub(r'\s*\.\.\.$', '', clean).strip()
-        if len(clean) < 3 or clean.lower() in ["log in", "sign up", "facebook", "home", "about us", "contact us", "used products", "electronics"]:
-            return ""
-        return clean
+    def extract_all_phones(self, text: str, country_code: str = "BD") -> List[str]:
+        """Extract and normalize all valid phone numbers from a text snippet."""
+        if not text:
+            return []
+        
+        cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
+        pattern = cfg["phone_pattern"]
+        clean_fn = cfg["phone_clean"]
 
-    def generate_search_queries(self, query: str, country_code: str = "BD", limit: int = 20) -> List[str]:
+        # Normalize Bengali numerals
+        bengali_digits = {'০':'0', '১':'1', '২':'2', '৩':'3', '৪':'4', '৫':'5', '৬':'6', '৭':'7', '৮':'8', '৯':'9'}
+        for b_digit, e_digit in bengali_digits.items():
+            text = text.replace(b_digit, e_digit)
+
+        matches = re.finditer(pattern, text)
+        results = []
+        for m in matches:
+            raw_match = m.group(0)
+            cleaned = clean_fn(raw_match)
+            if cleaned and cleaned not in results:
+                # Basic sanity check
+                digits = re.sub(r'\D', '', cleaned)
+                if len(digits) >= 8:
+                    results.append(cleaned)
+        return results
+
+    def detect_category(self, query: str, default: str = "Retail") -> str:
+        """Infer business category from user search query."""
+        q = query.lower()
+        for cat, keywords in CATEGORY_KEYWORDS.items():
+            for kw in keywords:
+                if kw in q:
+                    return cat
+        return default
+
+    def generate_search_queries(self, query: str, country_code: str = "BD", limit: int = 50) -> List[str]:
+        """Generate smart multi-angle search query variations."""
         cfg = COUNTRY_CONFIGS.get(country_code.upper(), COUNTRY_CONFIGS["BD"])
         country_name = cfg["name"]
-        suffix = cfg["search_suffix"]
         location = self.extract_location_from_query(query, country_name)
-        operators = cfg.get("operators", ["phone", "mobile", "WhatsApp"])
+        prefixes = cfg.get("phone_prefixes", [])
         directories = cfg.get("directories", [])
 
-        queries = [
-            f"{query} {suffix}".strip(),
-            f"site:facebook.com {query} {country_name}".strip(),
-            f"site:facebook.com {query} {location} contact".strip(),
-            f"{query} whatsapp number {country_name}".strip(),
-            f"{query} contact number {location}".strip(),
-            f"{query} mobile number {country_name}".strip(),
-            f"{query} showroom address {suffix}".strip(),
-            f"{query} market {location} {suffix}".strip(),
-            f"{query} plaza {location} {suffix}".strip(),
-            f"{query} shopping complex {location}".strip(),
-            f"{query} shop list {location}".strip(),
-            f"{query} dealer {country_name}".strip(),
-        ]
+        queries = []
+        suffix = country_name if country_name.lower() not in query.lower() else ""
 
-        # Operator prefix searches (e.g. 017, 018, 019...)
-        for op in operators:
-            queries.append(f"{query} {op} {suffix}".strip())
-            queries.append(f"site:facebook.com {query} {op}".strip())
+        # 1. Base query combinations
+        queries.append(f"{query} {suffix}".strip())
+        queries.append(f"{query} contact number {suffix}".strip())
+        queries.append(f"{query} whatsapp number {suffix}".strip())
+        queries.append(f"{query} showroom address {suffix}".strip())
+        queries.append(f"{query} store {location}".strip())
 
-        # Area code / section expansions for deep search
-        for num in ["1", "2", "10", "11", "12"]:
-            queries.append(f"{query} {num} {suffix}".strip())
+        # 2. Area variations if location detected
+        if location and location.lower() != country_name.lower():
+            for sub in ["1", "2", "10", "11", "12", "Market", "Plaza", "Shopping Complex"]:
+                queries.append(f"{query} {sub} {suffix}".strip())
 
-        # Directory sites
+        # 3. Mobile operator prefix targeted queries
+        for pfx in prefixes:
+            queries.append(f"{query} {pfx} {suffix}".strip())
+
+        # 4. Social & Business pages
+        queries.append(f"site:facebook.com {query} {country_name}".strip())
+        queries.append(f"site:facebook.com {query} contact".strip())
+        queries.append(f"site:facebook.com {query} 017 OR 018 OR 019".strip())
+
+        # 5. Local B2B and YellowPages directories
         for d in directories:
             queries.append(f"site:{d} {query}".strip())
 
@@ -339,59 +291,51 @@ class LeadScraperEngine:
                     tasks.append(fetch_page(client, sq, p))
             responses = await asyncio.gather(*tasks)
 
-        raw_leads = []
+        raw_results = []
         seen_urls = set()
-        seen_titles = set()
-
         for res_list in responses:
-            for r in res_list:
-                url = r.get("url", "")
-                title = r.get("title", "")
-                content = r.get("content", "")
-                thumbnail = r.get("thumbnail") or r.get("img_src") or None
+            for item in res_list:
+                url = item.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    raw_results.append(item)
 
-                if any(skip in url.lower() for skip in [
-                    "login", "help", "recover", "terms", "privacy", "policy",
-                    "sharer", "places/clothing", "events/category", "accounts/login"
-                ]):
-                    continue
+        # Parse and structure
+        extracted_leads = []
+        for item in raw_results:
+            title = item.get("title", "")
+            content = item.get("content", "")
+            url = item.get("url", "")
+            thumbnail = item.get("thumbnail") or item.get("img_src")
 
-                clean_url = url.split("?")[0].rstrip("/")
-                if clean_url in seen_urls:
-                    continue
-                seen_urls.add(clean_url)
+            clean_name = self.clean_shop_name(title)
+            phones = self.extract_all_phones(f"{title} {content} {url}", country_code=country_code)
 
-                shop_name = self.clean_shop_title(title)
-                if not shop_name:
-                    continue
+            # Extract email
+            email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', f"{title} {content}")
+            email = email_match.group(0) if email_match else ""
 
-                combined_text = f"{title} {content} {clean_url}"
-                phones = self.extract_all_phones(combined_text, country_code=country_code)
-                email = self.extract_email(combined_text)
-                website = self.extract_website(combined_text)
-                fb_url = clean_url if "facebook.com" in clean_url else None
+            # Check if Facebook or website
+            fb_url = url if "facebook.com" in url else None
+            website = url if not fb_url else ""
 
-                extracted_address = f"{location}, {country_name}"
-                addr_match = re.search(r'([A-Za-z0-9\s,\-\.]{5,60}(?:Market|Bazar|Road|Holding|Ward|Showroom|Center|Plaza|Complex|Town|Street|Avenue|Sector|Block|City)[A-Za-z0-9\s,\-\.]*)', content, flags=re.IGNORECASE)
-                if addr_match:
-                    found_addr = addr_match.group(1).strip()
-                    if len(found_addr) > 8:
-                        extracted_address = f"{found_addr}, {country_name}"
+            # Extract rough address
+            address_match = re.search(rf'(?:at|in|near|road|sector|block|level|shop\s*(?:no\.?)?)\s*([A-Za-z0-9\s,\-\./#]+(?:{location}|{country_name}))', f"{title} {content}", re.IGNORECASE)
+            address = address_match.group(0).strip() if address_match else f"{location}, {country_name}"
 
-                raw_leads.append({
-                    "shop_name": shop_name,
-                    "phones": phones,
-                    "phone": phones[0] if phones else None,
-                    "email": email,
-                    "website": website,
-                    "facebook_url": fb_url,
-                    "source_url": clean_url,
-                    "content": content,
-                    "thumbnail": thumbnail if thumbnail and not thumbnail.startswith("http://searxng") else None,
-                    "address": extracted_address,
-                })
+            extracted_leads.append({
+                "shop_name": clean_name,
+                "phones": phones,
+                "phone": phones[0] if phones else "",
+                "email": email,
+                "website": website,
+                "facebook_url": fb_url,
+                "address": address[:120],
+                "thumbnail": thumbnail,
+                "content": content
+            })
 
-        return raw_leads
+        return extracted_leads
 
     async def search_and_generate_leads(
         self,
@@ -431,6 +375,9 @@ class LeadScraperEngine:
             address = r.get("address") or f"{location}, {country_name}"
             thumb = r.get("thumbnail")
             content = r.get("content") or ""
+            
+            # Generate best visual avatar / logo
+            avatar_url = self.generate_avatar_url(name, website=website, facebook_url=fb_url, thumbnail=thumb)
 
             if phones:
                 for p in phones:
@@ -454,7 +401,7 @@ class LeadScraperEngine:
                         "address": address,
                         "facebook_url": fb_url,
                         "google_maps_url": gmaps_url,
-                        "profile_pic": thumb,
+                        "profile_pic": avatar_url,
                         "notes": f"{content[:160]}..." if content else f"Business located in {location}, {country_name}",
                         "is_on_whatsapp": False,
                         "whatsapp_profile_pic": None,
@@ -480,7 +427,7 @@ class LeadScraperEngine:
                     "address": address,
                     "facebook_url": fb_url,
                     "google_maps_url": gmaps_url,
-                    "profile_pic": thumb,
+                    "profile_pic": avatar_url,
                     "notes": f"{content[:160]}..." if content else f"Business located in {location}, {country_name}",
                     "is_on_whatsapp": False,
                     "whatsapp_profile_pic": None,
@@ -540,11 +487,22 @@ class LeadScraperEngine:
                     data = resp.json()
                     is_wa = data.get("exists", False)
                     pic = data.get("profilePicUrl")
+                    name_wa = data.get("name")
+                    about = data.get("about")
                     leads[i]["is_on_whatsapp"] = is_wa
+                    if name_wa:
+                        leads[i]["whatsapp_name"] = name_wa
+                    if about:
+                        leads[i]["whatsapp_about"] = about
                     if pic:
                         leads[i]["whatsapp_profile_pic"] = pic
-                        if not leads[i].get("profile_pic"):
-                            leads[i]["profile_pic"] = pic
+                        leads[i]["profile_pic"] = pic
+                    elif not leads[i].get("profile_pic"):
+                        leads[i]["profile_pic"] = self.generate_avatar_url(
+                            leads[i]["shop_name"],
+                            website=leads[i].get("website"),
+                            facebook_url=leads[i].get("facebook_url")
+                        )
                 else:
                     leads[i]["is_on_whatsapp"] = False
 

@@ -106,6 +106,23 @@ const LEAD_STATUSES = [
   { value: 'LOST', label: 'Lost / Closed', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' },
 ];
 
+
+const getLeadAvatarSrc = (lead: { shop_name?: string; whatsapp_profile_pic?: string | null; profile_pic?: string | null; website?: string | null; facebook_url?: string | null }) => {
+  const pic = lead.whatsapp_profile_pic || lead.profile_pic;
+  if (pic && !pic.includes('searxng:8080')) return pic;
+  if (lead.website) {
+    try {
+      const url = new URL(lead.website.startsWith('http') ? lead.website : `https://${lead.website}`);
+      const domain = url.hostname.replace(/^www\./, '');
+      if (domain && domain.includes('.')) {
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+      }
+    } catch {}
+  }
+  const safeName = encodeURIComponent((lead.shop_name || 'Shop').slice(0, 20));
+  return `https://ui-avatars.com/api/?name=${safeName}&background=6366f1&color=fff&size=128&bold=true`;
+};
+
 export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: LeadManagerProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [categories, setCategories] = useState<LeadCategory[]>([]);
@@ -1101,7 +1118,8 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                                 }
                               >
                                 <Avatar
-                                  src={lead.whatsapp_profile_pic || undefined}
+                                  src={getLeadAvatarSrc(lead)}
+                                  alt={lead.shop_name}
                                   sx={{
                                     width: 42,
                                     height: 42,
@@ -1109,7 +1127,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                                     fontWeight: 700,
                                     fontSize: '0.9rem',
                                     boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-                                    border: lead.whatsapp_profile_pic ? '2px solid #10b981' : 'none',
+                                    border: lead.whatsapp_profile_pic ? '2px solid #10b981' : '1px solid #e2e8f0',
                                   }}
                                 >
                                   {lead.shop_name.charAt(0).toUpperCase()}
@@ -2524,47 +2542,35 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
 
                           <TableCell>
                             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                              {(lead.whatsapp_profile_pic || lead.profile_pic) ? (
-                                <Avatar
-                                  src={lead.whatsapp_profile_pic || lead.profile_pic}
-                                  sx={{
-                                    width: 38,
-                                    height: 38,
-                                    borderRadius: 2,
-                                    cursor: 'pointer',
-                                    border: '1px solid #cbd5e1',
-                                    '&:hover': {
-                                      transform: 'scale(1.08)',
-                                      borderColor: '#6366f1',
-                                    },
-                                  }}
-                                  onClick={() => {
-                                    const imgUrl = lead.whatsapp_profile_pic || lead.profile_pic;
-                                    if (imgUrl) {
-                                      setPreviewImage({
-                                        url: imgUrl,
-                                        title: lead.shop_name,
-                                        subtitle: `${lead.phone} • ${lead.address || 'Shop Profile'}`,
-                                      });
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <Avatar
-                                  sx={{
-                                    width: 38,
-                                    height: 38,
-                                    borderRadius: 2,
-                                    bgcolor: '#f1f5f9',
-                                    color: '#475569',
-                                    fontWeight: 800,
-                                    fontSize: '0.9rem',
-                                    border: '1px solid #e2e8f0',
-                                  }}
-                                >
-                                  {lead.shop_name.charAt(0).toUpperCase()}
-                                </Avatar>
-                              )}
+                              <Avatar
+                                src={getLeadAvatarSrc(lead)}
+                                alt={lead.shop_name}
+                                sx={{
+                                  width: 38,
+                                  height: 38,
+                                  borderRadius: 2,
+                                  cursor: 'pointer',
+                                  border: '1px solid #cbd5e1',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                  '&:hover': {
+                                    transform: 'scale(1.12)',
+                                    borderColor: '#6366f1',
+                                    boxShadow: '0 4px 12px rgba(99,102,241,0.2)',
+                                  },
+                                }}
+                                onClick={() => {
+                                  const imgUrl = getLeadAvatarSrc(lead);
+                                  if (imgUrl) {
+                                    setPreviewImage({
+                                      url: imgUrl,
+                                      title: lead.shop_name,
+                                      subtitle: `${lead.phone} • ${lead.address || 'Shop Profile'}`,
+                                    });
+                                  }
+                                }}
+                              >
+                                {lead.shop_name.charAt(0).toUpperCase()}
+                              </Avatar>
                               <Box>
                                 <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a' }}>
                                   {lead.shop_name}
