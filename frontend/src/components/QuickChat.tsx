@@ -13,17 +13,10 @@ import {
   Stack,
   CircularProgress,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Avatar,
   RadioGroup,
   FormControlLabel,
   Radio,
-  Tooltip,
   IconButton,
   Dialog,
   DialogContent,
@@ -32,30 +25,14 @@ import SendIcon from '@mui/icons-material/Send';
 import ChatIcon from '@mui/icons-material/Chat';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import CloseIcon from '@mui/icons-material/Close';
-import HistoryIcon from '@mui/icons-material/History';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import ImageIcon from '@mui/icons-material/Image';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HighQualityIcon from '@mui/icons-material/HighQuality';
 import { WhatsAppService } from '@/lib/api';
 
 interface QuickChatProps {
   initialPhone?: string;
   onOpenLiveChat?: (phone: string) => void;
-}
-
-interface RecentMessage {
-  id: number;
-  phone: string;
-  sender_name?: string;
-  message_text?: string;
-  media_type?: string;
-  media_url?: string;
-  file_name?: string;
-  timestamp: string;
-  whatsapp_message_id?: string;
 }
 
 export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickChatProps) {
@@ -80,8 +57,6 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
     sizeFormatted: string;
   } | null>(null);
 
-  const [recentMessages, setRecentMessages] = useState<RecentMessage[]>([]);
-  const [loadingRecent, setLoadingRecent] = useState<boolean>(false);
   const [previewModalImg, setPreviewModalImg] = useState<string | null>(null);
 
   const formatFileSize = (bytes: number): string => {
@@ -91,22 +66,6 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
-
-  const fetchRecent = async () => {
-    try {
-      setLoadingRecent(true);
-      const res = await WhatsAppService.getRecentDirect();
-      setRecentMessages(res.data || []);
-    } catch (e) {
-      console.error('Failed to load recent messages:', e);
-    } finally {
-      setLoadingRecent(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRecent();
-  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -158,11 +117,10 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
 
       setStatus({
         type: 'success',
-        text: `Message and media dispatched & recorded to database! (ID: ${res.data.messageId || 'OK'})`,
+        text: `Message sent successfully! (ID: ${res.data.messageId || 'OK'})`,
       });
       setMessage('');
       setAttachedFile(null);
-      fetchRecent();
     } catch (err: any) {
       setStatus({
         type: 'error',
@@ -191,13 +149,13 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
               <ChatIcon sx={{ color: '#10b981' }} /> Direct Quick Message (1-to-1 Send)
             </Typography>
             <Chip
-              label="Instant Live Delivery"
+              label="Stateless Direct Dispatch"
               size="small"
               sx={{ bgcolor: '#ecfdf5', color: '#059669', fontWeight: 700, border: '1px solid #a7f3d0' }}
             />
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-            Send instant high-resolution photos, documents, and text messages directly to any WhatsApp phone number with auto-database persistence.
+            Send instant high-resolution photos, documents, and messages directly without storing any media files or chat logs on the server.
           </Typography>
 
           {status && (
@@ -355,94 +313,6 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
               </Button>
             </Stack>
           </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Recently Sent Messages Card */}
-      <Card
-        sx={{
-          borderRadius: 3,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-          overflow: 'hidden',
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1, color: '#0f172a' }}>
-              <HistoryIcon sx={{ color: '#6366f1' }} /> Recent 1-to-1 Dispatches
-            </Typography>
-            <Button size="small" onClick={fetchRecent} sx={{ textTransform: 'none', fontWeight: 600 }}>
-              Refresh History
-            </Button>
-          </Box>
-
-          {loadingRecent ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress size={28} />
-            </Box>
-          ) : recentMessages.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4, color: '#94a3b8' }}>
-              <Typography variant="body2">No recent outgoing messages yet.</Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, border: '1px solid #e2e8f0' }}>
-              <Table size="small">
-                <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800, color: '#475569' }}>Recipient</TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: '#475569' }}>Message / Media</TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: '#475569' }}>Time Sent</TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: '#475569' }} align="right">Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentMessages.map((msg) => (
-                    <TableRow key={msg.id} hover>
-                      <TableCell sx={{ fontWeight: 700, color: '#0f172a' }}>
-                        {msg.phone}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          {msg.media_url && (
-                            <Tooltip title="Click to view full image">
-                              <Avatar
-                                src={msg.media_url}
-                                variant="rounded"
-                                sx={{ width: 36, height: 36, border: '1px solid #e2e8f0', cursor: 'pointer' }}
-                                onClick={() => setPreviewModalImg(msg.media_url || null)}
-                              >
-                                <ImageIcon fontSize="small" />
-                              </Avatar>
-                            </Tooltip>
-                          )}
-                          <Typography variant="body2" sx={{ color: '#334155', maxWidth: 300 }} noWrap>
-                            {msg.message_text || (msg.media_type ? `[${msg.media_type.toUpperCase()}] ${msg.file_name || ''}` : '—')}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: '#64748b', fontSize: '0.82rem' }}>
-                        {new Date(msg.timestamp).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Chip
-                          icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />}
-                          label="Saved & Sent"
-                          size="small"
-                          sx={{ bgcolor: '#ecfdf5', color: '#059669', fontWeight: 700, fontSize: '0.72rem' }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
         </CardContent>
       </Card>
 

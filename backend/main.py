@@ -391,20 +391,6 @@ async def delete_template(template_id: int):
 
 # --- DIRECT & BULK SENDING LOGIC ---
 
-@app.get("/api/messages/recent-direct")
-async def get_recent_direct_messages(limit: int = 8):
-    def _get_recent():
-        return list(
-            ChatMessage.objects.filter(is_from_me=True)
-            .order_by('-timestamp')[:limit]
-            .values('id', 'phone', 'sender_name', 'message_text', 'media_type', 'media_url', 'file_name', 'timestamp', 'whatsapp_msg_id')
-        )
-    items = await sync_to_async(_get_recent)()
-    for it in items:
-        if it.get('timestamp'):
-            it['timestamp'] = it['timestamp'].isoformat()
-    return items
-
 @app.post("/api/messages/send-direct")
 async def send_direct_message(payload: DirectSendRequest):
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -422,64 +408,10 @@ async def send_direct_message(payload: DirectSendRequest):
             if resp.status_code != 200 or not data.get("success"):
                 raise HTTPException(status_code=400, detail=data.get("error", "Failed to send"))
 
-            # Save media file locally if base64 media was sent
-            saved_media_url = None
-            saved_media_type = payload.media_type
-            if payload.media_base64:
-                import base64
-                import uuid
-                import os
-                try:
-                    media_dir = "/app/media/direct_uploads"
-                    os.makedirs(media_dir, exist_ok=True)
-                    ext = ".jpg"
-                    if payload.file_name and "." in payload.file_name:
-                        ext = os.path.splitext(payload.file_name)[1]
-                    elif payload.mime_type:
-                        if "png" in payload.mime_type: ext = ".png"
-                        elif "pdf" in payload.mime_type: ext = ".pdf"
-                        elif "webp" in payload.mime_type: ext = ".webp"
-                        elif "mp4" in payload.mime_type: ext = ".mp4"
-
-                    filename = f"quick_{uuid.uuid4().hex[:10]}{ext}"
-                    filepath = os.path.join(media_dir, filename)
-                    with open(filepath, "wb") as f:
-                        f.write(base64.b64decode(payload.media_base64))
-                    saved_media_url = f"/media/direct_uploads/{filename}"
-                except Exception as me:
-                    print(f"Failed to save local media: {me}")
-
-            # Save to ChatMessage database so it appears in Live Chat & history
-            def _save_chat_msg():
-                raw_p = payload.phone.replace("+", "").replace("-", "").replace(" ", "")
-                if raw_p.startswith("8801") and len(raw_p) >= 13:
-                    db_phone = "0" + raw_p[2:]
-                else:
-                    db_phone = raw_p
-
-                jid = data.get("jid") or (f"88{db_phone}@s.whatsapp.net" if db_phone.startswith("01") else f"{db_phone}@s.whatsapp.net")
-                return ChatMessage.objects.create(
-                    phone=db_phone,
-                    jid=jid,
-                    sender_name="StockWhisk Admin",
-                    message_text=payload.message or "",
-                    is_from_me=True,
-                    is_read=True,
-                    media_type=saved_media_type,
-                    media_url=saved_media_url,
-                    file_name=payload.file_name,
-                    whatsapp_message_id=data.get("whatsapp_msg_id") or data.get("messageId")
-                )
-            await sync_to_async(_save_chat_msg)()
-
-            # Automatically track lead outreach
+            # Automatically track lead outreach without saving disk media or chat records
             await sync_to_async(mark_lead_contacted_by_phone)(payload.phone)
 
-            return {
-                **data,
-                "media_url": saved_media_url,
-                "saved_to_db": True
-            }
+            return data
         except HTTPException:
             raise
         except Exception as e:
