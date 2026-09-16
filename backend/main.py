@@ -1264,18 +1264,21 @@ async def get_chat_list():
     # Fast single batch resolve from whatsapp-engine
     resolved_meta = {}
     try:
-        async with httpx.AsyncClient(timeout=1.2) as client:
+        async with httpx.AsyncClient(timeout=2.5) as client:
             resp = await client.post(
                 f"{WHATSAPP_ENGINE_URL}/api/resolve-chats",
                 json={"chats": [{"phone": c['phone'], "jid": c['jid']} for c in db_chats]}
             )
             if resp.status_code == 200:
                 data = resp.json()
-                for item in data.get("resolved", []):
-                    if item.get("phone"):
-                        resolved_meta[item["phone"]] = item
-                    if item.get("jid"):
-                        resolved_meta[item["jid"]] = item
+                if "results" in data and isinstance(data["results"], dict):
+                    resolved_meta = data["results"]
+                elif "resolved" in data and isinstance(data["resolved"], list):
+                    for item in data["resolved"]:
+                        if item.get("phone"):
+                            resolved_meta[item["phone"]] = item
+                        if item.get("jid"):
+                            resolved_meta[item["jid"]] = item
     except Exception:
         pass
 
@@ -1283,12 +1286,12 @@ async def get_chat_list():
     for c in db_chats:
         phone = c['phone']
         jid = c.get('jid') or f"{phone}@s.whatsapp.net"
-        meta = resolved_meta.get(phone) or resolved_meta.get(jid) or {}
+        meta = resolved_meta.get(phone) or resolved_meta.get(jid) or resolved_meta.get(phone.replace('8801', '01')) or resolved_meta.get('88' + phone if phone.startswith('01') else phone) or {}
 
-        pic = c.get('lead_pic') or meta.get('profile_picture') or _chat_meta_cache.get(jid, {}).get('profilePictureUrl')
+        pic = c.get('lead_pic') or meta.get('profile_picture') or meta.get('profilePictureUrl') or _chat_meta_cache.get(jid, {}).get('profilePictureUrl')
         name = meta.get('name') or c.get('name')
-        if not name or name == phone or name == 'WhatsApp Group':
-            name = _chat_meta_cache.get(jid, {}).get('name') or name or phone
+        if not name or name == phone or name == 'WhatsApp Group' or '(WhatsApp Group)' in str(name):
+            name = _chat_meta_cache.get(jid, {}).get('name') or meta.get('name') or name or phone
 
         disp_name = name or phone
         while disp_name.startswith('00') and len(disp_name) > 2:

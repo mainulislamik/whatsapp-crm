@@ -742,9 +742,22 @@ app.post('/api/resolve-chats', async (req, res) => {
         const gKey = rawJid.includes('@g.us') ? rawJid : rawJid + '@g.us';
         const ginfo = groupsStore.get(gKey) || groupsStore.get(rawJid) || groupsStore.get(rawJid.split('@')[0]) || groupsStore.get(phone);
         name = ginfo?.subject || null;
+
+        if (!name) {
+          try {
+            const gmeta = await sock.groupMetadata(gKey);
+            if (gmeta && gmeta.subject) {
+              name = gmeta.subject;
+              groupsStore.set(gKey, { subject: gmeta.subject, participants: gmeta.participants });
+              groupsStore.set(rawJid, { subject: gmeta.subject });
+              groupsStore.set(phone, { subject: gmeta.subject });
+            }
+          } catch (e) {}
+        }
       } else {
-        const cinfo = contactsStore.get(rawJid) || contactsStore.get(rawJid.split('@')[0]) || contactsStore.get(phone);
-        name = cinfo?.name || cinfo?.notify || cinfo?.verifiedName || null;
+        const mappedPhone = lidToPhoneMap.get(rawJid) || lidToPhoneMap.get(phone) || rawJid;
+        const cinfo = contactsStore.get(rawJid) || contactsStore.get(rawJid.split('@')[0]) || contactsStore.get(phone) || contactsStore.get(mappedPhone);
+        name = cinfo?.name || cinfo?.notify || cinfo?.verifiedName || cinfo?.pushName || null;
       }
 
       if (!pic) {
@@ -761,6 +774,7 @@ app.post('/api/resolve-chats', async (req, res) => {
 
       const resObj = {
         name,
+        profile_picture: pic,
         profilePictureUrl: pic,
         isGroup
       };
@@ -770,7 +784,7 @@ app.post('/api/resolve-chats', async (req, res) => {
     });
 
     await Promise.allSettled(promises);
-    res.json({ results });
+    res.json({ results, resolved: Object.entries(results).map(([k, v]) => ({ phone: k, ...v })) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
