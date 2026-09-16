@@ -1197,43 +1197,57 @@ _chat_meta_cache = {}
 
 @app.get("/api/chats", response_model=List[ChatListItem])
 async def get_chat_list():
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            st = await client.get(f"{WHATSAPP_ENGINE_URL}/status")
-            if st.status_code == 200 and st.json().get("status") != "CONNECTED":
-                return []
-    except Exception:
-        return []
     def _get_chats_db():
-        phones = list(set(ChatMessage.objects.values_list('phone', flat=True)))
+        from django.db.models import Max, Count
+
+        latest_ids = list(ChatMessage.objects.values('phone').annotate(max_id=Max('id')).values_list('max_id', flat=True))
+        if not latest_ids:
+            return []
+
+        latest_msgs = {
+            m.phone: m
+            for m in ChatMessage.objects.filter(id__in=latest_ids).order_by('-timestamp')
+        }
+
+        unread_counts = {
+            row['phone']: row['c']
+            for row in ChatMessage.objects.filter(is_from_me=False, is_read=False)
+                .values('phone')
+                .annotate(c=Count('id'))
+        }
+
+        # Cache leads by clean phone numbers
+        leads_clean = {}
+        for l in Lead.objects.all():
+            clean = l.phone.replace('+', '').replace('-', '').replace(' ', '')
+            leads_clean[clean] = l
+            if clean.startswith('8801'):
+                leads_clean['0' + clean[2:]] = l
+            elif clean.startswith('01'):
+                leads_clean['88' + clean] = l
+
         results = []
-        for p in phones:
-            latest = ChatMessage.objects.filter(phone=p).order_by('-timestamp').first()
-            if not latest:
-                continue
-            unread = ChatMessage.objects.filter(phone=p, is_from_me=False, is_read=False).count()
-            lead = Lead.objects.filter(phone=p).first()
-            
+        for p, latest in latest_msgs.items():
+            unread = unread_counts.get(p, 0)
+            clean_p = p.replace('@s.whatsapp.net', '').replace('@g.us', '').replace('+', '').replace('-', '').replace(' ', '')
+            lead = leads_clean.get(clean_p) or leads_clean.get(p)
+
             is_group = p.endswith('@g.us') or (latest.jid and latest.jid.endswith('@g.us'))
-            
+
             chat_name = ''
             if is_group:
                 chat_name = getattr(latest, 'group_name', '') or latest.sender_name or 'WhatsApp Group'
             elif lead and (lead.whatsapp_name or lead.owner_name or lead.shop_name):
                 chat_name = lead.whatsapp_name or lead.owner_name or lead.shop_name
+            elif latest.sender_name and latest.sender_name != 'Me' and not latest.is_from_me:
+                chat_name = latest.sender_name
             else:
-                incoming = ChatMessage.objects.filter(phone=p, is_from_me=False).exclude(sender_name='').exclude(sender_name='Me').order_by('-timestamp').first()
-                if incoming and incoming.sender_name:
-                    chat_name = incoming.sender_name
-                elif latest.sender_name and latest.sender_name != 'Me' and not latest.is_from_me:
-                    chat_name = latest.sender_name
-                else:
-                    chat_name = p
-                    
+                chat_name = p
+
             results.append({
                 'phone': p,
                 'name': chat_name,
-                'jid': latest.jid,
+                'jid': latest.jid or (f"{p}@g.us" if is_group else f"{p}@s.whatsapp.net"),
                 'last_message': latest.message_text[:80] if latest.message_text else (latest.media_type or 'Media'),
                 'last_message_time': latest.timestamp.isoformat(),
                 'unread_count': unread,
@@ -1244,45 +1258,52 @@ async def get_chat_list():
         return results
 
     db_chats = await sync_to_async(_get_chats_db)()
-    
+    if not db_chats:
+        return []
+
+    # Fast single batch resolve from whatsapp-engine
+    resolved_meta = {}
+    try:
+        async with httpx.AsyncClient(timeout=1.2) as client:
+            resp = await client.post(
+                f"{WHATSAPP_ENGINE_URL}/api/resolve-chats",
+                json={"chats": [{"phone": c['phone'], "jid": c['jid']} for c in db_chats]}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                for item in data.get("resolved", []):
+                    if item.get("phone"):
+                        resolved_meta[item["phone"]] = item
+                    if item.get("jid"):
+                        resolved_meta[item["jid"]] = item
+    except Exception:
+        pass
+
     final_chats = []
-    async with httpx.AsyncClient(timeout=4.0) as client:
-        for c in db_chats:
-            jid = c.get('jid') or f"{c['phone']}@s.whatsapp.net"
-            pic = c.get('lead_pic')
-            name = c.get('name')
-            
-            if jid in _chat_meta_cache:
-                cached = _chat_meta_cache[jid]
-                pic = pic or cached.get('profilePictureUrl')
-                if not name or name == c['phone']:
-                    name = cached.get('name') or name
-            else:
-                try:
-                    resp = await client.get(f"{WHATSAPP_ENGINE_URL}/chat-profile?jid={jid}")
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        _chat_meta_cache[jid] = data
-                        pic = pic or data.get('profilePictureUrl')
-                        if (not name or name == c['phone'] or name == 'WhatsApp Group' or '(WhatsApp Group)' in str(name) or c['is_group']) and data.get('name'):
-                            name = data.get('name')
-                except Exception:
-                    pass
-            
-            disp_name = name or c['phone']
-            while disp_name.startswith('00') and len(disp_name) > 2:
-                disp_name = disp_name[1:]
-            
-            final_chats.append({
-                'phone': c['phone'],
-                'name': disp_name,
-                'jid': jid,
-                'last_message': c['last_message'],
-                'last_message_time': c['last_message_time'],
-                'unread_count': c['unread_count'],
-                'is_on_whatsapp': c['is_on_whatsapp'],
-                'profile_picture': pic
-            })
+    for c in db_chats:
+        phone = c['phone']
+        jid = c.get('jid') or f"{phone}@s.whatsapp.net"
+        meta = resolved_meta.get(phone) or resolved_meta.get(jid) or {}
+
+        pic = c.get('lead_pic') or meta.get('profile_picture') or _chat_meta_cache.get(jid, {}).get('profilePictureUrl')
+        name = meta.get('name') or c.get('name')
+        if not name or name == phone or name == 'WhatsApp Group':
+            name = _chat_meta_cache.get(jid, {}).get('name') or name or phone
+
+        disp_name = name or phone
+        while disp_name.startswith('00') and len(disp_name) > 2:
+            disp_name = disp_name[1:]
+
+        final_chats.append({
+            'phone': phone,
+            'name': disp_name,
+            'jid': jid,
+            'last_message': c['last_message'],
+            'last_message_time': c['last_message_time'],
+            'unread_count': c['unread_count'],
+            'is_on_whatsapp': c['is_on_whatsapp'],
+            'profile_picture': pic
+        })
 
     final_chats.sort(key=lambda x: x['last_message_time'], reverse=True)
     return final_chats

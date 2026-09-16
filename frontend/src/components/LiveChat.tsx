@@ -112,19 +112,11 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   }, [messages, scrollToBottom]);
 
   // Load chats list
-  const fetchChats = async () => {
+  const fetchChats = async (isInitial = false) => {
     try {
-      try {
-        const st = await WhatsAppService.getStatus();
-        const isConn = st.data?.status === 'CONNECTED';
-        setWaConnected(isConn);
-        if (!isConn) {
-          setChats([]);
-          setMessages([]);
-          setSelectedChat(null);
-          return;
-        }
-      } catch (e) {}
+      if (isInitial && chats.length === 0) {
+        setLoading(true);
+      }
       const res = await ChatService.list();
       const rawChats: ChatListItem[] = res.data || [];
       const updated = rawChats.map((c) => {
@@ -134,8 +126,13 @@ export default function LiveChat({ onBack }: LiveChatProps) {
         return c;
       });
       setChats(updated);
+      setWaConnected(true);
     } catch (err) {
       console.error('Failed to fetch chats:', err);
+    } finally {
+      if (isInitial) {
+        setLoading(false);
+      }
     }
   };
 
@@ -167,8 +164,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetchChats().finally(() => setLoading(false));
+    fetchChats(true);
   }, []);
 
   // Poll chats list every 6 seconds
@@ -404,7 +400,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
             </Box>
           </Stack>
           <Tooltip title="Refresh chats">
-            <IconButton size="small" onClick={fetchChats} sx={{ color: '#64748b' }}>
+            <IconButton size="small" onClick={() => fetchChats(true)} sx={{ color: '#64748b' }}>
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
