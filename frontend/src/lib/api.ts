@@ -152,6 +152,7 @@ export const WhatsAppService = {
     file_name?: string;
     mime_type?: string;
   }) => api.post('/messages/send-direct', data),
+  getRecentDirect: () => api.get('/messages/recent-direct'),
 };
 
 export const ContactService = {
