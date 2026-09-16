@@ -22,6 +22,7 @@ import {
   Tooltip,
   LinearProgress,
   Stack,
+  Alert,
 } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -32,6 +33,8 @@ import ImageIcon from '@mui/icons-material/Image';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ReplayIcon from '@mui/icons-material/Replay';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { Campaign, CampaignLog, BroadcastService } from '@/lib/api';
 
 export default function CampaignHistory() {
@@ -40,6 +43,7 @@ export default function CampaignHistory() {
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
   const [openDialog, setOpenDialog] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -80,6 +84,33 @@ export default function CampaignHistory() {
     }
   };
 
+  const handleRetryFailed = async (campId: number) => {
+    if (!confirm('Retry sending messages to all failed recipients in this campaign?')) return;
+    setActionLoading(campId);
+    try {
+      const res = await BroadcastService.retryFailed(campId);
+      alert(res.data.message || 'Started retrying failed messages.');
+      fetchCampaigns();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to retry campaign');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleResume = async (campId: number) => {
+    setActionLoading(campId);
+    try {
+      const res = await BroadcastService.resume(campId);
+      alert(res.data.message || 'Campaign resumed.');
+      fetchCampaigns();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to resume campaign');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDownloadCsv = (campId: number) => {
     window.open(BroadcastService.getExportCsvUrl(campId), '_blank');
   };
@@ -90,6 +121,8 @@ export default function CampaignHistory() {
         return <Chip label="Completed" color="success" size="small" />;
       case 'RUNNING':
         return <Chip label="Running" color="warning" size="small" />;
+      case 'PAUSED':
+        return <Chip label="Paused (Disconnected)" color="warning" variant="outlined" size="small" />;
       case 'SCHEDULED':
         return <Chip label="Scheduled" color="secondary" size="small" />;
       case 'PENDING':
@@ -112,7 +145,7 @@ export default function CampaignHistory() {
               <HistoryIcon /> Campaign & Delivery History
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Live delivery results, recipient logs, and CSV export for all campaigns.
+              Live delivery results, recipient logs, anti-ban pacing, and instant retry for failed messages.
             </Typography>
           </Box>
           <Button
@@ -169,7 +202,7 @@ export default function CampaignHistory() {
                     </TableCell>
                     <TableCell>{c.total_recipients}</TableCell>
                     <TableCell sx={{ color: 'success.main', fontWeight: 600 }}>{c.sent_count}</TableCell>
-                    <TableCell sx={{ color: c.failed_count > 0 ? 'error.main' : 'text.secondary' }}>
+                    <TableCell sx={{ color: c.failed_count > 0 ? 'error.main' : 'text.secondary', fontWeight: c.failed_count > 0 ? 700 : 400 }}>
                       {c.failed_count}
                     </TableCell>
                     <TableCell>{getStatusChip(c.status)}</TableCell>
@@ -179,7 +212,35 @@ export default function CampaignHistory() {
                         : new Date(c.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell align="right">
-                      <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                      <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {c.failed_count > 0 && c.status !== 'RUNNING' && (
+                          <Tooltip title="Retry Failed Messages">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="warning"
+                                disabled={actionLoading === c.id}
+                                onClick={() => handleRetryFailed(c.id)}
+                              >
+                                <ReplayIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        {c.status === 'PAUSED' && (
+                          <Tooltip title="Resume Campaign">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="success"
+                                disabled={actionLoading === c.id}
+                                onClick={() => handleResume(c.id)}
+                              >
+                                <PlayArrowIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
                         <Tooltip title="View Logs">
                           <IconButton size="small" color="primary" onClick={() => handleViewLogs(c)}>
                             <VisibilityIcon fontSize="small" />
@@ -210,18 +271,39 @@ export default function CampaignHistory() {
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>Campaign Logs: {activeCampaign?.title}</Box>
-            {activeCampaign && (
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<DownloadIcon />}
-                onClick={() => handleDownloadCsv(activeCampaign.id)}
-              >
-                CSV Report
-              </Button>
-            )}
+            <Stack direction="row" spacing={1}>
+              {activeCampaign && activeCampaign.failed_count > 0 && activeCampaign.status !== 'RUNNING' && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  size="small"
+                  startIcon={<ReplayIcon />}
+                  onClick={() => {
+                    setOpenDialog(false);
+                    handleRetryFailed(activeCampaign.id);
+                  }}
+                >
+                  Retry ({activeCampaign.failed_count}) Failed
+                </Button>
+              )}
+              {activeCampaign && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<DownloadIcon />}
+                  onClick={() => handleDownloadCsv(activeCampaign.id)}
+                >
+                  CSV Report
+                </Button>
+              )}
+            </Stack>
           </DialogTitle>
           <DialogContent>
+            {activeCampaign && activeCampaign.failed_count > 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <strong>{activeCampaign.failed_count}</strong> messages failed during broadcast. Hover over or read the error column below, or click <strong>Retry Failed</strong> to re-send.
+              </Alert>
+            )}
             <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1, maxHeight: 400 }}>
               <Table size="small" stickyHeader>
                 <TableHead>
@@ -229,6 +311,7 @@ export default function CampaignHistory() {
                     <TableCell>Recipient Name</TableCell>
                     <TableCell>Phone Number</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Error / Reason</TableCell>
                     <TableCell>Message Preview</TableCell>
                     <TableCell>Sent Time</TableCell>
                   </TableRow>
@@ -237,7 +320,7 @@ export default function CampaignHistory() {
                   {selectedLogs?.map((log) => (
                     <TableRow key={log.id} hover>
                       <TableCell>{log.contact_name || '—'}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace' }}>{log.phone || '—'}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{log.phone || '—'}</TableCell>
                       <TableCell>
                         {log.status === 'SENT' ? (
                           <Chip
@@ -247,19 +330,20 @@ export default function CampaignHistory() {
                             size="small"
                           />
                         ) : log.status === 'FAILED' ? (
-                          <Tooltip title={log.error_message || 'Error'}>
-                            <Chip
-                              icon={<ErrorOutlineIcon />}
-                              label="Failed"
-                              color="error"
-                              size="small"
-                            />
-                          </Tooltip>
+                          <Chip
+                            icon={<ErrorOutlineIcon />}
+                            label="Failed"
+                            color="error"
+                            size="small"
+                          />
                         ) : (
                           <Chip label="Pending" size="small" />
                         )}
                       </TableCell>
-                      <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <TableCell sx={{ color: log.status === 'FAILED' ? 'error.main' : 'text.secondary', fontSize: '0.8rem', maxWidth: 180 }}>
+                        {log.error_message || '—'}
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                         {log.message}
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem' }}>

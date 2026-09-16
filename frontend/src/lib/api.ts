@@ -204,6 +204,8 @@ export const TemplateService = {
 
 export const BroadcastService = {
   listCampaigns: () => api.get<Campaign[]>('/campaigns'),
+  retryFailed: (id: number) => api.post<{ success: boolean; message: string; count: number }>(`/campaigns/${id}/retry-failed`),
+  resume: (id: number) => api.post<{ success: boolean; message: string; count: number }>(`/campaigns/${id}/resume`),
   getLogs: (id: number) =>
     api.get<{
       campaign_id: number;

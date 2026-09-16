@@ -13,6 +13,7 @@ const QRCode = require('qrcode');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const Boom = require('@hapi/boom');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -40,6 +41,8 @@ let lastQr = null;
 let lastQrDataUrl = null;
 let connectionStatus = 'DISCONNECTED';
 let connectedUser = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
 
 // In-memory caches for fast lookup
 const contactsStore = new Map();
@@ -249,18 +252,38 @@ async function fetchGroupsAndPictures() {
 
 async function connectToWhatsApp() {
   connectionStatus = 'CONNECTING';
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  const { version } = await fetchLatestBaileysVersion();
+  let state, saveCreds;
+  try {
+    const auth = await useMultiFileAuthState(AUTH_DIR);
+    state = auth.state;
+    saveCreds = auth.saveCreds;
+  } catch (e) {
+    console.error('Failed to load multi file auth state:', e);
+    return;
+  }
+
+  let version;
+  try {
+    const vInfo = await fetchLatestBaileysVersion();
+    version = vInfo.version;
+  } catch (e) {
+    version = [2, 3000, 1015901307];
+  }
 
   sock = makeWASocket({
     version,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     auth: state,
-    syncFullHistory: true,
-    shouldSyncHistoryMessage: () => true,
+    syncFullHistory: false,
+    markOnlineOnConnect: true,
     generateHighQualityLinkPreview: true,
-    browser: ['WhatsApp CRM Pro', 'Chrome', '124.0.0']
+    browser: ['Ubuntu', 'Chrome', '124.0.0.0'],
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
+    keepAliveIntervalMs: 25000,
+    retryRequestDelayMs: 3000,
+    maxMsgRetryCount: 5
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -279,19 +302,22 @@ async function connectToWhatsApp() {
     }
 
     if (connection === 'close') {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       connectionStatus = 'DISCONNECTED';
       connectedUser = null;
       lastQr = null;
       lastQrDataUrl = null;
 
-      console.log(`Connection closed due to: ${lastDisconnect?.error}. Reconnecting: ${shouldReconnect}`);
+      console.log(`[WhatsApp Engine] Connection closed. StatusCode: ${statusCode}. LoggedOut: ${isLoggedOut}. Error:`, lastDisconnect?.error);
 
-      if (shouldReconnect) {
-        setTimeout(connectToWhatsApp, 3000);
+      if (!isLoggedOut) {
+        reconnectAttempts++;
+        const delay = Math.min(3000 * reconnectAttempts, 20000);
+        console.log(`[WhatsApp Engine] Attempting reconnect in ${delay / 1000}s (Attempt ${reconnectAttempts})...`);
+        setTimeout(connectToWhatsApp, delay);
       } else {
-        console.log('Logged out. Cleaning credentials and database...');
+        console.log('[WhatsApp Engine] Session logged out by WhatsApp server. Resetting auth credentials...');
         try {
           fs.rmSync(AUTH_DIR, { recursive: true, force: true });
         } catch (e) {}
@@ -300,31 +326,17 @@ async function connectToWhatsApp() {
         groupsStore.clear();
         profilePicsCache.clear();
         unreadCountsMap.clear();
-
-        // Wipe backend database history
-        try {
-          const req = http.request({
-            hostname: 'backend',
-            port: 8000,
-            path: '/api/whatsapp/wipe-history',
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': 2 },
-            timeout: 3000
-          }, () => {});
-          req.on('error', () => {});
-          req.write('{}');
-          req.end();
-        } catch (e) {}
-
+        reconnectAttempts = 0;
         setTimeout(connectToWhatsApp, 2000);
       }
     } else if (connection === 'open') {
       connectionStatus = 'CONNECTED';
+      reconnectAttempts = 0;
       lastQr = null;
       lastQrDataUrl = null;
       connectedUser = sock.user;
-      console.log('WhatsApp connection opened successfully for user:', connectedUser?.id);
-      setTimeout(fetchGroupsAndPictures, 1500);
+      console.log('[WhatsApp Engine] Connection opened successfully for user:', connectedUser?.id);
+      setTimeout(fetchGroupsAndPictures, 2000);
     }
   });
 
@@ -357,14 +369,12 @@ async function connectToWhatsApp() {
         }
         const parsed = await extractMessageInfo(m);
         if (parsed) {
-          // Check actual WhatsApp unread status
           const chatUnread = unreadCountsMap.get(parsed.jid) || unreadCountsMap.get(parsed.phone) || 0;
           parsed.is_read = (chatUnread === 0) || Boolean(m.key?.fromMe) || m.status === 4 || m.status === 'READ';
           parsedBatch.push(parsed);
         }
       }
       
-      // Chunk batches of 50
       for (let i = 0; i < parsedBatch.length; i += 50) {
         const chunk = parsedBatch.slice(i, i + 50);
         await forwardBatchToBackend(chunk);
@@ -399,7 +409,7 @@ async function connectToWhatsApp() {
     }
   });
 
-  // Sync read receipts when read on main WhatsApp phone / web
+  // Sync read receipts
   sock.ev.on('chats.update', async (updates) => {
     if (Array.isArray(updates)) {
       for (const u of updates) {
@@ -548,6 +558,7 @@ app.post('/logout', async (req, res) => {
   connectedUser = null;
   lastQr = null;
   lastQrDataUrl = null;
+  reconnectAttempts = 0;
   setTimeout(connectToWhatsApp, 1000);
   res.json({ success: true, message: 'Logged out successfully' });
 });
@@ -560,11 +571,12 @@ app.post('/restart', async (req, res) => {
     }
   } catch (e) {}
   connectionStatus = 'CONNECTING';
+  reconnectAttempts = 0;
   setTimeout(connectToWhatsApp, 1000);
   res.json({ success: true, message: 'WhatsApp engine restarted' });
 });
 
-// 1-to-1 Send Direct & Bulk Send Message endpoint
+// 1-to-1 Send Direct & Bulk Send Message endpoint with humanized presence
 app.post('/send', async (req, res) => {
   try {
     if (!sock || connectionStatus !== 'CONNECTED') {
@@ -578,6 +590,14 @@ app.post('/send', async (req, res) => {
 
     const jid = formatJID(to);
     let sentMsg;
+
+    // Simulate natural typing presence before sending
+    try {
+      await sock.presenceSubscribe(jid);
+      await sock.sendPresenceUpdate('composing', jid);
+      await new Promise(r => setTimeout(r, 1200));
+      await sock.sendPresenceUpdate('paused', jid);
+    } catch (e) {}
 
     if (mediaBase64) {
       const buffer = Buffer.from(mediaBase64, 'base64');
@@ -642,6 +662,14 @@ app.post('/send-message', async (req, res) => {
 
     const jid = formatJID(phone);
     let sentMsg;
+
+    // Simulate typing
+    try {
+      await sock.presenceSubscribe(jid);
+      await sock.sendPresenceUpdate('composing', jid);
+      await new Promise(r => setTimeout(r, 800));
+      await sock.sendPresenceUpdate('paused', jid);
+    } catch (e) {}
 
     if (mediaUrl) {
       let localPath = mediaUrl;
@@ -835,23 +863,19 @@ app.get('/check-contact', async (req, res) => {
     let businessProfile = null;
 
     if (exists && verifiedJid) {
-      // 1. Profile Picture
       try {
         profilePictureUrl = await sock.profilePictureUrl(verifiedJid, 'image');
       } catch (e) {}
 
-      // 2. Status / About
       try {
         const statusObj = await sock.fetchStatus(verifiedJid);
         about = statusObj?.status || null;
       } catch (e) {}
 
-      // 3. Business Profile
       try {
         businessProfile = await sock.getBusinessProfile(verifiedJid);
       } catch (e) {}
 
-      // 4. Contact Name from store
       const normPhone = normalizePhone(phone);
       const cinfo = contactsStore.get(verifiedJid) || contactsStore.get(phone) || contactsStore.get(normPhone);
       name = cinfo?.name || cinfo?.notify || cinfo?.verifiedName || businessProfile?.description || null;

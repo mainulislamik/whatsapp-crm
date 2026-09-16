@@ -529,7 +529,7 @@ async def send_direct_message(payload: DirectSendRequest):
 async def run_campaign_worker(campaign_id: int, base_delay: int):
     def _get_campaign_and_logs():
         camp = Campaign.objects.get(id=campaign_id)
-        if camp.status == 'CANCELLED':
+        if camp.status in ['CANCELLED', 'PAUSED']:
             return None, []
         camp.status = 'RUNNING'
         camp.save()
@@ -537,15 +537,27 @@ async def run_campaign_worker(campaign_id: int, base_delay: int):
         return camp, logs
 
     camp, logs = await sync_to_async(_get_campaign_and_logs)()
-    if not camp:
+    if not camp or not logs:
         return
 
-    async with httpx.AsyncClient(timeout=35.0) as client:
+    sent_in_batch = 0
+    disconnected = False
+
+    async with httpx.AsyncClient(timeout=45.0) as client:
         for log in logs:
-            def _is_cancelled():
-                return Campaign.objects.filter(id=campaign_id, status='CANCELLED').exists()
-            if await sync_to_async(_is_cancelled)():
+            def _check_status():
+                c = Campaign.objects.filter(id=campaign_id).first()
+                return c.status if c else 'CANCELLED'
+            
+            curr_status = await sync_to_async(_check_status)()
+            if curr_status in ['CANCELLED', 'PAUSED']:
                 break
+
+            # Batch cooldown: pause 25s after every 12 messages to prevent WhatsApp burst spam flagging
+            sent_in_batch += 1
+            if sent_in_batch % 12 == 0:
+                logger.info(f"Campaign {campaign_id}: Batch threshold reached. Cooling down for 25s...")
+                await asyncio.sleep(25.0)
 
             try:
                 req_data = {
@@ -569,34 +581,107 @@ async def run_campaign_worker(campaign_id: int, base_delay: int):
                         mark_lead_contacted_by_phone(ph)
                     await sync_to_async(_update_success)(log.id, log.phone)
                 else:
+                    err_msg = data.get("error", "Failed")
+                    if "not connected" in err_msg.lower():
+                        disconnected = True
+                        logger.warning(f"Campaign {campaign_id}: WhatsApp disconnected. Auto-pausing campaign to save remaining leads...")
+                        def _set_paused():
+                            Campaign.objects.filter(id=campaign_id).update(status='PAUSED')
+                        await sync_to_async(_set_paused)()
+                        break
+                    
                     def _update_fail(l_id, err):
                         l = CampaignLog.objects.get(id=l_id)
                         l.status = 'FAILED'
                         l.error_message = err
                         l.save()
                         Campaign.objects.filter(id=campaign_id).update(failed_count=django.db.models.F('failed_count') + 1)
-                    await sync_to_async(_update_fail)(log.id, data.get("error", "Failed"))
+                    await sync_to_async(_update_fail)(log.id, err_msg)
             except Exception as e:
+                err_str = str(e)
+                if "not connected" in err_str.lower():
+                    disconnected = True
+                    def _set_paused():
+                        Campaign.objects.filter(id=campaign_id).update(status='PAUSED')
+                    await sync_to_async(_set_paused)()
+                    break
+
                 def _update_err(l_id, err):
                     l = CampaignLog.objects.get(id=l_id)
                     l.status = 'FAILED'
                     l.error_message = str(err)
                     l.save()
                     Campaign.objects.filter(id=campaign_id).update(failed_count=django.db.models.F('failed_count') + 1)
-                await sync_to_async(_update_err)(log.id, e)
+                await sync_to_async(_update_err)(log.id, err_str)
 
-            jitter = random.uniform(-1.5, 1.5)
-            actual_delay = max(2.0, base_delay + jitter)
-            await asyncio.sleep(actual_delay)
+            # Safe humanized delay with natural jitter (minimum 8s)
+            delay = max(8.0, float(base_delay)) + random.uniform(-1.5, 2.5)
+            await asyncio.sleep(delay)
 
     def _finish_campaign():
-        c = Campaign.objects.get(id=campaign_id)
-        if c.status != 'CANCELLED':
-            c.status = 'COMPLETED'
-        c.completed_at = datetime.now()
-        c.save()
+        c = Campaign.objects.filter(id=campaign_id).first()
+        if c and c.status not in ['CANCELLED', 'PAUSED']:
+            pending_count = c.logs.filter(status='PENDING').count()
+            if pending_count == 0:
+                c.status = 'COMPLETED'
+                c.completed_at = datetime.now()
+            else:
+                c.status = 'PAUSED'
+            c.save()
 
     await sync_to_async(_finish_campaign)()
+
+@app.post("/api/campaigns/{campaign_id}/retry-failed")
+async def retry_failed_campaign(campaign_id: int, background_tasks: BackgroundTasks):
+    try:
+        def _prepare_retry():
+            camp = Campaign.objects.get(id=campaign_id)
+            failed_logs = list(camp.logs.filter(status='FAILED'))
+            if not failed_logs:
+                return None, 0
+            for l in failed_logs:
+                l.status = 'PENDING'
+                l.error_message = ''
+                l.save()
+            camp.failed_count = max(0, camp.failed_count - len(failed_logs))
+            camp.status = 'RUNNING'
+            camp.save()
+            return camp, len(failed_logs)
+
+        camp, count = await sync_to_async(_prepare_retry)()
+        if not camp:
+            return {"success": False, "message": "No failed recipients to retry."}
+
+        background_tasks.add_task(run_campaign_worker, camp.id, camp.delay_seconds or 10)
+        return {"success": True, "message": f"Retrying {count} failed messages...", "count": count}
+    except Campaign.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/campaigns/{campaign_id}/resume")
+async def resume_campaign(campaign_id: int, background_tasks: BackgroundTasks):
+    try:
+        def _prepare_resume():
+            camp = Campaign.objects.get(id=campaign_id)
+            pending_count = camp.logs.filter(status='PENDING').count()
+            if pending_count == 0:
+                return None, 0
+            camp.status = 'RUNNING'
+            camp.save()
+            return camp, pending_count
+
+        camp, count = await sync_to_async(_prepare_resume)()
+        if not camp:
+            return {"success": False, "message": "No pending recipients in this campaign."}
+
+        background_tasks.add_task(run_campaign_worker, camp.id, camp.delay_seconds or 10)
+        return {"success": True, "message": f"Resumed campaign with {count} pending messages.", "count": count}
+    except Campaign.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/campaigns")
 async def create_and_start_campaign(payload: BulkSendRequest, background_tasks: BackgroundTasks):
