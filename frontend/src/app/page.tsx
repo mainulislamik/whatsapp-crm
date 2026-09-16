@@ -91,6 +91,7 @@ export default function Dashboard() {
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [messageText, setMessageText] = useState<string>('');
+  const [templateMedia, setTemplateMedia] = useState<any>(null);
   const [directChatPhone, setDirectChatPhone] = useState<string>('');
   const [historyRefreshKey, setHistoryRefreshKey] = useState<number>(0);
   const [waStatus, setWaStatus] = useState<{ status: string; user?: any; hasQr: boolean } | null>(null);
@@ -363,11 +364,17 @@ export default function Dashboard() {
               )}
 
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 3fr' }, gap: 3, alignItems: 'start' }}>
-                <TemplateManager onSelectTemplate={(content) => setMessageText(content)} />
+                <TemplateManager
+                  onSelectTemplate={(content, media) => {
+                    setMessageText(content);
+                    setTemplateMedia(media || null);
+                  }}
+                />
                 <BroadcastSender
                   selectedContactIds={selectedContactIds}
                   messageText={messageText}
                   onMessageChange={setMessageText}
+                  templateMedia={templateMedia}
                   onCampaignStarted={() => {
                     setHistoryRefreshKey((prev) => prev + 1);
                     updateSection('reports');
@@ -388,8 +395,9 @@ export default function Dashboard() {
           {activeSection === 'templates' && (
             <Box sx={{ maxWidth: 900, mx: 'auto' }}>
               <TemplateManager
-                onSelectTemplate={(content) => {
+                onSelectTemplate={(content, media) => {
                   setMessageText(content);
+                  setTemplateMedia(media || null);
                   updateSection('broadcast');
                 }}
               />

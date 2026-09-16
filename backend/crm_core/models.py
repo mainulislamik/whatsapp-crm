@@ -18,8 +18,12 @@ class Contact(models.Model):
 
 class MessageTemplate(models.Model):
     name = models.CharField(max_length=255)
-    content = models.TextField()
+    content = models.TextField(blank=True, default='')
     category = models.CharField(max_length=100, default='General')
+    media_base64 = models.TextField(blank=True, null=True)
+    media_type = models.CharField(max_length=50, blank=True, null=True)
+    file_name = models.CharField(max_length=255, blank=True, null=True)
+    mime_type = models.CharField(max_length=100, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

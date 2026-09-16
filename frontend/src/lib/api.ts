@@ -27,6 +27,10 @@ export interface Template {
   name: string;
   content: string;
   category: string;
+  media_base64?: string | null;
+  media_type?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
   created_at: string;
 }
 
@@ -172,7 +176,27 @@ export const ContactService = {
 
 export const TemplateService = {
   list: () => api.get<Template[]>('/templates'),
-  create: (data: { name: string; content: string; category?: string }) => api.post('/templates', data),
+  create: (data: {
+    name: string;
+    content: string;
+    category?: string;
+    media_base64?: string;
+    media_type?: string;
+    file_name?: string;
+    mime_type?: string;
+  }) => api.post('/templates', data),
+  update: (
+    id: number,
+    data: {
+      name?: string;
+      content?: string;
+      category?: string;
+      media_base64?: string | null;
+      media_type?: string | null;
+      file_name?: string | null;
+      mime_type?: string | null;
+    }
+  ) => api.put(`/templates/${id}`, data),
   delete: (id: number) => api.delete(`/templates/${id}`),
 };
 

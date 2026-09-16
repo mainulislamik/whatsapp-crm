@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -34,6 +34,12 @@ interface BroadcastSenderProps {
   messageText: string;
   onMessageChange: (text: string) => void;
   onCampaignStarted: () => void;
+  templateMedia?: {
+    base64: string;
+    type: string;
+    fileName: string;
+    mimeType: string;
+  } | null;
 }
 
 export default function BroadcastSender({
@@ -41,6 +47,7 @@ export default function BroadcastSender({
   messageText,
   onMessageChange,
   onCampaignStarted,
+  templateMedia,
 }: BroadcastSenderProps) {
   const [title, setTitle] = useState<string>('New Broadcast Campaign');
   const [delay, setDelay] = useState<number>(5);
@@ -50,11 +57,26 @@ export default function BroadcastSender({
 
   // Media Attachment State
   const [attachedFile, setAttachedFile] = useState<{
-    file: File;
+    file?: File;
+    fileName?: string;
     base64: string;
     type: 'image' | 'document';
+    mimeType?: string;
     previewUrl?: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (templateMedia && templateMedia.base64) {
+      const isImg = templateMedia.type === 'image' || templateMedia.mimeType?.startsWith('image/');
+      setAttachedFile({
+        fileName: templateMedia.fileName || 'template_media',
+        base64: templateMedia.base64,
+        type: isImg ? 'image' : 'document',
+        mimeType: templateMedia.mimeType || (isImg ? 'image/jpeg' : 'application/octet-stream'),
+        previewUrl: isImg ? `data:${templateMedia.mimeType || 'image/jpeg'};base64,${templateMedia.base64}` : undefined,
+      });
+    }
+  }, [templateMedia]);
 
   // Scheduling State
   const [isScheduled, setIsScheduled] = useState<boolean>(false);
@@ -117,8 +139,8 @@ export default function BroadcastSender({
         delay_seconds: delay,
         media_base64: attachedFile?.base64,
         media_type: attachedFile?.type,
-        file_name: attachedFile?.file.name,
-        mime_type: attachedFile?.file.type,
+        file_name: attachedFile?.fileName || attachedFile?.file?.name,
+        mime_type: attachedFile?.mimeType || attachedFile?.file?.type,
         scheduled_at: isScheduled && scheduleDateTime ? new Date(scheduleDateTime).toISOString() : undefined,
       });
 
@@ -252,7 +274,7 @@ export default function BroadcastSender({
                     />
                   )}
                   <Chip
-                    label={attachedFile.file.name}
+                    label={attachedFile.fileName || attachedFile.file?.name || 'Attached File'}
                     onDelete={removeAttachment}
                     deleteIcon={<CloseIcon />}
                     color="primary"
@@ -346,7 +368,7 @@ export default function BroadcastSender({
             </Typography>
             {attachedFile && (
               <Typography variant="body2" color="primary" sx={{ mb: 1 }}>
-                Attached file: <b>{attachedFile.file.name}</b>
+                Attached file: <b>{attachedFile.fileName || attachedFile.file?.name || 'Attached File'}</b>
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary">

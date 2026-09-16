@@ -117,8 +117,21 @@ class ContactCreate(BaseModel):
 
 class TemplateCreate(BaseModel):
     name: str
-    content: str
+    content: Optional[str] = ""
     category: Optional[str] = "General"
+    media_base64: Optional[str] = None
+    media_type: Optional[str] = None
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
+
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
+    category: Optional[str] = None
+    media_base64: Optional[str] = None
+    media_type: Optional[str] = None
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
 
 class DirectSendRequest(BaseModel):
     phone: str
@@ -362,6 +375,10 @@ async def list_templates():
                 "name": t.name,
                 "content": t.content,
                 "category": t.category,
+                "media_base64": t.media_base64,
+                "media_type": t.media_type,
+                "file_name": t.file_name,
+                "mime_type": t.mime_type,
                 "created_at": t.created_at.isoformat()
             }
             for t in MessageTemplate.objects.all()
@@ -373,11 +390,62 @@ async def create_template(payload: TemplateCreate):
     def _create():
         t = MessageTemplate.objects.create(
             name=payload.name.strip(),
-            content=payload.content.strip(),
-            category=payload.category or "General"
+            content=(payload.content or "").strip(),
+            category=(payload.category or "General").strip(),
+            media_base64=payload.media_base64,
+            media_type=payload.media_type,
+            file_name=payload.file_name,
+            mime_type=payload.mime_type
         )
-        return {"id": t.id, "name": t.name, "content": t.content, "category": t.category}
+        return {
+            "id": t.id,
+            "name": t.name,
+            "content": t.content,
+            "category": t.category,
+            "media_base64": t.media_base64,
+            "media_type": t.media_type,
+            "file_name": t.file_name,
+            "mime_type": t.mime_type,
+            "created_at": t.created_at.isoformat()
+        }
     return await sync_to_async(_create)()
+
+@app.put("/api/templates/{template_id}")
+async def update_template(template_id: int, payload: TemplateUpdate):
+    def _update():
+        t = MessageTemplate.objects.filter(id=template_id).first()
+        if not t:
+            return None
+        if payload.name is not None:
+            t.name = payload.name.strip()
+        if payload.content is not None:
+            t.content = payload.content.strip()
+        if payload.category is not None:
+            t.category = payload.category.strip()
+        if payload.media_base64 is not None:
+            t.media_base64 = payload.media_base64 or None
+        if payload.media_type is not None:
+            t.media_type = payload.media_type or None
+        if payload.file_name is not None:
+            t.file_name = payload.file_name or None
+        if payload.mime_type is not None:
+            t.mime_type = payload.mime_type or None
+        t.save()
+        return {
+            "id": t.id,
+            "name": t.name,
+            "content": t.content,
+            "category": t.category,
+            "media_base64": t.media_base64,
+            "media_type": t.media_type,
+            "file_name": t.file_name,
+            "mime_type": t.mime_type,
+            "created_at": t.created_at.isoformat()
+        }
+    res = await sync_to_async(_update)()
+    if not res:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return res
 
 @app.delete("/api/templates/{template_id}")
 async def delete_template(template_id: int):
