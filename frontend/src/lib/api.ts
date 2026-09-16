@@ -172,6 +172,7 @@ export const ContactService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  syncWhatsApp: () => api.post<{ synced: number; total: number }>('/contacts/sync-whatsapp'),
 };
 
 export const TemplateService = {

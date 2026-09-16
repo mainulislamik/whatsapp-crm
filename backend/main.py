@@ -364,6 +364,46 @@ async def import_contacts_csv(file: UploadFile = File(...)):
     await sync_to_async(_save_batch)(list(reader))
     return {"success": True, "imported": imported, "updated": updated}
 
+@app.post("/api/contacts/sync-whatsapp")
+async def sync_contacts_from_whatsapp():
+    def _sync():
+        synced_count = 0
+        # 1. Sync from ChatMessages
+        chat_rows = ChatMessage.objects.exclude(phone__startswith='120363').values('phone', 'sender_name').distinct()
+        for c in chat_rows:
+            p = (c.get('phone') or '').strip()
+            if not p or len(p) < 8:
+                continue
+            name = (c.get('sender_name') or '').strip()
+            if not name or name == 'StockWhisk Admin' or name == p:
+                name = f"WhatsApp Contact ({p[-4:]})"
+            obj, created = Contact.objects.get_or_create(
+                phone=p,
+                defaults={'name': name, 'tags': 'WhatsApp Chat'}
+            )
+            if created:
+                synced_count += 1
+
+        # 2. Sync from Lead Candidates
+        for l in LeadCandidate.objects.all():
+            p = (l.phone or '').strip()
+            if not p or len(p) < 8:
+                continue
+            name = (l.name or '').strip() or f"Lead ({p[-4:]})"
+            obj, created = Contact.objects.get_or_create(
+                phone=p,
+                defaults={
+                    'name': name,
+                    'email': l.email or '',
+                    'tags': l.category or 'Scanned Lead'
+                }
+            )
+            if created:
+                synced_count += 1
+
+        return {"synced": synced_count, "total": Contact.objects.count()}
+    return await sync_to_async(_sync)()
+
 # --- MESSAGE TEMPLATES ---
 
 @app.get("/api/templates")

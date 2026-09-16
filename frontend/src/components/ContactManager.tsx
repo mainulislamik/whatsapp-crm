@@ -24,6 +24,7 @@ import {
   Stack,
   Tooltip,
   LinearProgress,
+  Alert,
 } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -31,6 +32,8 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
 import SearchIcon from '@mui/icons-material/Search';
+import SyncIcon from '@mui/icons-material/Sync';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { Contact, ContactService } from '@/lib/api';
 
 interface ContactManagerProps {
@@ -75,6 +78,23 @@ export default function ContactManager({
   useEffect(() => {
     fetchContactsAndTags();
   }, []);
+
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const handleSyncWhatsApp = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await ContactService.syncWhatsApp();
+      setSyncMsg(`Successfully synced ${res.data.synced} contact(s)! Total directory: ${res.data.total}`);
+      fetchContactsAndTags();
+    } catch (err: any) {
+      alert('Failed to sync WhatsApp contacts.');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleCreateContact = async () => {
     if (!formName.trim() || !formPhone.trim()) {
@@ -214,6 +234,21 @@ export default function ContactManager({
             >
               Add Contact
             </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={syncing ? <SyncIcon sx={{ animation: 'spin 1s linear infinite' }} /> : <AutoAwesomeIcon />}
+              disabled={syncing}
+              onClick={handleSyncWhatsApp}
+              sx={{
+                fontWeight: 700,
+                bgcolor: '#10b981',
+                '&:hover': { bgcolor: '#059669' },
+                textTransform: 'none',
+              }}
+            >
+              {syncing ? 'Syncing...' : 'Sync from WhatsApp'}
+            </Button>
             <Tooltip title="Download CSV template format">
               <IconButton size="small" onClick={handleDownloadSampleCsv}>
                 <DownloadIcon fontSize="small" />
@@ -260,6 +295,12 @@ export default function ContactManager({
             </Tooltip>
           </Stack>
         </Stack>
+
+        {syncMsg && (
+          <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setSyncMsg(null)}>
+            {syncMsg}
+          </Alert>
+        )}
 
         {/* Tag Audience Filters */}
         {tags.length > 0 && (
@@ -357,8 +398,35 @@ export default function ContactManager({
             <TableBody>
               {filteredContacts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                    No contacts found.
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <Box sx={{ maxWidth: 480, mx: 'auto', textAlign: 'center' }}>
+                      <PeopleIcon sx={{ fontSize: 48, color: '#94a3b8', mb: 1.5 }} />
+                      <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#1e293b', mb: 0.5 }}>
+                        No contacts found in your directory
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+                        Add contacts manually, import a CSV list with bulk numbers, or click Sync to auto-import from WhatsApp chats & leads.
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} justifyContent="center" flexWrap="wrap">
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<PersonAddIcon />}
+                          onClick={() => setOpenAddDialog(true)}
+                        >
+                          + Add Contact
+                        </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<AutoAwesomeIcon />}
+                          onClick={handleSyncWhatsApp}
+                          sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, textTransform: 'none', fontWeight: 700 }}
+                        >
+                          Sync from WhatsApp
+                        </Button>
+                      </Stack>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ) : (
