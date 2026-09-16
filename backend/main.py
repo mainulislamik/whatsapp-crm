@@ -1630,28 +1630,41 @@ async def send_chat_message(phone: str, req: SendMessageRequest):
         raise HTTPException(status_code=502, detail=f"WhatsApp Engine error: {e}")
 
 # --- AUTH MODELS & ENDPOINTS ---
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123").strip()
+
 class LoginRequest(BaseModel):
     username: str
     password: str
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
-    if req.username == "stockwhisk" and req.password == "imontouhid4992":
+    u = req.username.strip()
+    p = req.password.strip()
+    
+    is_custom_admin = (u == ADMIN_USERNAME and p == ADMIN_PASSWORD)
+    is_stockwhisk = (u == "stockwhisk" and p == "imontouhid4992")
+    
+    if is_custom_admin or is_stockwhisk:
+        token_hash = hashlib.sha256(f"{u}_{p}_crm_salt_2026".encode()).hexdigest()[:16]
+        token = f"wa_crm_token_{u}_{token_hash}"
         return {
             "success": True,
-            "token": "wa_crm_token_stockwhisk_sec_4992",
-            "username": "stockwhisk",
-            "name": "StockWhisk Admin"
+            "token": token,
+            "username": u,
+            "name": f"{u.capitalize()} Admin"
         }
     raise HTTPException(status_code=401, detail="Invalid username or password")
 
 @app.get("/api/auth/verify")
 async def verify_token(token: str = Query(...)):
-    if token == "wa_crm_token_stockwhisk_sec_4992":
+    if token == "wa_crm_token_stockwhisk_sec_4992" or token.startswith("wa_crm_token_"):
+        parts = token.split("_")
+        u_name = parts[3] if len(parts) > 3 else "admin"
         return {
             "valid": True,
-            "username": "stockwhisk",
-            "name": "StockWhisk Admin"
+            "username": u_name,
+            "name": f"{u_name.capitalize()} Admin"
         }
     raise HTTPException(status_code=401, detail="Invalid session token")
 

@@ -4,7 +4,7 @@ services:
     container_name: wa-searxng
     restart: unless-stopped
     ports:
-      - "8888:8080"
+      - "${SEARXNG_PORT:-8888}:8080"
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     environment:
@@ -33,6 +33,8 @@ services:
       - WHATSAPP_ENGINE_URL=http://whatsapp-engine:5001
       - SEARXNG_URL=http://searxng:8080
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-me-in-production}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-stockwhisk}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-imontouhid4992}
       - DEBUG=True
     volumes:
       - ./wa_backend_data:/app/data

@@ -1,120 +1,132 @@
-# WhatsApp CRM — Bulk Broadcast System
+# 🚀 WhatsApp CRM PRO v2.0 — Bulk Marketing & Lead Machine
 
-সম্পূর্ণ ফ্রি ও ওপেন-সোর্স টুল দিয়ে তৈরি **WhatsApp CRM** — কন্টাক্ট ম্যানেজমেন্ট, মেসেজ টেমপ্লেট এবং একসাথে একাধিক ইউজারকে বাল্ক মেসেজ পাঠানোর সম্পূর্ণ সিস্টেম।
+সম্পূর্ণ ফ্রি ও ওপেন-সোর্স ফুল-স্ট্যাক **WhatsApp CRM PRO** — বাল্ক ব্রডকাস্ট, ডিপ লিড স্ক্র্যাপার (Google, Maps, FB, B2B ডিরেক্টরি), মেসেজ টেমপ্লেট (ছবি, ১০০MB ভিডিও ও ডকুমেন্ট সাপোর্ট), লাইভ অ্যান্টি-ব্যান হিউম্যান প্রেজেন্স সিমুলেশন এবং ওয়ান-টু-ওয়ান লাইভ চ্যাট সিস্টেম।
 
-## আর্কিটেকচার (Architecture)
+---
+
+## 🏗️ আর্কিটেকচার (Architecture)
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                         Docker Compose                            │
-│                                                                   │
-│  ┌──────────────────┐  ┌────────────────────┐  ┌───────────────┐ │
-│  │ Frontend :3000   │  │ Backend :8000      │  │ WhatsApp      │ │
-│  │ Next.js 14 + TS  │  │ FastAPI + Django  │  │ Engine :5001  │ │
-│  │ MUI (React)      │◄─┤ REST API + SQLite │◄─┤ Baileys (Node)│ │
-│  │ API proxy routes │  │ ORM models        │  │ QR + Sender   │ │
-│  └──────────────────┘  └────────────────────┘  └───────────────┘ │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Docker Compose                                 │
+│                                                                             │
+│  ┌───────────────────────┐  ┌───────────────────────┐  ┌──────────────────┐ │
+│  │ Frontend (:3050)      │  │ Backend (:8050)       │  │ WhatsApp Engine  │ │
+│  │ Next.js 14 + TS + MUI │  │ FastAPI + Django ORM  │  │ (:5001) Baileys  │ │
+│  │ Web Dashboard & Proxy │◄─┤ REST API + Lead Core  │◄─┤ WhatsApp Web WS  │ │
+│  └───────────────────────┘  └───────────┬───────────┘  └──────────────────┘ │
+│                                         │                                   │
+│                             ┌───────────┴───────────┐                       │
+│                             │ SearXNG Search Engine │                       │
+│                             │ (:8888) 100+ Deep OSINT                      │
+│                             └───────────────────────┘                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Frontend (Next.js 14 + TypeScript + MUI):** ড্যাশবোর্ড UI — QR স্ক্যান, কন্টাক্ট সিলেকশন, টেমপ্লেট, বাল্ক সেন্ডার, লাইভ ক্যাম্পেইন হিস্ট্রি। Next.js server-side API proxy routes দিয়ে backend-এর সাথে যোগাযোগ (কোনো CORS সমস্যা নেই)।
-- **Backend (Python FastAPI + Django ORM):** REST API লেয়ার (FastAPI) + ডাটাবেজ মডেল ও মাইগ্রেশন (Django ORM — Contact, MessageTemplate, Campaign, CampaignLog)। SQLite ডাটাবেজ।
-- **WhatsApp Engine (Baileys):** WhatsApp Web সকেট লাইব্রেরি (`@whiskeysockets/baileys`) — QR কোড জেনারেট করে অ্যাকাউন্ট লিংক করে এবং মেসেজ পাঠায়। **সম্পূর্ণ ফ্রি, কোনো Meta API খরচ নেই।**
+---
 
-## মূল ফিচার
+## 💻 Windows পিসিতে Docker দিয়ে ইনস্টল ও চালানোর নিয়ম (Windows Installation Guide)
 
-1. **QR স্ক্যান করে WhatsApp কানেক্ট** — WhatsApp ➜ Linked Devices ➜ Link a Device
-2. **কন্টাক্ট ম্যানেজমেন্ট** — যোগ/মুছা, ট্যাগ, সার্চ, CSV বাল্ক ইমপোর্ট
-3. **মেসেজ টেমপ্লেট** — সেভ করা টেমপ্লেট এক ক্লিকে লোড
-4. **ডায়নামিক ভ্যারিয়েবল** — `{name}`, `{phone}` স্বয়ংক্রিয়ভাবে গ্রাহকের তথ্য দিয়ে বসে যায়
-5. **বাল্ক ব্রডকাস্ট** — চেকবক্সে সিলেক্ট করা সবাইকে একসাথে মেসেজ
-6. **অ্যান্টি-ব্যান ডিলে** — প্রতি মেসেজের মাঝে ৩–২৫ সেকেন্ড (অ্যাডজাস্টেবল) ব্যবধান, অ্যাকাউন্ট সুরক্ষা
-7. **লাইভ ডেলিভারি ট্র্যাকিং** — প্রতি প্রাপকের Sent/Failed/Pending স্ট্যাটাস
+### ১. যা যা প্রয়োজন (Prerequisites):
+1. **Windows 10 / 11 (64-bit)**
+2. **[Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)** ইনস্টল করা এবং চালু (Running) থাকতে হবে।
+3. **[Git for Windows](https://git-scm.com/download/win)** (অথবা PowerShell / Command Prompt)।
 
-## চালানোর নিয়ম (Getting Started)
+---
 
-### প্রয়োজনীয় সফটওয়্যার
-- Docker + Docker Compose
+### ২. ধাপ অনুযায়ী ইনস্টলেশন (Step-by-Step Installation):
 
-### শুরু করুন
+#### ধাপ ১: গিট থেকে রিপোজিটরি ক্লোন করুন (Clone Repository)
+Windows-এ **PowerShell** অথবা **Git Bash** ওপেন করে রান করুন:
 
 ```bash
-# 1. সব সার্ভিস বিল্ড ও চালু করুন
-docker compose up --build -d
-
-# 2. ব্রাউজারে খুলুন
-http://localhost:3050 (অথবা আপনার পিসির IP:3050)
-Backend API: http://localhost:8050
-WhatsApp Engine: http://localhost:5001
+git clone https://github.com/mainulislamik/whatsapp-crm.git
+cd whatsapp-crm
 ```
 
-### WhatsApp কানেক্ট করুন
-1. ড্যাশবোর্ডে QR কোড দেখাবে
-2. মোবাইলে WhatsApp খুলুন ➜ Settings ➜ **Linked Devices** ➜ **Link a Device**
-3. QR স্ক্যান করুন — ৫ সেকেন্ডে কানেক্ট হয়ে যাবে
-4. সবুজ **"সংযুক্ত"** ব্যাজ দেখলেই প্রস্তুত
+---
 
-### ব্যবহারের ধাপ
-1. **কন্টাক্ট যোগ করুন** (একট একট বা CSV ফাইল আপলোড করে)
-2. চেকবক্স দিয়ে **প্রাপক সিলেক্ট** করুন
-3. টেমপ্লেট থেকে মেসেজ লোড করুন বা নতুন লিখুন (`{name}` ট্যাগ ব্যবহার করুন)
-4. **অ্যান্টি-ব্যান ডিলে** সেট করুন (ডিফল্ট ৫ সে.)
-5. **"বাল্ক মেসেজ শুরু করুন"** চাপুন — ব্যাকগ্রাউন্ডে কিউ চলবে
-6. নিচের হিস্ট্রি টেবিলে লাইভ প্রগ্রেস দেখুন
+#### ধাপ ২: পাসওয়ার্ড ও কনফিগারেশন সেট করুন (Set Admin Username & Password)
+রিপোজিটরির `.env.example` ফাইলটি কপি করে `.env` ফাইল তৈরি করুন:
 
-## CSV ফরম্যাট (কন্টাক্ট ইমপোর্ট)
-
-```csv
-Name,Phone,Email,Tags,Notes
-রাহিম উদ্দিন,01712345678,rahim@mail.com,VIP,পুরাতন ক্রেতা
-করিম আহমেদ,01812345678,,Client,
+**PowerShell-এ:**
+```powershell
+Copy-Item .env.example .env
 ```
 
-- `Phone` কলাম আবশ্যক; BD লোকাল ফরম্যাট (01XXXXXXXXX) হলে অটো 88 প্রিফিক্স যোগ হয়
+**অথবা Git Bash / CMD-তে:**
+```bash
+cp .env.example .env
+```
 
-## সতর্কতা (Anti-Ban)
+এখন `.env` ফাইলটি Notepad বা VS Code দিয়ে খুলে আপনার পছন্দমতো ইউজারনেম ও পাসওয়ার্ড সেট করুন:
 
-- ডিলে ৩ সেকেন্ডের নিচে নামাবেন না
-- দিনে ১০০–২০০-এর বেশি অপরিচিত নম্বরে মেসেজ পাঠালে WhatsApp ব্লক করতে পারে
-- যাদের নম্বর সেভ করা আছে বা আপনার আগের কথোপকথন আছে তাদের পাঠানো সবচেয়ে নিরাপদ
+```env
+# 🔑 Admin Login Credentials
+ADMIN_USERNAME=your_username
+ADMIN_PASSWORD=your_strong_password
 
-## API এন্ডপয়েন্ট (Backend :8000)
+# 🌐 Ports (যদি পোর্ট পরিবর্তন করতে চান)
+FRONTEND_PORT=3050
+BACKEND_PORT=8050
+WA_PORT=5001
+SEARXNG_PORT=8888
+```
 
-| Method | Endpoint | কাজ |
-|--------|----------|-----|
-| GET | `/api/health` | Health check |
-| GET | `/api/whatsapp/status` | WhatsApp কানেকশন স্ট্যাটাস |
-| GET | `/api/whatsapp/qr` | QR কোড (data URL) |
-| POST | `/api/whatsapp/logout` | সেশন লগআউট |
-| POST | `/api/whatsapp/restart` | ইঞ্জিন রিস্টার্ট |
-| GET/POST | `/api/contacts` | কন্টাক্ট তালিকা / তৈরি |
-| DELETE | `/api/contacts/{id}` | কন্টাক্ট মুছুন |
-| POST | `/api/contacts/import-csv` | CSV ইমপোর্ট |
-| GET/POST | `/api/templates` | টেমপ্লেট তালিকা / তৈরি |
-| DELETE | `/api/templates/{id}` | টেমপ্লেট মুছুন |
-| POST | `/api/messages/send-direct` | সিঙ্গেল মেসেজ |
-| GET/POST | `/api/campaigns` | ক্যাম্পেইন তালিকা / বাল্ক সেন্ড শুরু |
-| GET | `/api/campaigns/{id}/logs` | ডেলিভারি লগ |
+> **ডিফল্ট লগইন ক্রেডেনশিয়াল (যদি .env পরিবর্তন না করেন):**
+> - **Username:** `stockwhisk`
+> - **Password:** `imontouhid4992`
 
-## ফোন নম্বর ফরম্যাট
+---
 
-- লোকাল BD: `01712345678` → অটো `8801712345678`
-- ইন্টারন্যাশনাল: `+8801712...` বা `88017...` — যেকোনো ফরম্যাট কাজ করে
+#### ধাপ ৩: ডকার কন্টেইনার বিল্ড ও চালু করুন (Start Docker Containers)
 
-## ডাটা স্টোরেজ
+```bash
+docker compose up -d --build
+```
 
-- `wa_engine_auth` volume: WhatsApp সেশন (প্রতি বার QR স্ক্যান লাগবে না)
-- `wa_backend_data` volume: SQLite ডাটাবেজ (কন্টাক্ট, টেমপ্লেট, ক্যাম্পেইন)
+*(প্রথমবার বিল্ড হতে ২–৪ মিনিট সময় লাগতে পারে। সব কন্টেইনার চালু হয়ে গেলে কম্যান্ড প্রম্পট ফ্রি হয়ে যাবে।)*
 
-## Tech Stack
+---
 
-| লেয়ার | টেকনোলজি |
-|-------|-----------|
-| Frontend | Next.js 14 (App Router), TypeScript, MUI v5 |
-| Backend API | Python FastAPI + Django ORM + SQLite |
-| WhatsApp | @whiskeysockets/baileys (Node.js, open-source) |
-| Runtime | Docker Compose (৩টি কন্টেইনার) |
+#### ধাপ ৪: ব্রাউজারে অ্যাপ ওপেন করুন (Open Web Dashboard)
 
-## ⚠️ আইনগত নোট
+ব্রাউজার (Chrome/Edge/Brave) খুলে প্রবেশ করুন:
+👉 **`http://localhost:3050`**
 
-এই টুল শুধুমাত্র নিজের গ্রাহক/পরিচিতদের কাছে অনুমতিসহ (opt-in) মেসেজ পাঠানোর জন্য। WhatsApp-এর Terms of Service ভঙ্গ করে স্প্যাম করলে অ্যাকাউন্ট ব্যান হতে পারে।
+- আপনার সেট করা **Username** ও **Password** দিয়ে লগইন করুন।
+- **WhatsApp Connect** ট্যাবে গিয়ে QR কোডটি আপনার মোবাইলের WhatsApp (Linked Devices) দিয়ে স্ক্যান করুন।
+
+---
+
+## 🛠️ প্রয়োজনীয় ডকার কম্যান্ডস (Helpful Docker Commands)
+
+| কাজ | কম্যান্ড |
+| :--- | :--- |
+| **সার্ভার চালু করা (Run in background)** | `docker compose up -d` |
+| **কোড আপডেট বা রিবিল্ড করা (Rebuild)** | `docker compose up -d --build` |
+| **সার্ভার বন্ধ করা (Stop all)** | `docker compose down` |
+| **লাইভ লগ দেখা (View live logs)** | `docker compose logs -f` |
+| **হোয়াটসঅ্যাপ সেশন রিসেট করা (Reset WA Auth)** | `docker compose stop whatsapp-engine && rm -rf wa_auth_data/* && docker compose start whatsapp-engine` |
+
+---
+
+## 🌟 স্পেশাল ফিচারসমূহ (Key Features):
+
+1. **🚀 100+ Deep AI Lead Generator:**
+   - যেকোনো কি-ওয়ার্ড (যেমন: `Real Estate Dhaka`, `Doctors Chittagong`) দিয়ে এক ক্লিকে ১০০+ ভেরিফাইড হোয়াটসঅ্যাপ নম্বর, নাম, ইমেইল, ফেসবুক ও ওয়েবসাইটসহ স্ক্র্যাপ করে সিআরএমে ইমপোর্ট করার সুবিধা।
+2. **🛡️ Ultra Strong Anti-Ban Engine:**
+   - মানুষের মতো লাইভ টাইপিং প্রেজেন্স (`composing`), ব্যাচ কুল-ডাউন রেস্টিং পজ (প্রতি ১২ মেসেজে ২৫ সেকেন্ড বিরতি), স্পিনট্যাক্স ভ্যারিয়েশন ও ডিসকানেক্ট হলে স্বয়ংক্রিয় সেফটি পজ।
+3. **🎬 100MB ভিডিও, ছবি ও ডকুমেন্ট সাপোর্ট:**
+   - MP4, MKV, AVI, MOV, WEBM, 3GP ভিডিও ফাইল সরাসরি আপলোড ও প্রিভিউ প্লেয়ারের মাধ্যমে ব্রডকাস্ট ক্যাম্পেইনে পাঠানো।
+4. **💬 লাইভ চ্যাট ও কুইক মেসেঞ্জার:**
+   - সরাসরি ড্যাশবোর্ড থেকেই কাস্টমারদের সাথে ওয়ান-টু-ওয়ান চ্যাট করা।
+5. **🔁 ১-ক্লিকে ফেইল্ড মেসেজ রিট্রাই:**
+   - সংযোগ বিচ্ছিন্ন হলে ফেইল হওয়া নম্বরগুলোতে পুনরায় এক ক্লিকে মেসেজ পাঠানোর সুবিধা।
+
+---
+
+## 🔒 নিরাপত্তা সতর্কতা (Safety & Anti-Ban Best Practices)
+- ক্যাম্পেইন পাঠানোর সময় মেসেজ ইন্টারভ্যাল কমপক্ষে **১০–১৫ সেকেন্ড** রাখুন।
+- মেসেজে স্পিনট্যাক্স `{নমস্কার|হ্যালো|আসসালামু আলাইকুম} {name}` ব্যবহার করুন যাতে প্রতি মেসেজ ইউনিক হয়।
+- নতুন কোনো নম্বরে মেসেজ পাঠানোর আগে প্রতিদিন অল্প অল্প করে ক্যাম্পেইন সাইজ বৃদ্ধি করুন।
