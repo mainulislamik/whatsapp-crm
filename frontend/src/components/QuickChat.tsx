@@ -22,12 +22,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Divider,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import ChatIcon from '@mui/icons-material/Chat';
@@ -39,13 +33,35 @@ import HighQualityIcon from '@mui/icons-material/HighQuality';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ImageIcon from '@mui/icons-material/Image';
+import VideocamIcon from '@mui/icons-material/Videocam';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { WhatsAppService, TemplateService, Template } from '@/lib/api';
 
 interface QuickChatProps {
   initialPhone?: string;
   onOpenLiveChat?: (phone: string) => void;
 }
+
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.3gp', '.m4v', '.wmv', '.flv', '.ts'];
+
+const isVideoFile = (type?: string | null, fileName?: string | null) => {
+  if (type && (type.startsWith('video/') || type === 'video')) return true;
+  if (fileName) {
+    const ext = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
+    return VIDEO_EXTENSIONS.includes(ext);
+  }
+  return false;
+};
+
+const isImageFile = (type?: string | null, fileName?: string | null) => {
+  if (type && (type.startsWith('image/') || type === 'image')) return true;
+  if (fileName) {
+    const ext = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
+    return ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
+  }
+  return false;
+};
 
 export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickChatProps) {
   const [phone, setPhone] = useState<string>(initialPhone);
@@ -65,18 +81,18 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
   const [templatesLoading, setTemplatesLoading] = useState<boolean>(false);
   const [openTemplateModal, setOpenTemplateModal] = useState<boolean>(false);
 
-  const [deliveryMode, setDeliveryMode] = useState<'image' | 'document'>('image');
+  const [deliveryMode, setDeliveryMode] = useState<'image' | 'video' | 'document'>('image');
   const [attachedFile, setAttachedFile] = useState<{
     file?: File;
     fileName: string;
     base64: string;
-    type: 'image' | 'document';
+    type: 'image' | 'video' | 'document';
     mimeType?: string;
     previewUrl?: string;
     sizeFormatted?: string;
   } | null>(null);
 
-  const [previewModalImg, setPreviewModalImg] = useState<string | null>(null);
+  const [previewMediaModal, setPreviewMediaModal] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
 
   const loadTemplates = async () => {
     setTemplatesLoading(true);
@@ -106,25 +122,29 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      alert('Maximum file size is 25MB.');
+    const MAX_SIZE_BYTES = 100 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      alert(`Maximum file size is 100MB. Selected: ${(file.size / (1024 * 1024)).toFixed(1)} MB`);
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       const base64Data = (reader.result as string).split(',')[1];
-      const isImg = file.type.startsWith('image/');
+      const isVid = isVideoFile(file.type, file.name);
+      const isImg = isImageFile(file.type, file.name);
+      const fileType: 'image' | 'video' | 'document' = isVid ? 'video' : isImg ? 'image' : 'document';
+      
       setAttachedFile({
         file,
         fileName: file.name,
         base64: base64Data,
-        type: isImg ? 'image' : 'document',
-        mimeType: file.type || (isImg ? 'image/jpeg' : 'application/octet-stream'),
-        previewUrl: isImg ? (reader.result as string) : undefined,
+        type: fileType,
+        mimeType: file.type || (isVid ? 'video/mp4' : isImg ? 'image/jpeg' : 'application/octet-stream'),
+        previewUrl: (isImg || isVid) ? (reader.result as string) : undefined,
         sizeFormatted: formatFileSize(file.size),
       });
-      setDeliveryMode(isImg ? 'image' : 'document');
+      setDeliveryMode(fileType);
     };
     reader.readAsDataURL(file);
   };
@@ -140,22 +160,26 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
 
     // If template has attached media, load it automatically
     if (t.media_base64) {
-      const isImg = t.media_type === 'image' || t.mime_type?.startsWith('image/');
+      const isVid = isVideoFile(t.media_type, t.file_name) || t.mime_type?.startsWith('video/');
+      const isImg = !isVid && (isImageFile(t.media_type, t.file_name) || t.mime_type?.startsWith('image/'));
+      const determinedType: 'image' | 'video' | 'document' = isVid ? 'video' : isImg ? 'image' : 'document';
+      const determinedMime = t.mime_type || (isVid ? 'video/mp4' : isImg ? 'image/jpeg' : 'application/octet-stream');
+
       setAttachedFile({
-        fileName: t.file_name || (isImg ? 'template_photo.png' : 'template_doc.pdf'),
+        fileName: t.file_name || (isVid ? 'template_video.mp4' : isImg ? 'template_photo.png' : 'template_doc.pdf'),
         base64: t.media_base64,
-        type: isImg ? 'image' : 'document',
-        mimeType: t.mime_type || (isImg ? 'image/jpeg' : 'application/octet-stream'),
-        previewUrl: isImg ? `data:${t.mime_type || 'image/jpeg'};base64,${t.media_base64}` : undefined,
+        type: determinedType,
+        mimeType: determinedMime,
+        previewUrl: (isImg || isVid) ? `data:${determinedMime};base64,${t.media_base64}` : undefined,
         sizeFormatted: 'Template Media',
       });
-      setDeliveryMode(isImg ? 'image' : 'document');
+      setDeliveryMode(determinedType);
     }
 
     setOpenTemplateModal(false);
     setStatus({
       type: 'success',
-      text: `Applied template "${t.name}"${t.media_base64 ? ' with attached photo' : ''}!`,
+      text: `Applied template "${t.name}"${t.media_base64 ? ' with attached media' : ''}!`,
     });
   };
 
@@ -222,7 +246,7 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
             />
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-            Send instant high-resolution photos, documents, and messages directly using pre-made templates or custom content.
+            Send instant videos (up to 100MB), high-resolution photos, documents, and messages directly using pre-made templates or custom content.
           </Typography>
 
           {status && (
@@ -273,7 +297,13 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
                   <Chip
                     key={t.id}
                     label={t.name}
-                    icon={t.media_base64 ? <ImageIcon sx={{ fontSize: '14px !important' }} /> : undefined}
+                    icon={
+                      isVideoFile(t.media_type, t.file_name) ? (
+                        <VideocamIcon sx={{ fontSize: '14px !important' }} />
+                      ) : t.media_base64 ? (
+                        <ImageIcon sx={{ fontSize: '14px !important' }} />
+                      ) : undefined
+                    }
                     onClick={() => handleSelectTemplate(t)}
                     clickable
                     size="small"
@@ -309,7 +339,7 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
             {/* Message Text Input */}
             <TextField
               label="Message Caption / Content"
-              placeholder="Type your WhatsApp message, select a template, or write an image caption here..."
+              placeholder="Type your WhatsApp message, select a template, or write a video/image caption here..."
               multiline
               rows={4}
               value={message}
@@ -335,12 +365,19 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  {attachedFile.previewUrl ? (
+                  {attachedFile.type === 'video' && attachedFile.previewUrl ? (
+                    <Box
+                      component="video"
+                      src={attachedFile.previewUrl}
+                      controls
+                      sx={{ width: 100, height: 60, borderRadius: 1.5, border: '1px solid #cbd5e1', bgcolor: '#000' }}
+                    />
+                  ) : attachedFile.type === 'image' && attachedFile.previewUrl ? (
                     <Avatar
                       src={attachedFile.previewUrl}
                       variant="rounded"
                       sx={{ width: 64, height: 64, border: '1px solid #cbd5e1', cursor: 'pointer' }}
-                      onClick={() => setPreviewModalImg(attachedFile.previewUrl || null)}
+                      onClick={() => setPreviewMediaModal({ url: attachedFile.previewUrl!, type: 'image' })}
                     />
                   ) : (
                     <Avatar
@@ -359,12 +396,12 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
                       {attachedFile.fileName}
                     </Typography>
                     <Typography variant="caption" sx={{ color: '#64748b' }}>
-                      {attachedFile.sizeFormatted || 'Attachment ready'} • {attachedFile.type === 'image' ? 'Image File' : 'Document File'}
+                      {attachedFile.sizeFormatted || 'Attachment ready'} • {attachedFile.type === 'video' ? '🎬 Video File' : attachedFile.type === 'image' ? '📷 Image File' : '📄 Document File'}
                     </Typography>
                   </Box>
                 </Box>
 
-                {/* Quality Mode Toggle for Images */}
+                {/* Delivery Mode Toggle */}
                 {attachedFile.type === 'image' && (
                   <Box sx={{ bgcolor: '#ffffff', p: 1, px: 1.5, borderRadius: 2, border: '1px solid #e2e8f0' }}>
                     <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', display: 'block', mb: 0.5 }}>
@@ -385,7 +422,7 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
                         control={<Radio size="small" color="secondary" />}
                         label={
                           <Typography variant="caption" sx={{ fontWeight: 700, color: '#0284c7', display: 'flex', alignItems: 'center', gap: 0.3 }}>
-                            <HighQualityIcon sx={{ fontSize: 16 }} /> 100% HD Quality (Document)
+                            <HighQualityIcon sx={{ fontSize: 16 }} /> 100% HD Quality (Doc)
                           </Typography>
                         }
                       />
@@ -415,14 +452,17 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
                   startIcon={<AttachFileIcon />}
                   sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, borderColor: '#cbd5e1' }}
                 >
-                  {attachedFile ? 'Change Attachment' : 'Attach Photo / Document'}
+                  {attachedFile ? 'Change Attachment' : 'Attach Video / Photo / Document'}
                   <input
                     type="file"
                     hidden
-                    accept="image/*,.pdf,.doc,.docx,.xlsx"
+                    accept="video/*,image/*,.pdf,.doc,.docx,.xlsx,.mp4,.mkv,.avi,.mov,.webm,.3gp"
                     onChange={handleFileUpload}
                   />
                 </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Max 100MB
+                </Typography>
               </Stack>
 
               <Button
@@ -477,8 +517,9 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
               {templates.map((t) => {
                 const hasMedia = Boolean(t.media_base64);
-                const isImg = t.media_type === 'image' || t.mime_type?.startsWith('image/');
-                const previewSrc = hasMedia && isImg ? `data:${t.mime_type || 'image/jpeg'};base64,${t.media_base64}` : null;
+                const isVideo = isVideoFile(t.media_type, t.file_name) || t.mime_type?.startsWith('video/');
+                const isImg = !isVideo && (isImageFile(t.media_type, t.file_name) || t.mime_type?.startsWith('image/'));
+                const previewSrc = hasMedia && (isImg || isVideo) ? `data:${t.mime_type || (isVideo ? 'video/mp4' : 'image/jpeg')};base64,${t.media_base64}` : null;
 
                 return (
                   <Paper
@@ -514,10 +555,22 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
                           />
                           {hasMedia && (
                             <Chip
-                              icon={<ImageIcon sx={{ fontSize: '12px !important' }} />}
-                              label="Photo"
+                              icon={
+                                isVideo ? (
+                                  <VideocamIcon sx={{ fontSize: '12px !important' }} />
+                                ) : (
+                                  <ImageIcon sx={{ fontSize: '12px !important' }} />
+                                )
+                              }
+                              label={isVideo ? 'Video' : 'Photo'}
                               size="small"
-                              sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, bgcolor: '#fef3c7', color: '#92400e' }}
+                              sx={{
+                                height: 20,
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                bgcolor: isVideo ? '#f5f3ff' : '#fef3c7',
+                                color: isVideo ? '#7c3aed' : '#92400e',
+                              }}
                             />
                           )}
                         </Stack>
@@ -525,14 +578,31 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
 
                       {hasMedia && previewSrc && (
                         <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Box
-                            component="img"
-                            src={previewSrc}
-                            alt="Template Preview"
-                            sx={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 1, border: '1px solid #cbd5e1' }}
-                          />
+                          {isVideo ? (
+                            <Box
+                              sx={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 1,
+                                bgcolor: '#1e1b4b',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '1px solid #cbd5e1',
+                              }}
+                            >
+                              <PlayCircleOutlineIcon sx={{ color: '#a5b4fc', fontSize: 22 }} />
+                            </Box>
+                          ) : (
+                            <Box
+                              component="img"
+                              src={previewSrc}
+                              alt="Template Preview"
+                              sx={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 1, border: '1px solid #cbd5e1' }}
+                            />
+                          )}
                           <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
-                            {t.file_name || 'Attached Photo'}
+                            {t.file_name || (isVideo ? 'Attached Video' : 'Attached Photo')}
                           </Typography>
                         </Box>
                       )}
@@ -584,12 +654,12 @@ export default function QuickChat({ initialPhone = '', onOpenLiveChat }: QuickCh
         </DialogActions>
       </Dialog>
 
-      {/* Image Preview Lightbox Modal */}
-      <Dialog open={Boolean(previewModalImg)} onClose={() => setPreviewModalImg(null)} maxWidth="md">
+      {/* Media Preview Lightbox Modal */}
+      <Dialog open={Boolean(previewMediaModal)} onClose={() => setPreviewMediaModal(null)} maxWidth="md">
         <DialogContent sx={{ p: 1, bgcolor: '#000000', display: 'flex', justifyContent: 'center' }}>
-          {previewModalImg && (
+          {previewMediaModal && (
             <img
-              src={previewModalImg}
+              src={previewMediaModal.url}
               alt="Media Preview"
               style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
             />

@@ -43,3 +43,7 @@ else:
 TIME_ZONE = 'Asia/Dhaka'
 USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Max memory upload size (150MB to safely support 100MB videos with Base64 encoding)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 157286400
+FILE_UPLOAD_MAX_MEMORY_SIZE = 157286400

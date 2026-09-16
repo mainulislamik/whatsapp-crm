@@ -20,19 +20,6 @@ import {
   FormControlLabel,
   Switch,
   Tooltip,
-} from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
-import SecurityIcon from '@mui/icons-material/Security';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
-import CloseIcon from '@mui/icons-material/Close';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import ScheduleIcon from '@mui/icons-material/Schedule';
-import PeopleIcon from '@mui/icons-material/People';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import SyncIcon from '@mui/icons-material/Sync';
-import SearchIcon from '@mui/icons-material/Search';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import {
   Table,
   TableBody,
   TableCell,
@@ -43,8 +30,18 @@ import {
   Paper,
   IconButton,
 } from '@mui/material';
+import SendIcon from '@mui/icons-material/Send';
+import SecurityIcon from '@mui/icons-material/Security';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import CloseIcon from '@mui/icons-material/Close';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import PeopleIcon from '@mui/icons-material/People';
+import SearchIcon from '@mui/icons-material/Search';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import { BroadcastService, Contact, Lead, LeadService } from '@/lib/api';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import { BroadcastService, Lead, LeadService } from '@/lib/api';
 
 interface BroadcastSenderProps {
   selectedContactIds: number[];
@@ -61,6 +58,26 @@ interface BroadcastSenderProps {
   };
 }
 
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.3gp', '.m4v', '.wmv', '.flv', '.ts'];
+
+const isVideoFile = (type?: string | null, fileName?: string | null) => {
+  if (type && (type.startsWith('video/') || type === 'video')) return true;
+  if (fileName) {
+    const ext = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
+    return VIDEO_EXTENSIONS.includes(ext);
+  }
+  return false;
+};
+
+const isImageFile = (type?: string | null, fileName?: string | null) => {
+  if (type && (type.startsWith('image/') || type === 'image')) return true;
+  if (fileName) {
+    const ext = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
+    return ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
+  }
+  return false;
+};
+
 export default function BroadcastSender({
   selectedContactIds,
   onSelectedContactIdsChange,
@@ -71,7 +88,7 @@ export default function BroadcastSender({
   templateMedia,
 }: BroadcastSenderProps) {
   const [title, setTitle] = useState<string>('New Broadcast Campaign');
-  const [delay, setDelay] = useState<number>(5);
+  const [delay, setDelay] = useState<number>(10);
   const [loading, setLoading] = useState<boolean>(false);
   const [openConfirm, setOpenConfirm] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -119,25 +136,30 @@ export default function BroadcastSender({
     }
   };
 
-  // Media Attachment State
+  // Media Attachment State (Supports Video, Photo, Doc up to 100MB)
   const [attachedFile, setAttachedFile] = useState<{
     file?: File;
     fileName?: string;
     base64: string;
-    type: 'image' | 'document';
+    type: 'image' | 'video' | 'document';
     mimeType?: string;
     previewUrl?: string;
+    fileSize?: string;
   } | null>(null);
 
   useEffect(() => {
     if (templateMedia && templateMedia.base64) {
-      const isImg = templateMedia.type === 'image' || templateMedia.mimeType?.startsWith('image/');
+      const isVid = isVideoFile(templateMedia.type, templateMedia.fileName) || templateMedia.mimeType?.startsWith('video/');
+      const isImg = !isVid && (isImageFile(templateMedia.type, templateMedia.fileName) || templateMedia.mimeType?.startsWith('image/'));
+      const determinedType: 'image' | 'video' | 'document' = isVid ? 'video' : isImg ? 'image' : 'document';
+      const determinedMime = templateMedia.mimeType || (isVid ? 'video/mp4' : isImg ? 'image/jpeg' : 'application/octet-stream');
+
       setAttachedFile({
-        fileName: templateMedia.fileName || 'template_media',
+        fileName: templateMedia.fileName || (isVid ? 'video.mp4' : isImg ? 'photo.jpg' : 'document.pdf'),
         base64: templateMedia.base64,
-        type: isImg ? 'image' : 'document',
-        mimeType: templateMedia.mimeType || (isImg ? 'image/jpeg' : 'application/octet-stream'),
-        previewUrl: isImg ? `data:${templateMedia.mimeType || 'image/jpeg'};base64,${templateMedia.base64}` : undefined,
+        type: determinedType,
+        mimeType: determinedMime,
+        previewUrl: (isImg || isVid) ? `data:${determinedMime};base64,${templateMedia.base64}` : undefined,
       });
     }
   }, [templateMedia]);
@@ -154,20 +176,30 @@ export default function BroadcastSender({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      alert('Maximum file size is 20MB.');
+    const MAX_SIZE_BYTES = 100 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      alert(`File size exceeds 100MB limit. Selected file: ${(file.size / (1024 * 1024)).toFixed(1)} MB`);
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       const base64Data = (reader.result as string).split(',')[1];
-      const isImg = file.type.startsWith('image/');
+      const isVid = isVideoFile(file.type, file.name);
+      const isImg = isImageFile(file.type, file.name);
+      const fileType: 'image' | 'video' | 'document' = isVid ? 'video' : isImg ? 'image' : 'document';
+      const sizeStr = file.size > 1024 * 1024 
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+        : `${(file.size / 1024).toFixed(0)} KB`;
+
       setAttachedFile({
         file,
+        fileName: file.name,
         base64: base64Data,
-        type: isImg ? 'image' : 'document',
-        previewUrl: isImg ? (reader.result as string) : undefined,
+        type: fileType,
+        mimeType: file.type || (isVid ? 'video/mp4' : isImg ? 'image/jpeg' : 'application/octet-stream'),
+        previewUrl: (isImg || isVid) ? (reader.result as string) : undefined,
+        fileSize: sizeStr,
       });
     };
     reader.readAsDataURL(file);
@@ -232,7 +264,7 @@ export default function BroadcastSender({
               <SendIcon color="secondary" /> Bulk Broadcast Sender
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Send personalized text, images, and documents to multiple users.
+              Send personalized text, video (up to 100MB), images, and documents to multiple users.
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
@@ -309,54 +341,63 @@ export default function BroadcastSender({
           </Box>
 
           <TextField
-            label="Message Content *"
+            label="Message Content / Caption *"
             fullWidth
             multiline
             rows={4}
             value={messageText}
             onChange={(e) => onMessageChange(e.target.value)}
-            placeholder="{Hello|Hi} {name}! Check out our special announcement..."
+            placeholder="{Hello|Hi} {name}! Check out our special video / offer..."
             helperText="Using Spintax variations prevents account flags and keeps messages organic."
           />
 
-          {/* Media Attachment Row */}
-          <Box sx={{ p: 1.5, border: '1px dashed #cbd5e1', borderRadius: 1.5, bgcolor: '#f8fafc' }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, gap: 1 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          {/* Media Attachment Row (Video, Photo, Doc up to 100MB) */}
+          <Box sx={{ p: 2, border: '1px dashed #cbd5e1', borderRadius: 2, bgcolor: '#f8fafc' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, gap: 1.5 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Button
                   component="label"
                   variant="outlined"
                   size="small"
                   startIcon={<AttachFileIcon />}
+                  sx={{ textTransform: 'none', fontWeight: 700 }}
                 >
-                  Attach Image / Document
+                  Attach Media (Video / Photo / Doc)
                   <input
                     type="file"
                     hidden
-                    accept="image/*,.pdf,.doc,.docx,.xlsx"
+                    accept="video/*,image/*,.pdf,.doc,.docx,.xlsx,.mp4,.mkv,.avi,.mov,.webm,.3gp"
                     onChange={handleFileUpload}
                   />
                 </Button>
                 <Typography variant="caption" color="text.secondary">
-                  (JPG, PNG, PDF, DOCX — max 20MB)
+                  🎬 Videos (MP4, MKV, MOV), 📷 Photos, 📄 Docs — <b>Max 100MB</b>
                 </Typography>
               </Stack>
 
               {attachedFile && (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  {attachedFile.previewUrl && (
+                  {attachedFile.type === 'video' && attachedFile.previewUrl ? (
+                    <Box
+                      component="video"
+                      src={attachedFile.previewUrl}
+                      controls
+                      sx={{ width: 80, height: 45, borderRadius: 1, border: '1px solid #cbd5e1', bgcolor: '#000' }}
+                    />
+                  ) : attachedFile.type === 'image' && attachedFile.previewUrl ? (
                     <Box
                       component="img"
                       src={attachedFile.previewUrl}
                       alt="Preview"
-                      sx={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 1 }}
+                      sx={{ width: 45, height: 45, objectFit: 'cover', borderRadius: 1, border: '1px solid #cbd5e1' }}
                     />
-                  )}
+                  ) : null}
                   <Chip
-                    label={attachedFile.fileName || attachedFile.file?.name || 'Attached File'}
+                    icon={attachedFile.type === 'video' ? <VideocamIcon /> : undefined}
+                    label={`${attachedFile.type === 'video' ? 'Video: ' : ''}${attachedFile.fileName || 'Attached File'}${attachedFile.fileSize ? ` (${attachedFile.fileSize})` : ''}`}
                     onDelete={removeAttachment}
                     deleteIcon={<CloseIcon />}
-                    color="primary"
+                    color={attachedFile.type === 'video' ? 'secondary' : 'primary'}
                     variant="outlined"
                     size="small"
                   />
@@ -401,16 +442,16 @@ export default function BroadcastSender({
             <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1 }}>
               <SecurityIcon color="success" fontSize="small" />
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                Anti-Ban Protection Delay: {delay}s (±1.5s random human jitter)
+                Anti-Ban Protection Delay: {delay}s (±2s random human jitter)
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontSize: '0.82rem' }}>
-              System dynamically varies intervals between sends to mirror natural human typing rhythms.
+              System dynamically varies intervals between sends and simulates live typing presence to avoid bot detection.
             </Typography>
             <Slider
               value={delay}
-              min={3}
-              max={25}
+              min={5}
+              max={30}
               step={1}
               valueLabelDisplay="auto"
               onChange={(_, val) => setDelay(val as number)}
@@ -447,7 +488,7 @@ export default function BroadcastSender({
             </Typography>
             {attachedFile && (
               <Typography variant="body2" color="primary" sx={{ mb: 1 }}>
-                Attached file: <b>{attachedFile.fileName || attachedFile.file?.name || 'Attached File'}</b>
+                Attached media: <b>{attachedFile.fileName || 'Attached File'}</b> ({attachedFile.type})
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary">

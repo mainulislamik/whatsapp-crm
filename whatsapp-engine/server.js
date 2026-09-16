@@ -20,8 +20,8 @@ const PORT = process.env.PORT || 5001;
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || 'http://backend:8000';
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '150mb' }));
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 
 // Shared media directory
 const MEDIA_DIR = process.env.MEDIA_DIR || '/app/media';
