@@ -932,7 +932,7 @@ async def batch_import_leads_endpoint(payload: AutoLeadAssignRequest):
         imported = []
         skipped = []
         for item in payload.leads:
-            raw_phone = item.get('phone', '').strip()
+            raw_phone = str(item.get('phone') or '').strip()
             if not raw_phone:
                 continue
             
@@ -948,32 +948,48 @@ async def batch_import_leads_endpoint(payload: AutoLeadAssignRequest):
                 phone = raw_phone
 
             # Deduplication
-            if Lead.objects.filter(phone=phone).exists():
+            if Lead.objects.filter(phone=phone).exists() or (raw_phone and Lead.objects.filter(phone=raw_phone).exists()):
                 skipped.append(phone)
                 continue
 
-            category_name = item.get('category', 'Electronics')
+            category_name = str(item.get('category') or 'General').strip() or 'General'
+            shop_type = str(item.get('shop_type') or 'Retail').strip() or 'Retail'
+            shop_name = str(item.get('shop_name') or '').strip() or 'New Business'
+            owner_name = str(item.get('owner_name') or '').strip()
+            email = str(item.get('email') or '').strip()
+            website = str(item.get('website') or '').strip()
+            facebook_url = str(item.get('facebook_url') or '').strip()
+            address = str(item.get('address') or '').strip()
+            notes = str(item.get('notes') or '').strip()
+            whatsapp_about = str(item.get('whatsapp_about') or '').strip()
+
+            pic = str(item.get('whatsapp_profile_pic') or item.get('profile_pic') or '').strip()
+            wa_name = str(item.get('whatsapp_name') or item.get('shop_name') or '').strip()
+            is_on_wa = bool(item.get('is_on_whatsapp', True))
 
             lead = Lead.objects.create(
                 phone=phone,
-                shop_name=item.get('shop_name', '').strip() or 'New Business',
-                owner_name=item.get('owner_name', '').strip(),
-                email=item.get('email', '').strip(),
-                website=item.get('website', '').strip(),
-                facebook_url=item.get('facebook_url', '').strip(),
+                shop_name=shop_name,
+                owner_name=owner_name,
+                email=email,
+                website=website,
+                facebook_url=facebook_url,
                 category=category_name,
-                shop_type=item.get('shop_type', 'Retail'),
-                address=item.get('address', '').strip(),
-                notes=item.get('notes', '').strip(),
-                whatsapp_profile_pic=item.get('whatsapp_profile_pic') or item.get('profile_pic', '').strip(),
-                whatsapp_name=item.get('whatsapp_name') or item.get('shop_name', '').strip(),
-                is_on_whatsapp=item.get('is_on_whatsapp', True),
+                shop_type=shop_type,
+                address=address,
+                notes=notes,
+                whatsapp_profile_pic=pic,
+                whatsapp_name=wa_name,
+                whatsapp_about=whatsapp_about,
+                is_on_whatsapp=is_on_wa,
                 status='NEW'
             )
             imported.append({
                 "id": lead.id,
                 "shop_name": lead.shop_name,
-                "phone": lead.phone
+                "phone": lead.phone,
+                "original_id": item.get('id'),
+                "original_phone": raw_phone
             })
         return {"imported_count": len(imported), "skipped_count": len(skipped), "imported": imported}
 

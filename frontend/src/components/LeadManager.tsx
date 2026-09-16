@@ -420,14 +420,19 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
       }));
       const res = await LeadService.batchImport(payload);
       showNotification(`Successfully assigned ${res.data.imported_count} leads to CRM!`, 'success');
-      const importedPhones = new Set((res.data.imported || []).map((i: any) => i.phone));
+      const importedPhones = new Set(
+        (res.data.imported || []).flatMap((i: any) => [i.phone, i.original_phone].filter(Boolean))
+      );
+      const importedIds = new Set(
+        (res.data.imported || []).flatMap((i: any) => [i.original_id, i.id].filter(Boolean))
+      );
       setStagedLeads((prev) =>
-        prev.map((l) => (importedPhones.has(l.phone) ? { ...l, already_in_crm: true } : l))
+        prev.map((l) => (importedPhones.has(l.phone) || importedIds.has(l.id) ? { ...l, already_in_crm: true } : l))
       );
       setSelectedStagedIds((prev) => {
         const next = new Set(prev);
         toImport.forEach((l) => {
-          if (importedPhones.has(l.phone)) next.delete(l.id);
+          if (importedPhones.has(l.phone) || importedIds.has(l.id)) next.delete(l.id);
         });
         return next;
       });
