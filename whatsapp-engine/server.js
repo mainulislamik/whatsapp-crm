@@ -494,10 +494,12 @@ async function forwardBatchToBackend(msgBatch) {
 
 // Format phone number to WhatsApp JID
 function formatJID(phone) {
-  let cleaned = String(phone).replace(/\D/g, '');
-  if (phone.includes('@g.us')) {
-    return phone;
+  if (!phone) return '';
+  let str = String(phone).trim();
+  if (str.includes('@g.us') || str.includes('@s.whatsapp.net')) {
+    return str;
   }
+  let cleaned = str.replace(/\D/g, '');
   if (cleaned.startsWith('01') && cleaned.length === 11) {
     cleaned = '88' + cleaned;
   }
@@ -518,7 +520,202 @@ app.get('/status', (req, res) => {
   });
 });
 
-// All chats metadata endpoint (fast multi-lookup)
+// QR Code endpoint
+app.get('/qr', (req, res) => {
+  res.json({
+    hasQr: Boolean(lastQrDataUrl),
+    qrDataUrl: lastQrDataUrl,
+    rawQr: lastQr
+  });
+});
+
+// Logout endpoint
+app.post('/logout', async (req, res) => {
+  try {
+    if (sock) {
+      await sock.logout();
+    }
+  } catch (e) {}
+  try {
+    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  } catch (e) {}
+  contactsStore.clear();
+  lidToPhoneMap.clear();
+  groupsStore.clear();
+  profilePicsCache.clear();
+  unreadCountsMap.clear();
+  connectionStatus = 'DISCONNECTED';
+  connectedUser = null;
+  lastQr = null;
+  lastQrDataUrl = null;
+  setTimeout(connectToWhatsApp, 1000);
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// Restart endpoint
+app.post('/restart', async (req, res) => {
+  try {
+    if (sock) {
+      sock.end(undefined);
+    }
+  } catch (e) {}
+  connectionStatus = 'CONNECTING';
+  setTimeout(connectToWhatsApp, 1000);
+  res.json({ success: true, message: 'WhatsApp engine restarted' });
+});
+
+// 1-to-1 Send Direct & Bulk Send Message endpoint
+app.post('/send', async (req, res) => {
+  try {
+    if (!sock || connectionStatus !== 'CONNECTED') {
+      return res.status(400).json({ success: false, error: 'WhatsApp is not connected. Please scan QR code.' });
+    }
+
+    const { to, text, mediaBase64, mediaType, fileName, mimeType } = req.body;
+    if (!to) {
+      return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
+    }
+
+    const jid = formatJID(to);
+    let sentMsg;
+
+    if (mediaBase64) {
+      const buffer = Buffer.from(mediaBase64, 'base64');
+      if (mediaType === 'image' || (mimeType && mimeType.startsWith('image/'))) {
+        sentMsg = await sock.sendMessage(jid, {
+          image: buffer,
+          caption: text || undefined,
+          mimetype: mimeType || 'image/jpeg'
+        });
+      } else if (mediaType === 'video' || (mimeType && mimeType.startsWith('video/'))) {
+        sentMsg = await sock.sendMessage(jid, {
+          video: buffer,
+          caption: text || undefined,
+          mimetype: mimeType || 'video/mp4'
+        });
+      } else if (mediaType === 'audio' || (mimeType && mimeType.startsWith('audio/'))) {
+        sentMsg = await sock.sendMessage(jid, {
+          audio: buffer,
+          mimetype: mimeType || 'audio/mp4',
+          ptt: false
+        });
+      } else {
+        sentMsg = await sock.sendMessage(jid, {
+          document: buffer,
+          caption: text || undefined,
+          fileName: fileName || 'document.pdf',
+          mimetype: mimeType || 'application/octet-stream'
+        });
+      }
+    } else {
+      if (!text || !String(text).trim()) {
+        return res.status(400).json({ success: false, error: 'Message text or attachment is required.' });
+      }
+      sentMsg = await sock.sendMessage(jid, { text: String(text) });
+    }
+
+    const messageId = sentMsg?.key?.id || `msg_${Date.now()}`;
+    return res.json({
+      success: true,
+      messageId,
+      whatsapp_msg_id: messageId,
+      jid,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Error in /send:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to send WhatsApp message' });
+  }
+});
+
+// Live Chat Send Message endpoint
+app.post('/send-message', async (req, res) => {
+  try {
+    if (!sock || connectionStatus !== 'CONNECTED') {
+      return res.status(400).json({ success: false, error: 'WhatsApp is not connected. Please scan QR code.' });
+    }
+
+    const { phone, text, mediaType, mediaUrl, fileName } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
+    }
+
+    const jid = formatJID(phone);
+    let sentMsg;
+
+    if (mediaUrl) {
+      let localPath = mediaUrl;
+      if (mediaUrl.startsWith('/media/')) {
+        localPath = path.join(MEDIA_DIR, mediaUrl.replace('/media/', ''));
+      }
+      if (fs.existsSync(localPath)) {
+        const fileBuffer = fs.readFileSync(localPath);
+        if (mediaType === 'image') {
+          sentMsg = await sock.sendMessage(jid, { image: fileBuffer, caption: text || undefined });
+        } else if (mediaType === 'video') {
+          sentMsg = await sock.sendMessage(jid, { video: fileBuffer, caption: text || undefined });
+        } else if (mediaType === 'audio') {
+          sentMsg = await sock.sendMessage(jid, { audio: fileBuffer, mimetype: 'audio/mp4' });
+        } else {
+          sentMsg = await sock.sendMessage(jid, { document: fileBuffer, fileName: fileName || 'file.pdf', caption: text || undefined });
+        }
+      } else {
+        sentMsg = await sock.sendMessage(jid, { text: `${text || ''} ${mediaUrl}`.trim() });
+      }
+    } else {
+      sentMsg = await sock.sendMessage(jid, { text: String(text || '') });
+    }
+
+    const messageId = sentMsg?.key?.id || `msg_${Date.now()}`;
+    return res.json({
+      success: true,
+      whatsapp_msg_id: messageId,
+      jid,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Error in /send-message:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to send chat message' });
+  }
+});
+
+// Mark messages as read endpoint
+app.post('/mark-read', async (req, res) => {
+  try {
+    const { keys } = req.body;
+    if (sock && Array.isArray(keys) && keys.length > 0) {
+      await sock.readMessages(keys);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Chat profile lookup
+app.get('/chat-profile', async (req, res) => {
+  try {
+    const jid = req.query.jid;
+    if (!jid || !sock) {
+      return res.status(400).json({ error: 'JID required or socket disconnected' });
+    }
+    let pic = profilePicsCache.get(jid) || null;
+    if (!pic) {
+      try {
+        pic = await sock.profilePictureUrl(jid, 'image');
+        if (pic) profilePicsCache.set(jid, pic);
+      } catch (e) {}
+    }
+    let about = null;
+    try {
+      const st = await sock.fetchStatus(jid);
+      about = st?.status || null;
+    } catch (e) {}
+    res.json({ jid, profilePictureUrl: pic, about });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Batch resolve contact names & profile pictures for chat list
 app.post('/api/resolve-chats', async (req, res) => {
@@ -578,14 +775,6 @@ app.post('/api/resolve-chats', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Start WhatsApp socket & server
-connectToWhatsApp();
-
-app.listen(PORT, () => {
-  console.log(`WhatsApp Baileys Engine running on port ${PORT}`);
-});
-
 
 // Check if a phone number exists on WhatsApp + fetch live details
 app.get('/check-contact', async (req, res) => {
@@ -667,4 +856,11 @@ app.get('/check-contact', async (req, res) => {
     console.error('Error in /check-contact:', err);
     res.status(500).json({ error: err.message, exists: false });
   }
+});
+
+// Start WhatsApp socket & server
+connectToWhatsApp();
+
+app.listen(PORT, () => {
+  console.log(`WhatsApp Baileys Engine running on port ${PORT}`);
 });
