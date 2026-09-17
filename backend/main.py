@@ -128,6 +128,26 @@ async def lifespan(app: FastAPI):
         await sync_to_async(_setup_db_wal)()
     except Exception as e:
         print("Notice on WAL setup:", e)
+
+    # Self-healing: recover any interrupted campaigns on startup/restart
+    def _recover_orphaned_campaigns():
+        try:
+            from crm_core.models import Campaign
+            for camp in Campaign.objects.filter(status='RUNNING'):
+                pending = camp.logs.filter(status='PENDING').count()
+                if pending > 0:
+                    camp.status = 'PAUSED'
+                else:
+                    camp.status = 'COMPLETED'
+                camp.save()
+        except Exception as err:
+            logger.warning(f"Error recovering campaigns on startup: {err}")
+
+    try:
+        await sync_to_async(_recover_orphaned_campaigns)()
+    except Exception as e:
+        pass
+
     task = asyncio.create_task(scheduled_campaign_checker())
     yield
     task.cancel()
