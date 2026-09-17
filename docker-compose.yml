@@ -4,7 +4,7 @@ services:
     container_name: wa-searxng
     restart: unless-stopped
     ports:
-      - "${SEARXNG_PORT:-8888}:8080"
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:8080"
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     environment:
@@ -16,7 +16,7 @@ services:
     container_name: wa-engine
     restart: unless-stopped
     ports:
-      - "${WA_PORT:-5001}:5001"
+      - "127.0.0.1:${WA_PORT:-5001}:5001"
     environment:
       - BACKEND_URL=http://backend:8000
     volumes:

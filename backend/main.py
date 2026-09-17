@@ -15,10 +15,10 @@ import csv
 import io
 from datetime import datetime, timezone
 from django.utils import timezone as django_tz
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,31 @@ from crm_core.models import Contact, MessageTemplate, Campaign, CampaignLog, Lea
 from crm_core.ai_enricher import enrich_phone_intelligence
 
 WHATSAPP_ENGINE_URL = os.environ.get('WHATSAPP_ENGINE_URL', 'http://whatsapp-engine:5001')
+
+
+# --- REAL-TIME WEBSOCKET CHAT MANAGER ---
+class WebSocketChatManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
+
+    async def broadcast(self, data: dict):
+        dead = []
+        for ws in list(self.active_connections):
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.active_connections.discard(ws)
+
+ws_chat_manager = WebSocketChatManager()
 
 # --- SPINTAX HELPER ---
 def parse_spintax(text: str) -> str:
@@ -42,16 +67,16 @@ def parse_spintax(text: str) -> str:
         text = text[:match.start()] + choice + text[match.end():]
     return text
 
-# --- HELPER: LEAD CONTACTED TRACKER ---
+# --- HELPER: LEAD CONTACTED TRACKER (HIGH PERFORMANCE INDEXED) ---
 def normalize_phone_digits(phone: str) -> str:
     cleaned = re.sub(r'\D', '', str(phone))
-    if cleaned.startswith('88') and len(cleaned) == 13:
-        cleaned = cleaned[2:]
+    if cleaned.startswith('8801') and len(cleaned) == 13:
+        return '0' + cleaned[2:]
     return cleaned
 
 def mark_lead_contacted_by_phone(phone: str, msg_time: Optional[datetime] = None):
     """
-    Finds lead matching the phone number and automatically marks:
+    Fast indexed lookup for lead matching the phone number:
     - is_contacted = True
     - if status == 'NEW' -> status = 'CONTACTED'
     - last_contacted_at = now
@@ -59,12 +84,15 @@ def mark_lead_contacted_by_phone(phone: str, msg_time: Optional[datetime] = None
     """
     if not phone:
         return
-    norm = normalize_phone_digits(phone)
-    if not norm:
+    cleaned = re.sub(r'\D', '', str(phone))
+    if not cleaned or len(cleaned) < 5:
         return
     now_time = msg_time or django_tz.now()
-    for lead in Lead.objects.all():
-        if normalize_phone_digits(lead.phone) == norm:
+    suffix = cleaned[-8:] if len(cleaned) >= 8 else cleaned
+    leads = list(Lead.objects.filter(phone__icontains=suffix))
+    for lead in leads:
+        lead_digits = re.sub(r'\D', '', str(lead.phone))
+        if lead_digits.endswith(suffix) or cleaned.endswith(lead_digits[-8:] if len(lead_digits) >= 8 else lead_digits):
             lead.is_contacted = True
             if lead.status == 'NEW':
                 lead.status = 'CONTACTED'
@@ -91,6 +119,15 @@ async def scheduled_campaign_checker():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    def _setup_db_wal():
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA busy_timeout=5000;")
+    try:
+        await sync_to_async(_setup_db_wal)()
+    except Exception as e:
+        print("Notice on WAL setup:", e)
     task = asyncio.create_task(scheduled_campaign_checker())
     yield
     task.cancel()
@@ -1415,6 +1452,14 @@ async def update_chat_status(req: ChatStatusUpdateRequest):
     def _update():
         ChatMessage.objects.filter(whatsapp_msg_id=req.whatsapp_msg_id).update(status=req.status)
     await sync_to_async(_update)()
+    try:
+        asyncio.create_task(ws_chat_manager.broadcast({
+            "type": "STATUS_UPDATE",
+            "whatsapp_msg_id": req.whatsapp_msg_id,
+            "status": req.status
+        }))
+    except Exception:
+        pass
     return {"success": True}
 
 class BatchIncomingMessageWebhook(BaseModel):
@@ -1443,15 +1488,27 @@ async def get_chat_list():
                 .annotate(c=Count('id'))
         }
 
-        # Cache leads by clean phone numbers
+        # Optimized: Indexed query only for active chat phones (Zero full-table scans)
+        from django.db.models import Q
+        lead_query = Q()
+        for p in latest_msgs.keys():
+            digits = re.sub(r'\D', '', p)
+            if len(digits) >= 8:
+                lead_query |= Q(phone__icontains=digits[-8:])
+            elif digits:
+                lead_query |= Q(phone__icontains=digits)
+
         leads_clean = {}
-        for l in Lead.objects.all():
-            clean = l.phone.replace('+', '').replace('-', '').replace(' ', '')
-            leads_clean[clean] = l
-            if clean.startswith('8801'):
-                leads_clean['0' + clean[2:]] = l
-            elif clean.startswith('01'):
-                leads_clean['88' + clean] = l
+        if lead_query:
+            for l in Lead.objects.filter(lead_query):
+                clean = re.sub(r'\D', '', l.phone)
+                leads_clean[clean] = l
+                if clean.startswith('8801'):
+                    leads_clean['0' + clean[2:]] = l
+                elif clean.startswith('01'):
+                    leads_clean['88' + clean] = l
+                if len(clean) >= 8:
+                    leads_clean[clean[-8:]] = l
 
         results = []
         for p, latest in latest_msgs.items():
@@ -1605,10 +1662,9 @@ async def send_chat_message(phone: str, req: SendMessageRequest):
             result = resp.json()
 
         def _save_outgoing():
-            local_phone = phone.replace('\D', '')
-            if local_phone.startswith('8801'):
-                local_phone = '0' + local_phone[2:]
-            ChatMessage.objects.create(
+            digits = re.sub(r'\D', '', phone)
+            local_phone = '0' + digits[2:] if (digits.startswith('8801') and len(digits) == 13) else digits
+            msg = ChatMessage.objects.create(
                 whatsapp_msg_id=result.get('whatsapp_msg_id', f"out_{datetime.now().timestamp()}"),
                 phone=local_phone,
                 jid=result.get('jid', f"{local_phone}@s.whatsapp.net"),
@@ -1622,10 +1678,32 @@ async def send_chat_message(phone: str, req: SendMessageRequest):
                 status="SENT",
                 timestamp=datetime.fromisoformat(result.get('timestamp', datetime.now().isoformat()))
             )
-            # Track lead contacted status
             mark_lead_contacted_by_phone(local_phone)
+            return msg
 
-        await sync_to_async(_save_outgoing)()
+        saved_msg = await sync_to_async(_save_outgoing)()
+        try:
+            asyncio.create_task(ws_chat_manager.broadcast({
+                "type": "NEW_MESSAGE",
+                "message": {
+                    "id": saved_msg.id,
+                    "whatsapp_msg_id": saved_msg.whatsapp_msg_id,
+                    "phone": phone,
+                    "jid": saved_msg.jid,
+                    "sender_name": saved_msg.sender_name,
+                    "is_from_me": True,
+                    "message_text": saved_msg.message_text,
+                    "media_type": saved_msg.media_type,
+                    "media_url": saved_msg.media_url,
+                    "media_caption": saved_msg.media_caption,
+                    "file_name": saved_msg.file_name,
+                    "status": "SENT",
+                    "is_read": True,
+                    "timestamp": saved_msg.timestamp.isoformat()
+                }
+            }))
+        except Exception:
+            pass
         return result
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"WhatsApp Engine error: {e}")
@@ -1701,6 +1779,29 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
             return msg, created
 
         msg, created = await sync_to_async(_save_incoming)()
+        if created:
+            try:
+                asyncio.create_task(ws_chat_manager.broadcast({
+                    "type": "NEW_MESSAGE",
+                    "message": {
+                        "id": msg.id,
+                        "whatsapp_msg_id": msg.whatsapp_msg_id,
+                        "phone": payload.phone,
+                        "jid": msg.jid,
+                        "sender_name": msg.sender_name,
+                        "is_from_me": msg.is_from_me,
+                        "message_text": msg.message_text,
+                        "media_type": msg.media_type,
+                        "media_url": msg.media_url,
+                        "media_caption": msg.media_caption,
+                        "file_name": msg.file_name,
+                        "status": msg.status,
+                        "is_read": msg.is_read,
+                        "timestamp": msg.timestamp.isoformat()
+                    }
+                }))
+            except Exception:
+                pass
         return {"success": True, "created": created, "id": msg.id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save incoming message: {e}")
@@ -1748,3 +1849,17 @@ async def incoming_batch_messages_webhook(payload: BatchIncomingMessageWebhook):
         return {"success": True, "saved": saved, "total": len(payload.messages)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save batch incoming messages: {e}")
+
+
+@app.websocket("/api/ws/chats")
+async def websocket_chat_endpoint(websocket: WebSocket):
+    await ws_chat_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        ws_chat_manager.disconnect(websocket)
+    except Exception:
+        ws_chat_manager.disconnect(websocket)

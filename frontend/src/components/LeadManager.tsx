@@ -179,6 +179,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   
   // Segmented Outreach Tab: 'all' | 'contacted' | 'uncontacted' | 'converted'
   const [activeTab, setActiveTab] = useState<'all' | 'contacted' | 'uncontacted' | 'converted'>('all');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
   // Updating lead status in-table state (leadId -> boolean)
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
@@ -1000,6 +1001,46 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
             <IconButton size="small" onClick={fetchLeadsAndCategories} sx={{ color: 'text.secondary', bgcolor: '#ffffff', border: '1px solid #e2e8f0' }}>
               <RefreshIcon fontSize="small" />
             </IconButton>
+
+            {/* View Mode Switcher (Table vs Kanban) */}
+            <Stack direction="row" spacing={0.5} sx={{ bgcolor: '#f1f5f9', p: 0.5, borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <Button
+                size="small"
+                onClick={() => setViewMode('table')}
+                sx={{
+                  borderRadius: 1.5,
+                  px: 1.5,
+                  py: 0.4,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  bgcolor: viewMode === 'table' ? '#ffffff' : 'transparent',
+                  color: viewMode === 'table' ? '#0f172a' : '#64748b',
+                  boxShadow: viewMode === 'table' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  '&:hover': { bgcolor: viewMode === 'table' ? '#ffffff' : '#e2e8f0' }
+                }}
+              >
+                📋 Table View
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setViewMode('kanban')}
+                sx={{
+                  borderRadius: 1.5,
+                  px: 1.5,
+                  py: 0.4,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  bgcolor: viewMode === 'kanban' ? '#ffffff' : 'transparent',
+                  color: viewMode === 'kanban' ? '#0f172a' : '#64748b',
+                  boxShadow: viewMode === 'kanban' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  '&:hover': { bgcolor: viewMode === 'kanban' ? '#ffffff' : '#e2e8f0' }
+                }}
+              >
+                📊 Kanban Pipeline
+              </Button>
+            </Stack>
           </Stack>
         </Box>
 
@@ -1059,8 +1100,11 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
 
         {loading && <LinearProgress sx={{ mb: 1.5, borderRadius: 1 }} />}
 
-        {/* Uniform Sized Modern Leads Table */}
-        <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 2.5, overflow: 'hidden' }}>
+        {/* ========================================================================= */}
+        {/* 🌟 VIEW MODE SWITCH: TABLE OR KANBAN PIPELINE */}
+        {/* ========================================================================= */}
+        {viewMode === 'table' ? (
+          <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 2.5, overflow: 'hidden' }}>
           <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 920 }}>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f1f5f9' }}>
@@ -1451,6 +1495,287 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
             </TableBody>
           </Table>
         </TableContainer>
+        ) : (
+          /* ========================================================================= */
+          /* 🌟 MODERN KANBAN LIFECYCLE PIPELINE BOARD */
+          /* ========================================================================= */
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 2,
+              overflowX: 'auto',
+              pb: 2.5,
+              pt: 0.5,
+              minHeight: 560,
+              alignItems: 'stretch',
+              '&::-webkit-scrollbar': { height: 8 },
+              '&::-webkit-scrollbar-thumb': { bgcolor: '#cbd5e1', borderRadius: 4 },
+            }}
+          >
+            {LEAD_STATUSES.map((statusConfig) => {
+              const columnLeads = filteredLeads.filter((l) => (l.status || 'NEW') === statusConfig.value);
+              return (
+                <Paper
+                  key={statusConfig.value}
+                  elevation={0}
+                  sx={{
+                    minWidth: 290,
+                    maxWidth: 310,
+                    flex: '0 0 295px',
+                    bgcolor: '#f8fafc',
+                    borderRadius: 3,
+                    border: `1px solid ${statusConfig.border}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    maxHeight: '78vh',
+                  }}
+                >
+                  {/* Column Header */}
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderBottom: '1px solid #e2e8f0',
+                      bgcolor: statusConfig.bg,
+                      borderTopLeftRadius: 12,
+                      borderTopRightRadius: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          bgcolor: statusConfig.text,
+                        }}
+                      />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: statusConfig.text, fontSize: '0.85rem' }}>
+                        {statusConfig.label}
+                      </Typography>
+                    </Stack>
+                    <Chip
+                      label={columnLeads.length}
+                      size="small"
+                      sx={{
+                        fontWeight: 800,
+                        fontSize: '0.75rem',
+                        bgcolor: '#ffffff',
+                        color: statusConfig.text,
+                        border: `1px solid ${statusConfig.border}`,
+                        height: 22,
+                      }}
+                    />
+                  </Box>
+
+                  {/* Cards List in Column */}
+                  <Box sx={{ p: 1.5, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {columnLeads.length === 0 ? (
+                      <Box
+                        sx={{
+                          py: 5,
+                          px: 2,
+                          textAlign: 'center',
+                          border: '1.5px dashed #cbd5e1',
+                          borderRadius: 2.5,
+                          bgcolor: '#ffffff',
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 600 }}>
+                          No leads in this stage
+                        </Typography>
+                      </Box>
+                    ) : (
+                      columnLeads.map((lead) => (
+                        <Paper
+                          key={lead.id}
+                          elevation={0}
+                          onClick={() => handleOpenProfile(lead)}
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2.5,
+                            bgcolor: '#ffffff',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.03)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                              boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
+                              borderColor: '#94a3b8',
+                              transform: 'translateY(-2px)',
+                            },
+                          }}
+                        >
+                          <Stack direction="row" spacing={1.2} sx={{ alignItems: 'flex-start', mb: 1 }}>
+                            <Avatar
+                              src={getLeadAvatarSrc(lead)}
+                              alt={lead.shop_name}
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                bgcolor: '#f1f5f9',
+                                color: '#475569',
+                                fontSize: '0.85rem',
+                                fontWeight: 700,
+                                border: '1px solid #e2e8f0',
+                              }}
+                            >
+                              {lead.shop_name?.[0]?.toUpperCase() || 'L'}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: 700,
+                                  color: '#0f172a',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {lead.shop_name}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                {lead.category || 'General'} {lead.owner_name ? `• ${lead.owner_name}` : ''}
+                              </Typography>
+                            </Box>
+                          </Stack>
+
+                          {/* Phone & WhatsApp Indicator */}
+                          <Stack direction="row" spacing={0.8} sx={{ alignItems: 'center', mb: 1 }}>
+                            <Typography
+                              variant="caption"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyPhone(lead.phone);
+                              }}
+                              sx={{
+                                fontFamily: 'monospace',
+                                fontWeight: 700,
+                                color: '#1e293b',
+                                bgcolor: '#f1f5f9',
+                                px: 0.8,
+                                py: 0.3,
+                                borderRadius: 1,
+                                cursor: 'copy',
+                                '&:hover': { bgcolor: '#e2e8f0' },
+                              }}
+                            >
+                              {lead.phone}
+                            </Typography>
+                            {lead.is_on_whatsapp && (
+                              <Tooltip title="Verified on WhatsApp">
+                                <CheckCircleIcon sx={{ color: '#25D366', fontSize: 16 }} />
+                              </Tooltip>
+                            )}
+                          </Stack>
+
+                          {/* Quick Message / Activity stats */}
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.2 }}>
+                            {lead.sent_messages_count ? (
+                              <Chip
+                                label={`${lead.sent_messages_count} msgs`}
+                                size="small"
+                                sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#f0fdf4', color: '#16a34a' }}
+                              />
+                            ) : null}
+                            {lead.last_contacted_at && (
+                              <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                                {formatRelativeTime(lead.last_contacted_at)}
+                              </Typography>
+                            )}
+                          </Stack>
+
+                          <Divider sx={{ my: 1 }} />
+
+                          {/* Status Mover & Quick Buttons */}
+                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Select
+                              size="small"
+                              value={lead.status || 'NEW'}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => handleQuickStatusChange(lead.id, e.target.value)}
+                              sx={{
+                                height: 26,
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                borderRadius: 1.5,
+                                bgcolor: '#f8fafc',
+                                '& .MuiSelect-select': { py: 0.3, px: 1 },
+                              }}
+                            >
+                              {LEAD_STATUSES.map((s) => (
+                                <MenuItem key={s.value} value={s.value} sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                                  {s.label}
+                                </MenuItem>
+                              ))}
+                            </Select>
+
+                            <Stack direction="row" spacing={0.5}>
+                              <Tooltip title="Quick WhatsApp Outreach">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenProfile(lead);
+                                  }}
+                                  sx={{ p: 0.5, color: '#128C7E', bgcolor: '#ecfdf5', '&:hover': { bgcolor: '#d1fae5' } }}
+                                >
+                                  <WhatsAppIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                              {onDirectMessage && (
+                                <Tooltip title="Live Chat">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDirectMessage(lead.phone);
+                                    }}
+                                    sx={{ p: 0.5, color: '#0284c7', '&:hover': { bgcolor: '#f0f9ff' } }}
+                                  >
+                                    <ChatIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              <Tooltip title="Edit Lead">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEdit(lead);
+                                  }}
+                                  sx={{ p: 0.5, color: '#64748b', '&:hover': { bgcolor: '#f1f5f9' } }}
+                                >
+                                  <EditIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Delete">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteLead(lead.id, lead.shop_name);
+                                  }}
+                                  sx={{ p: 0.5, '&:hover': { bgcolor: '#fef2f2' } }}
+                                >
+                                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
+                          </Stack>
+                        </Paper>
+                      ))
+                    )}
+                  </Box>
+                </Paper>
+              );
+            })}
+          </Box>
+        )}
       </CardContent>
 
       {/* ========================================================================= */}

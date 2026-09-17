@@ -304,19 +304,17 @@ async function connectToWhatsApp() {
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
       const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      const isQrTimeout = statusCode === 408 || String(lastDisconnect?.error).includes('QR refs attempts ended');
       connectionStatus = 'DISCONNECTED';
       connectedUser = null;
       lastQr = null;
       lastQrDataUrl = null;
 
-      console.log(`[WhatsApp Engine] Connection closed. StatusCode: ${statusCode}. LoggedOut: ${isLoggedOut}. Error:`, lastDisconnect?.error);
+      console.log(`[WhatsApp Engine] Connection closed. StatusCode: ${statusCode}. LoggedOut: ${isLoggedOut}. isQrTimeout: ${isQrTimeout}. Error:`, lastDisconnect?.error);
 
-      if (!isLoggedOut) {
-        reconnectAttempts++;
-        const delay = Math.min(3000 * reconnectAttempts, 20000);
-        console.log(`[WhatsApp Engine] Attempting reconnect in ${delay / 1000}s (Attempt ${reconnectAttempts})...`);
-        setTimeout(connectToWhatsApp, delay);
-      } else {
+      const hasCreds = fs.existsSync(path.join(AUTH_DIR, 'creds.json'));
+
+      if (isLoggedOut) {
         console.log('[WhatsApp Engine] Session logged out by WhatsApp server. Resetting auth credentials...');
         try {
           fs.rmSync(AUTH_DIR, { recursive: true, force: true });
@@ -327,7 +325,16 @@ async function connectToWhatsApp() {
         profilePicsCache.clear();
         unreadCountsMap.clear();
         reconnectAttempts = 0;
-        setTimeout(connectToWhatsApp, 2000);
+        connectionStatus = 'DISCONNECTED';
+      } else if (isQrTimeout || (!hasCreds && reconnectAttempts >= 3)) {
+        console.log('[WhatsApp Engine] QR pairing timed out or max retry reached. Pausing auto-reconnect until user requests QR.');
+        connectionStatus = 'QR_TIMEOUT';
+        reconnectAttempts = 0;
+      } else {
+        reconnectAttempts++;
+        const delay = Math.min(3000 * reconnectAttempts, 20000);
+        console.log(`[WhatsApp Engine] Attempting reconnect in ${delay / 1000}s (Attempt ${reconnectAttempts})...`);
+        setTimeout(connectToWhatsApp, delay);
       }
     } else if (connection === 'open') {
       connectionStatus = 'CONNECTED';
@@ -532,7 +539,16 @@ app.get('/status', (req, res) => {
 
 // QR Code endpoint
 app.get('/qr', (req, res) => {
+  if (!sock || connectionStatus === 'QR_TIMEOUT' || connectionStatus === 'DISCONNECTED') {
+    const hasCreds = fs.existsSync(path.join(AUTH_DIR, 'creds.json'));
+    if (!hasCreds) {
+      console.log('[WhatsApp Engine] User requested /qr while inactive. Initializing QR generation...');
+      reconnectAttempts = 0;
+      connectToWhatsApp();
+    }
+  }
   res.json({
+    status: connectionStatus,
     hasQr: Boolean(lastQrDataUrl),
     qrDataUrl: lastQrDataUrl,
     rawQr: lastQr

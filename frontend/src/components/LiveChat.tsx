@@ -167,6 +167,90 @@ export default function LiveChat({ onBack }: LiveChatProps) {
     fetchChats(true);
   }, []);
 
+  // --- REAL-TIME WEBSOCKET FOR 0ms LIVE CHAT & INSTANT DELIVERY TICKS ---
+  useEffect(() => {
+    let ws: any = null;
+    let reconnectTimer: any = null;
+
+    const connectWs = () => {
+      try {
+        if (typeof window === 'undefined') return;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.hostname + ':8050/api/ws/chats';
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event: any) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'NEW_MESSAGE' && data.message) {
+              const newMsg = data.message;
+              const currentPhone = selectedPhoneRef.current;
+              
+              if (currentPhone && (newMsg.phone === currentPhone || currentPhone.endsWith(newMsg.phone.slice(-8)) || newMsg.phone.endsWith(currentPhone.slice(-8)))) {
+                setMessages((prev) => {
+                  if (prev.some((m) => m.id === newMsg.id || (newMsg.whatsapp_msg_id && m.whatsapp_msg_id === newMsg.whatsapp_msg_id))) {
+                    return prev;
+                  }
+                  return [...prev, newMsg];
+                });
+                if (!newMsg.is_from_me) {
+                  ChatService.markRead(currentPhone).catch(() => {});
+                }
+              }
+
+              setChats((prev) => {
+                const idx = prev.findIndex((c) => c.phone === newMsg.phone || (newMsg.phone && c.phone.endsWith(newMsg.phone.slice(-8))));
+                if (idx !== -1) {
+                  const updated = [...prev];
+                  const target = { ...updated[idx] };
+                  target.last_message = newMsg.message_text || newMsg.media_type || 'Media';
+                  target.last_message_time = newMsg.timestamp || new Date().toISOString();
+                  if (!newMsg.is_from_me && target.phone !== currentPhone) {
+                    target.unread_count = (target.unread_count || 0) + 1;
+                  }
+                  updated.splice(idx, 1);
+                  return [target, ...updated];
+                } else {
+                  fetchChats();
+                  return prev;
+                }
+              });
+            } else if (data.type === 'STATUS_UPDATE') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.whatsapp_msg_id === data.whatsapp_msg_id ? { ...m, status: data.status } : m
+                )
+              );
+            }
+          } catch (e) {}
+        };
+
+        ws.onclose = () => {
+          reconnectTimer = setTimeout(connectWs, 4000);
+        };
+        ws.onerror = () => {
+          ws && ws.close();
+        };
+      } catch (e) {
+        reconnectTimer = setTimeout(connectWs, 4000);
+      }
+    };
+
+    connectWs();
+
+    const pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send('ping');
+      }
+    }, 25000);
+
+    return () => {
+      clearInterval(pingInterval);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) ws.close();
+    };
+  }, []);
+
   // Poll chats list every 6 seconds
   useEffect(() => {
     const chatInterval = setInterval(() => {

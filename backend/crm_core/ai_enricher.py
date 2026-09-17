@@ -1,3 +1,5 @@
+import phonenumbers
+from phonenumbers import geocoder, carrier, timezone
 import re
 import html
 import asyncio
@@ -402,18 +404,42 @@ def extract_owner_name_from_text(corpus: str) -> str:
     return ""
 
 async def enrich_lead(phone_raw: str, wa_data: Optional[Dict[str, Any]] = None, wa_engine_url: str = "http://whatsapp-engine:5001") -> Dict[str, Any]:
-    digits = re.sub(r'\D', '', str(phone_raw))
-    if digits.startswith('880'):
-        normalized = digits
-        local_phone = '0' + digits[3:]
-    elif digits.startswith('0'):
-        normalized = '88' + digits
-        local_phone = digits
-    else:
-        normalized = '880' + digits
-        local_phone = '0' + digits
+    # Worldwide phone intelligence using libphonenumber
+    raw_str = str(phone_raw).strip()
+    if not raw_str.startswith('+'):
+        if raw_str.startswith('880'):
+            raw_str = '+' + raw_str
+        elif raw_str.startswith('01'):
+            raw_str = '+880' + raw_str[1:]
+        else:
+            raw_str = '+' + raw_str
 
-    carrier = get_operator_info(local_phone)
+    carrier_detected = ""
+    location_detected = ""
+    tz_detected = ""
+    formatted_phone = phone_raw
+
+    try:
+        p = phonenumbers.parse(raw_str, None)
+        if phonenumbers.is_valid_number(p):
+            formatted_phone = phonenumbers.format_number(p, phonenumbers.PhoneNumberFormat.E164)
+            carrier_detected = carrier.name_for_number(p, "en")
+            location_detected = geocoder.description_for_number(p, "en")
+            tz_list = timezone.time_zones_for_number(p)
+            if tz_list:
+                tz_detected = tz_list[0]
+    except Exception:
+        pass
+
+    digits = re.sub(r'\D', '', str(formatted_phone))
+    if not carrier_detected:
+        if digits.startswith('8801') or (len(digits) == 11 and digits.startswith('01')):
+            carrier_detected = get_operator_info(digits)
+        else:
+            carrier_detected = "Mobile Network"
+
+    carrier = carrier_detected
+    local_phone = formatted_phone
     sources_found = []
     is_on_whatsapp = False
     profile_pic = None

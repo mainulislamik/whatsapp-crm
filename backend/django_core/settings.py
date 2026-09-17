@@ -37,6 +37,9 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': os.path.join(DATA_DIR, 'whatsapp_crm.sqlite3'),
+            'OPTIONS': {
+                'timeout': 25,
+            }
         }
     }
 
