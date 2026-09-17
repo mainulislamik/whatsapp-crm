@@ -403,11 +403,13 @@ class LeadScraperEngine:
     async def check_whatsapp_status(self, phone: str, client: httpx.AsyncClient) -> Tuple[bool, Optional[str]]:
         """Check if phone number is active on WhatsApp via Baileys engine."""
         try:
-            clean_num = re.sub(r'\D', '', phone)
-            resp = await client.get(f"{self.wa_engine_url}/api/contact/{clean_num}", timeout=3.0)
+            clean_num = re.sub(r'\D', '', str(phone))
+            if not clean_num or len(clean_num) < 7:
+                return False, None
+            resp = await client.get(f"{self.wa_engine_url}/check-contact", params={"phone": clean_num}, timeout=3.0)
             if resp.status_code == 200:
                 data = resp.json()
-                return data.get('exists', False), data.get('profilePicUrl')
+                return bool(data.get('exists', False)), data.get('profilePictureUrl') or data.get('profilePicUrl')
         except Exception:
             pass
         return False, None
@@ -422,7 +424,7 @@ class LeadScraperEngine:
         exclude_existing: bool = True
     ) -> List[Dict[str, Any]]:
         """
-        Executive Worldwide Lead Generation Pipeline.
+        High-Performance Concurrent Worldwide Lead Generation Pipeline.
         """
         country_info = COUNTRY_METADATA.get(country, COUNTRY_METADATA['GLOBAL'])
         country_name = country_info['name']
@@ -433,7 +435,6 @@ class LeadScraperEngine:
         if exclude_existing:
             try:
                 from crm_core.models import Lead
-                # Read existing lead phones from database
                 existing_phones = set(Lead.objects.values_list('phone', flat=True))
             except Exception:
                 pass
@@ -443,32 +444,34 @@ class LeadScraperEngine:
         seen_urls: Set[str] = set()
 
         async with httpx.AsyncClient(timeout=10.0) as client:
-            for sq in search_queries:
-                if len(collected_items) >= limit * 3:
-                    break
+            # 1. Fetch search engine results concurrently
+            async def _fetch_sq(sq: str):
                 try:
                     params = {
                         'q': sq,
                         'format': 'json',
                         'engines': SEARXNG_ENGINES,
                     }
-                    if country != 'GLOBAL' and country_info['iso']:
+                    if country != 'GLOBAL' and country_info.get('iso'):
                         params['country'] = country_info['iso']
-
-                    resp = await client.get(f"{self.searxng_url}/search", params=params, timeout=6.0)
+                    resp = await client.get(f"{self.searxng_url}/search", params=params, timeout=5.0)
                     if resp.status_code == 200:
-                        data = resp.json()
-                        results = data.get('results', [])
-                        for res in results:
-                            u = res.get('url', '')
-                            if u and u not in seen_urls:
-                                seen_urls.add(u)
-                                collected_items.append(res)
+                        return resp.json().get('results', [])
                 except Exception as e:
-                    logger.warning(f"SearXNG query error on '{sq}': {e}")
-                    continue
+                    logger.warning(f"SearXNG query '{sq}' failed: {e}")
+                return []
 
-            leads: List[Dict[str, Any]] = []
+            # Run top search queries simultaneously for max speed
+            nested_results = await asyncio.gather(*[_fetch_sq(sq) for sq in search_queries[:8]])
+            for res_list in nested_results:
+                for item in res_list:
+                    u = item.get('url', '')
+                    if u and u not in seen_urls:
+                        seen_urls.add(u)
+                        collected_items.append(item)
+
+            # 2. Extract candidate businesses
+            candidates = []
             seen_phones: Set[str] = set()
             seen_names: Set[str] = set()
 
@@ -482,14 +485,18 @@ class LeadScraperEngine:
                 emails = self.extract_emails(combined_text)
                 address = None
 
-                if not phone and url and not any(ign in url.lower() for ign in ['facebook.com', 'instagram.com', 'youtube.com', 'tiktok.com', 'wikipedia.org', 'linkedin.com']):
-                    deep = await self.fetch_website_deep_contacts(url, client, country)
-                    if deep.get('phones'):
-                        phone = deep['phones'][0]
-                    if deep.get('emails'):
-                        emails.extend(deep['emails'])
-                    if deep.get('address'):
-                        address = deep['address']
+                # Deep scraping for candidate URLs only if candidates are low
+                if not phone and len(candidates) < limit * 2 and url and not any(ign in url.lower() for ign in ['facebook.com', 'instagram.com', 'youtube.com', 'tiktok.com', 'wikipedia.org', 'linkedin.com', 'pinterest.com', 'x.com']):
+                    try:
+                        deep = await asyncio.wait_for(self.fetch_website_deep_contacts(url, client, country), timeout=2.0)
+                        if deep.get('phones'):
+                            phone = deep['phones'][0]
+                        if deep.get('emails'):
+                            emails.extend(deep['emails'])
+                        if deep.get('address'):
+                            address = deep['address']
+                    except Exception:
+                        pass
 
                 if not phone:
                     continue
@@ -503,16 +510,43 @@ class LeadScraperEngine:
                     continue
                 seen_names.add(shop_name.lower())
 
-                # WhatsApp status & profile pic
-                is_on_wa = False
+                has_wa_link = bool(re.search(r'wa\.me/|whatsapp\.com|api\.whatsapp', combined_text, re.I))
+                candidates.append({
+                    'shop_name': shop_name,
+                    'phone': phone,
+                    'emails': emails,
+                    'address': address,
+                    'url': url,
+                    'has_wa_link': has_wa_link,
+                    'content': content
+                })
+
+            # 3. Parallel WhatsApp verification for candidate leads
+            async def _verify_candidate(c: dict):
+                is_on_wa = c['has_wa_link']
                 wa_pic = None
                 try:
-                    is_on_wa, wa_pic = await self.check_whatsapp_status(phone, client)
+                    engine_wa, engine_pic = await self.check_whatsapp_status(c['phone'], client)
+                    if engine_wa:
+                        is_on_wa = True
+                    if engine_pic:
+                        wa_pic = engine_pic
                 except Exception:
                     pass
+                return c, is_on_wa, wa_pic
 
+            verified_tuples = await asyncio.gather(*[_verify_candidate(c) for c in candidates[:limit * 2]])
+
+            leads: List[Dict[str, Any]] = []
+            for c, is_on_wa, wa_pic in verified_tuples:
                 if only_whatsapp and not is_on_wa:
                     continue
+
+                url = c['url']
+                shop_name = c['shop_name']
+                phone = c['phone']
+                emails = c['emails']
+                address = c['address']
 
                 # Domain favicon fallback
                 domain = ""
@@ -523,36 +557,31 @@ class LeadScraperEngine:
                     pass
 
                 profile_pic = wa_pic or (f"https://www.google.com/s2/favicons?domain={domain}&sz=128" if domain else "")
-                
                 if not address:
                     address = f"{lead_category}, {country_name}" if country != 'GLOBAL' else lead_category
 
                 google_maps_url = f"https://www.google.com/maps/search/?api=1&query={quote_plus(shop_name + ' ' + address)}"
                 facebook_url = url if 'facebook.com' in url else None
-
                 lead_id = hashlib.md5(f"{phone}_{shop_name}".encode()).hexdigest()[:12]
 
-                lead_entry = {
+                leads.append({
                     'id': lead_id,
                     'shop_name': shop_name,
                     'phone': phone,
                     'email': emails[0] if emails else '',
                     'website': url,
-                    'country': country,
-                    'category': lead_category,
-                    'shop_type': 'Verified Business',
-                    'address': address,
                     'facebook_url': facebook_url,
                     'google_maps_url': google_maps_url,
-                    'profile_pic': profile_pic,
-                    'notes': content[:250] if content else f"Worldwide lead from {country_name}",
+                    'address': address,
+                    'category': lead_category,
                     'is_on_whatsapp': is_on_wa,
                     'whatsapp_profile_pic': wa_pic,
-                    'selected': True
-                }
+                    'profile_picture_url': profile_pic,
+                    'already_in_crm': phone in existing_phones,
+                    'scraped_source': 'Concurrent Multi-Engine Search',
+                })
 
-                leads.append(lead_entry)
                 if len(leads) >= limit:
                     break
 
-        return leads
+            return leads
