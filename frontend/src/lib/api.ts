@@ -307,6 +307,8 @@ export const LeadService = {
   listCategories: () => api.get<LeadCategory[]>('/lead-categories'),
   createCategory: (data: { name: string; description?: string }) =>
     api.post<LeadCategory>('/lead-categories', data),
+  deleteCategory: (id: number) =>
+    api.delete<{ success: boolean; message: string }>(`/lead-categories/${id}`),
   getExportCsvUrl: () => '/api/proxy/leads/export-csv',
   autoGenerate: (data: {
     query: string;

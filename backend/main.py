@@ -1032,6 +1032,19 @@ async def create_lead_category(payload: LeadCategoryCreate):
         raise HTTPException(status_code=400, detail="Category name cannot be empty")
     return res
 
+@app.delete("/api/lead-categories/{category_id}")
+async def delete_lead_category(category_id: int):
+    def _delete():
+        cat = LeadCategory.objects.filter(id=category_id).first()
+        if not cat:
+            return False
+        cat.delete()
+        return True
+    deleted = await sync_to_async(_delete)()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"success": True, "message": "Category deleted successfully"}
+
 from crm_core.lead_generator import LeadScraperEngine
 
 class AutoLeadGenerateRequest(BaseModel):

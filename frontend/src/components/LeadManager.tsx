@@ -720,15 +720,24 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   };
 
   const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) return;
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
     try {
-      const res = await LeadService.createCategory({ name: newCategoryName.trim() });
-      setCategories([...categories, res.data]);
-      setCategory(res.data.name);
+      const res = await LeadService.createCategory({ name: trimmed });
+      const createdCat = res.data;
+      setCategories((prev) => {
+        const exists = prev.some((c) => c.name.toLowerCase() === createdCat.name.toLowerCase());
+        return exists ? prev : [...prev, createdCat];
+      });
+      setCategory(createdCat.name);
+      setSelectedCategory(createdCat.name);
+      setGenCategory(createdCat.name);
+      setBatchCategoryAssign(createdCat.name);
       setNewCategoryName('');
       setOpenAddCategoryDialog(false);
-    } catch (err) {
-      alert('Failed to create category.');
+      showNotification(`Category "${createdCat.name}" added successfully!`, 'success');
+    } catch (err: any) {
+      showNotification(err.response?.data?.detail || 'Failed to create category.', 'error');
     }
   };
 
@@ -962,23 +971,50 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
               sx={{ flexGrow: 1, bgcolor: '#ffffff', borderRadius: 1.5 }}
             />
 
-            <FormControl size="small" sx={{ minWidth: 160, bgcolor: '#ffffff', borderRadius: 1.5 }}>
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={selectedCategory}
-                label="Category"
-                onChange={(e) => setSelectedCategory(e.target.value)}
-              >
-                <MenuItem value="">
-                  <em>All Categories</em>
-                </MenuItem>
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.name}>
-                    {c.name}
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+              <FormControl size="small" sx={{ minWidth: 160, bgcolor: '#ffffff', borderRadius: 1.5 }}>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={selectedCategory}
+                  label="Category"
+                  onChange={(e) => {
+                    if (e.target.value === '__add_new__') {
+                      setOpenAddCategoryDialog(true);
+                    } else {
+                      setSelectedCategory(e.target.value);
+                    }
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>All Categories</em>
                   </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                  {categories.map((c) => (
+                    <MenuItem key={c.id} value={c.name}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                  <Divider sx={{ my: 0.5 }} />
+                  <MenuItem value="__add_new__" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                    <AddIcon fontSize="small" sx={{ mr: 1 }} /> + Add New Category...
+                  </MenuItem>
+                </Select>
+              </FormControl>
+              <Tooltip title="Add New Category">
+                <IconButton
+                  size="small"
+                  onClick={() => setOpenAddCategoryDialog(true)}
+                  sx={{
+                    bgcolor: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 1.5,
+                    p: '7px',
+                    '&:hover': { bgcolor: '#f1f5f9' },
+                  }}
+                >
+                  <AddIcon fontSize="small" color="primary" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
 
             <FormControl size="small" sx={{ minWidth: 150, bgcolor: '#ffffff', borderRadius: 1.5 }}>
               <InputLabel>Status</InputLabel>
@@ -2541,6 +2577,12 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
             placeholder="e.g. Cosmetics & Beauty"
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCreateCategory();
+              }
+            }}
             autoFocus
           />
         </DialogContent>
@@ -2690,8 +2732,12 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                     value={genCategory}
                     label="Category"
                     onChange={(e) => {
-                      setGenCategory(e.target.value);
-                      setBatchCategoryAssign(e.target.value);
+                      if (e.target.value === '__add_new__') {
+                        setOpenAddCategoryDialog(true);
+                      } else {
+                        setGenCategory(e.target.value);
+                        setBatchCategoryAssign(e.target.value);
+                      }
                     }}
                   >
                     <MenuItem value="All">Auto-Detect</MenuItem>
@@ -2700,6 +2746,10 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                         {c.name}
                       </MenuItem>
                     ))}
+                    <Divider sx={{ my: 0.5 }} />
+                    <MenuItem value="__add_new__" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                      <AddIcon fontSize="small" sx={{ mr: 1 }} /> + Add New Category...
+                    </MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -2834,13 +2884,23 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                     <Select
                       value={batchCategoryAssign}
                       label="Category to Assign"
-                      onChange={(e) => setBatchCategoryAssign(e.target.value)}
+                      onChange={(e) => {
+                        if (e.target.value === '__add_new__') {
+                          setOpenAddCategoryDialog(true);
+                        } else {
+                          setBatchCategoryAssign(e.target.value);
+                        }
+                      }}
                     >
                       {categories.map((c) => (
                         <MenuItem key={c.id} value={c.name}>
                           {c.name}
                         </MenuItem>
                       ))}
+                      <Divider sx={{ my: 0.5 }} />
+                      <MenuItem value="__add_new__" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                        <AddIcon fontSize="small" sx={{ mr: 1 }} /> + Add New Category...
+                      </MenuItem>
                     </Select>
                   </FormControl>
 
