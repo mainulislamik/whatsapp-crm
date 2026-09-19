@@ -374,7 +374,7 @@ async function connectToWhatsApp() {
       if (messageStore.has(key.id)) {
         return messageStore.get(key.id);
       }
-      return proto.Message.fromObject({});
+      return undefined;
     }
   });
 
