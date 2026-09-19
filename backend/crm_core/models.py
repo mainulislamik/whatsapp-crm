@@ -112,6 +112,7 @@ class Lead(models.Model):
         ('IN_PROGRESS', 'In Progress'),
         ('INTERESTED', 'Interested'),
         ('QUALIFIED', 'Qualified'),
+        ('NEEDS_CUSTOMIZATION', 'Needs Customization'),
         ('CONVERTED', 'Converted'),
         ('LOST', 'Lost'),
     ]

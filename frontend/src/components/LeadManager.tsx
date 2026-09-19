@@ -130,6 +130,7 @@ const LEAD_STATUSES = [
   { value: 'IN_PROGRESS', label: 'In Progress', bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
   { value: 'INTERESTED', label: 'Interested', bg: '#e0e7ff', text: '#4338ca', border: '#a5b4fc' },
   { value: 'QUALIFIED', label: 'Qualified', bg: '#dcfce7', text: '#15803d', border: '#86efac' },
+  { value: 'NEEDS_CUSTOMIZATION', label: '🛠️ Custom Dev Lead', bg: '#fffbeb', text: '#b45309', border: '#f59e0b' },
   { value: 'CONVERTED', label: 'Converted (Customer)', bg: '#f3e8ff', text: '#7e22ce', border: '#d8b4fe' },
   { value: 'LOST', label: 'Lost / Closed', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' },
 ];

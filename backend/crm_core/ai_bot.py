@@ -173,21 +173,22 @@ STOCKWHISK_KNOWLEDGE = """
 সফটওয়্যার নাম: StockWhisk (স্টকহুইস্ক) - বাংলাদেশের সেরা অল-ইন-ওয়ান ক্লাউড ইআরপি ও স্মার্ট পিওএস সফটওয়্যার।
 অফিসিয়াল ওয়েবসাইট: https://stockwhisk.com এবং https://app.stockwhisk.com
 
-মূল সুবিধাসমূহ ও ২৪টি মডিউল:
-1. দ্রুত পিওএস বিলিং (Fast POS Checkout): টাচ ও কিবোর্ড মোড, অফলাইন সেল মোড (ইন্টারনেট ছাড়াও বিক্রি করা যায়)।
-2. ডিজিটাল ওজন স্কেল বারকোড ইন্টিগ্রেশন: সুপারশপ, মুদি, কাঁচাবাজার ও মিষ্টির দোকানের ওজন স্কেলের বারকোড (20[PLU][Weight]C) সম্পূর্ণ সাপোর্ট করে। ওজন ও দাম সরাসরি বিলে চলে আসে।
-3. থার্মাল রিসিট ও টোকেন প্রিন্টিং: 58mm, 80mm ক্যাশ মেমো, সানমি (Sunmi) হ্যান্ডহেল্ড পিওএস সাপোর্ট।
-4. মাল্টি-ব্রাঞ্চ ও ওয়্যারহাউজ ম্যানেজমেন্ট: এক ব্রাঞ্চ থেকে অন্য ব্রাঞ্চে সহজেই স্টক ট্রান্সফার।
-5. সিরিয়াল / আইএমইআই (IMEI) ট্র্যাকিং: মোবাইল, কম্পিউটার ও ইলেকট্রনিক্স পণ্যের প্রতিটি পার্টস/ফোনের IMEI ও ওয়ারেন্টি ট্র্যাক করা যায়।
-6. সার্ভিস টিকেটিং ও মোবাইল রিপেয়ার: সার্ভিস সেন্টারের কাস্টমার রিসিট, টেকনিশিয়ান অ্যাসাইন, পার্টস রিপ্লেসমেন্ট ট্র্যাকিং।
-7. কিস্তি / ইএমআই (EMI) সেলস: ডাউন পেমেন্ট, মাসিক কিস্তির শিডিউল ও স্বয়ংক্রিয় ডিউ অ্যালার্ট।
-8. অ্যাকাউন্টস ও লেজার: দৈনিক ক্লোজিং (Daily Settlement), আয়-ব্যয় (Expense), বাকির খাতা ও নগদ ক্যাশ ফ্লো।
-9. পণ্যের মেয়াদ (Expiry Date) ট্র্যাকিং: ফার্মেসি ও খাদ্যপণ্যের মেয়াদ উত্তীর্ণ হওয়ার আগেই নোটিফিকেশন।
+বর্তমানে সরাসরি সক্রিয় ও প্রাক-নির্মিত স্ট্যান্ডার্ড ক্যাটাগরিসমূহ (Standard Pre-built Categories):
+1. গ্রোসারি ও সুপারশপ: ডিজিটাল ওজন স্কেল বারকোড (20[PLU][Weight]C), কাঁচাবাজার ও খাদ্যপণ্যের মেয়াদ (Expiry Date) ট্র্যাকিং।
+2. মোবাইল, গ্যাজেট ও ইলেকট্রনিক্স শপ: ৩-লেয়ার IMEI ও সিরিয়াল ট্র্যাকিং, সার্ভিস টিকেটিং ও টেকনিশিয়ান কমিশন, ওয়ারেন্টি ও কিস্তি (EMI) সেলস।
+3. কাপড়, ফ্যাশন ও জুতার দোকান: কালার, সাইজ ভ্যারিয়েন্ট, নিজস্ব বারকোড লেবেল ও টাচ পিওএস বিলিং।
+4. ফার্মেসি ও ড্রাগ হাউস: ওষুধের জেনেরিক নাম, ব্যাচ নম্বর ও মেয়াদ উত্তীর্ণ হওয়ার লাল সতর্কবার্তা।
+5. ব্যাটারি, আইপিএস ও সোলার শপ: ব্যাটারি সিরিয়াল ট্র্যাকিং, পুরাতন স্ক্র্যাপ ব্যাটারি ক্রয় ও বিলে সমন্বয়।
+6. কেমিক্যাল ও ইন্ডাস্ট্রিয়াল সাপ্লাই: ড্রাম/কেজি/লিটার ইউনিট রূপান্তর, ব্যাচ নম্বর ও ডিলার পাইকারি চালান।
+7. হার্ডওয়্যার ও স্যানিটারি: পিস/ফুট/কেজি মাল্টি-ইউনিট, বড় বাকির খাতা ও দ্রুত ক্যাশ মেমো।
+8. জেনারেল রিটেইল ও ডিপার্টমেন্টাল: দ্রুত কিবোর্ড ও বারকোড বিলিং, সানমি হ্যান্ডহেল্ড পিওএস, দৈনিক ক্যাশ ক্লোজিং।
+
+কাস্টমাইজড মডিউল ও বিশেষ সমাধান (Custom Modules on Demand):
+- যেসকল ব্যবসা উপরের স্ট্যান্ডার্ড তালিকায় সরাসরি নেই (যেমন: প্রিন্টিং প্রেস ও মিডিয়া, সাইবার ও অনলাইন সেবা যেমন পাসপোর্ট/পুলিশ ক্লিয়ারেন্স আবেদন, ট্রাভেল এজেন্সি, হোটেল/রিসোর্ট, হাসপাতাল, স্কুল/মাদ্রাসা ইত্যাদি) — সেগুলোর জন্য StockWhisk-এর নিজস্ব সফটওয়্যার ইঞ্জিনিয়ারিং টিম গ্রাহকের কাজের চাহিদা অনুযায়ী সম্পূর্ণ কাস্টমাইজ করে নতুন মডিউল ডেভেলপ করে দেয়।
 
 প্যাকেজ ও প্রাইসিং অফার:
-- স্পেশাল ওপেনিং অফার (Opening Offer 6 Months): মাত্র ৳৪৯৯/মাস (৬ মাসের সাবস্ক্রিপশনে বা বাৎসরিক ৳৬০০০)। এতে পাচ্ছেন ১টি ব্রাঞ্চ, ২ জন ইউজার, ১০০ প্রোডাক্ট ট্রায়াল ও ফুল পিওএস।
-- কাস্টমাইজড / এন্টারপ্রাইজ (Customized): ৳৯৯৯/মাস। আনলিমিটেড প্রোডাক্ট, ১০০০ ইউজার, ১০০০ ব্রাঞ্চ, ফুল বিজনেস ফিচার।
-- ফ্রি লাইভ ডেমো: যেকোনো নতুন গ্রাহক ফ্রি ডেমো টেস্ট করতে পারেন।
+- স্পেশাল ওপেনিং অফার (Opening Offer 6 Months): মাত্র ৳৪৯৯/মাস (৬ মাসের সাবস্ক্রিপশনে বা বাৎসরিক ৳৬০০০)। স্ট্যান্ডার্ড রিটেইল শপের জন্য ১টি ব্রাঞ্চ, ২ ইউজার, ফুল পিওএস।
+- কাস্টমাইজড / এন্টারপ্রাইজ প্ল্যান (Customization & Enterprise): ৳৯৯৯/মাস। বিশেষ বিজনেসের জন্য কাস্টম ফিচার ডেভেলপমেন্ট, আনলিমিটেড ব্রাঞ্চ ও ডেডিকেটেড ইঞ্জিনিয়ারিং সাপোর্ট।
 """
 
 # 3. LLM Caller
@@ -201,10 +202,11 @@ async def call_llm(messages: List[Dict[str, str]], model: Optional[str] = None) 
         "Content-Type": "application/json"
     }
 
+    endpoint = OMNIROUTE_URL if OMNIROUTE_URL.endswith("/chat/completions") else f"{OMNIROUTE_URL.rstrip('/')}/chat/completions"
     async with httpx.AsyncClient(timeout=35.0) as client:
         try:
             resp = await client.post(
-                OMNIROUTE_URL,
+                endpoint,
                 headers=headers,
                 json={"model": target_model, "messages": messages, "temperature": 0.4}
             )
@@ -220,7 +222,7 @@ async def call_llm(messages: List[Dict[str, str]], model: Optional[str] = None) 
         if target_model != fallback_model:
             try:
                 resp = await client.post(
-                    OMNIROUTE_URL,
+                    endpoint,
                     headers=headers,
                     json={"model": fallback_model, "messages": messages, "temperature": 0.4}
                 )
@@ -291,6 +293,26 @@ StockWhisk সফটওয়্যার সম্পর্কিত সঠিক 
 গ্রাহকের নির্দিষ্ট প্রশ্ন ও উত্তরের কাস্টম নির্দেশিকা (কী প্রশ্ন করলে কী উত্তর দেবেন - FAQ Rules):
 {qa_rules_text}
 
+
+*** নতুন বা অমিল ক্যাটাগরি হ্যান্ডলিং ও কাস্টমাইজেশন পলিসি (Category & Customization Handling Rules - STRICT) ***:
+১. সততা ও স্পষ্টতা (কোনো মিথ্যা প্রতিশ্রুতি নয়):
+গ্রাহক যদি আমাদের স্ট্যান্ডার্ড তালিকায় নেই এমন কোনো ব্যবসার কথা বলে (যেমন: প্রিন্টিং প্রেস, সাইবার/অনলাইন সেবা যেমন পাসপোর্ট/পুলিশ ক্লিয়ারেন্স আবেদন, ট্রাভেল এজেন্সি, হোটেল/রিসোর্ট, হাসপাতাল, স্কুল/কোচিং ইত্যাদি), তবে কখনোই বলবেন না যে এটি আগে থেকেই সরাসরি রেডিমেড আছে।
+স্পষ্ট ও মার্জিতভাবে বলবেন: "স্যার, আপনার [ব্যবসার ধরন]-এর এই বিশেষ কাজের মডিউলটি বর্তমানে আমাদের স্ট্যান্ডার্ড রেডিমেড শপে সরাসরি যুক্ত নেই। তবে অত্যন্ত আনন্দের বিষয় হলো—StockWhisk-এর নিজস্ব ডেডিকেটেড সফটওয়্যার ডেভেলপমেন্ট টিম রয়েছে, যারা আপনার প্রতিষ্ঠানের কাজের নিয়ম অনুযায়ী এটি সম্পূর্ণ কাস্টমাইজ করে সিস্টেম তৈরি করে দিতে পারবে!"
+
+২. কাজের রিকোয়ারমেন্ট সংগ্রহ করা (Information Gathering):
+গ্রাহকের কাছ থেকে ওনার কাজের নিয়ম আন্তরিকভাবে জেনে নিন। যেমন:
+- "স্যার, আপনাদের প্রতিষ্ঠানে কাজের মেমো বা চালান কাটার মূল নিয়মটা কীভাবে রাখেন?"
+- "কাস্টমারের কাছ থেকে অগ্রিম (Advance) এবং কাজ ডেলিভারির সময় বকেয়া (Due) আদায়ের জন্য বিশেষ কী সুবিধা চান?"
+- "আর বিশেষ কী কী সুবিধা সফটওয়্যারে থাকলে আপনাদের কাজ সহজ ও নিখুঁত হবে?"
+
+৩. নিজে অ্যাকাউন্ট খোলার ভুয়া প্রতিশ্রুতি কঠোরভাবে নিষিদ্ধ:
+আপনি কোনো অবস্থাতেই বলবেন না "আমি এখনই আপনার অ্যাকাউন্ট খুলে দিচ্ছি" বা "আপনার অ্যাকাউন্ট তৈরি হচ্ছে"। কারণ বট নিজে ব্যাকএন্ডে শপ অ্যাকাউন্ট রেজিস্টার করতে পারে না।
+- সাধারণ রেডিমেড শপ হলে বলবেন: "স্যার, আপনি https://stockwhisk.com থেকে এখনই ১ মিনিটে ফ্রি ট্রায়াল শুরু করতে পারেন অথবা আমাদের সেলস প্রতিনিধির সাথে লাইভ ডেমো দেখতে পারেন।"
+- কাস্টমাইজেশন শপ হলে বলবেন: "স্যার, আমরা আপনার রিকোয়ারমেন্টগুলো গুরুত্বের সাথে নোট করে নিয়েছি। আমাদের টেকনিক্যাল টিম আপনার এই বিশেষ চাহিদাগুলো বিশ্লেষণ করে অল্প সময়ের মধ্যে আপনার সাথে সরাসরি যোগাযোগ করে ডেমো সলিউশন রেডি করে দেবে।"
+
+৪. স্মার্ট কাস্টমাইজেশন প্ল্যান অফার (Smart Upsell):
+যেখানে সাধারণ শপের জন্য মাত্র ৳৪৯৯/মাস, সেখানে ওনার কাজের স্পেশাল কাস্টমাইজেশনের জন্য স্মার্টলি আমাদের কাস্টমাইজেশন ও এন্টারপ্রাইজ প্ল্যান (৳৯৯৯/মাস)-এর কথা তুলে ধরুন, যেখানে উনি পাবেন সম্পূর্ণ মনমতো কাস্টমাইজেশন সুবিধা ও ডেডিকেটেড ইঞ্জিনিয়ারিং সাপোর্ট।
+
 আপনার কথোপকথনের নিয়মাবলী:
 1. গ্রাহক যদি সালাম বা কুশল বিনিময় করে, সুন্দর করে সালামের উত্তর দিন (যেমন: "আসসালামু আলাইকুম স্যার" বা "আসসালামু আলাইকুম স্যার/ম্যাম")।
 2. তথ্য দেওয়ার সময় সম্পূর্ণ সঠিক ও বাস্তবসম্মত তথ্য দিন। সফটওয়্যারে নেই এমন কোনো কাল্পনিক ফিচার বা ডিসকাউন্ট উল্লেখ করবেন না।
@@ -341,14 +363,35 @@ Return ONLY valid raw JSON with no markdown backticks and no explanation.
 Customer Messages:
 --- {all_user_messages} ---
 
+Standard supported retail categories:
+- Grocery
+- Electronics
+- Clothing
+- Pharmacy
+- Restaurant
+- Hardware
+- Departmental
+- Battery
+- Chemical
+
+Special Categorization Rules:
+If customer's business falls outside standard retail (e.g. Printing, Media, Passport/Cyber Online Services, Travel Agency, Hotel, Hospital, Coaching, Manufacturing, etc.) OR if they request custom software features:
+- Set "category": "Custom: " + actual business type
+- Set "status": "NEEDS_CUSTOMIZATION"
+- Set "is_custom": true
+Otherwise, if standard business and they shared shop name or asked pricing/demo:
+- Set "status": "QUALIFIED"
+- Set "is_custom": false
+
 Required JSON Schema:
 {{
   "shop_name": "extracted shop/business name or empty string",
   "owner_name": "extracted owner name or empty string",
-  "category": "one of: Grocery, Electronics, Clothing, Pharmacy, Restaurant, Hardware, Departmental, General",
+  "category": "one of the standard categories OR 'Custom: <BusinessType>'",
   "district": "extracted city/district in Bangladesh or empty string",
-  "status": "QUALIFIED if customer shared shop name or asked pricing/demo, else INTERESTED",
-  "notes": "one concise bullet point summarizing their business requirements and interest"
+  "status": "NEEDS_CUSTOMIZATION if custom, else QUALIFIED if intent/shop shared, else INTERESTED",
+  "is_custom": true or false,
+  "notes": "concise summary of requirements, custom features needed, or interest"
 }}
 """
     try:
@@ -362,9 +405,10 @@ Required JSON Schema:
         shop_name = data.get("shop_name", "").strip() or sender_name or f"Lead {phone[-4:]}"
         owner_name = data.get("owner_name", "").strip() or sender_name
         category = data.get("category", "General").strip()
-        status = data.get("status", "INTERESTED")
-        notes = data.get("notes", "").strip()
         district = data.get("district", "").strip()
+        is_custom = data.get("is_custom", False)
+        status = "NEEDS_CUSTOMIZATION" if is_custom else data.get("status", "INTERESTED")
+        notes = data.get("notes", "").strip()
 
         def _update_lead():
             lead = Lead.objects.filter(phone=phone).first()
@@ -389,11 +433,14 @@ Required JSON Schema:
                 if owner_name and not lead.owner_name:
                     lead.owner_name = owner_name
                     changed = True
-                if category != "General" and lead.category == "General":
+                if status == "NEEDS_CUSTOMIZATION":
+                    lead.status = "NEEDS_CUSTOMIZATION"
+                    changed = True
+                if category and category != "General":
                     lead.category = category
                     changed = True
-                if notes and notes not in lead.notes:
-                    lead.notes = (lead.notes + " | " + notes).strip(" |")
+                if notes and notes not in (lead.notes or ""):
+                    lead.notes = ((lead.notes or "") + " | " + notes).strip(" |")
                     changed = True
                 if district and not lead.address:
                     lead.address = district
@@ -404,7 +451,8 @@ Required JSON Schema:
                 "id": lead.id,
                 "shop_name": lead.shop_name,
                 "category": lead.category,
-                "status": lead.status
+                "status": lead.status,
+                "notes": lead.notes
             }
 
         result = await sync_to_async(_update_lead)()
