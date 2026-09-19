@@ -129,6 +129,10 @@ export interface ChatListItem {
   is_on_whatsapp: boolean;
   profile_picture?: string | null;
   is_bot_active?: boolean;
+  lead_id?: number | null;
+  lead_shop_name?: string | null;
+  lead_category?: string | null;
+  lead_status?: string | null;
 }
 
 export interface ChatMessage {
@@ -408,6 +412,8 @@ export const BotService = {
       `/chats/${encodeURIComponent(phone)}/bot-toggle`,
       { enabled }
     ),
+  suggestReply: (phone: string, hint?: string) =>
+    api.post<{ draft_reply: string }>('/bot/suggest-reply', { phone, hint }),
 };
 
 export const AuthService = {

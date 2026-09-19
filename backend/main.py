@@ -1444,6 +1444,10 @@ class ChatListItem(BaseModel):
     is_on_whatsapp: bool
     profile_picture: str | None = None
     is_bot_active: bool = True
+    lead_id: int | None = None
+    lead_shop_name: str | None = None
+    lead_category: str | None = None
+    lead_status: str | None = None
 
 class ChatMessageOut(BaseModel):
     id: int
@@ -1640,7 +1644,11 @@ async def get_chat_list():
                 'unread_count': unread,
                 'is_on_whatsapp': lead.is_on_whatsapp if lead else True,
                 'lead_pic': lead.whatsapp_profile_pic if lead else None,
-                'is_group': is_group
+                'is_group': is_group,
+                'lead_id': lead.id if lead else None,
+                'lead_shop_name': lead.shop_name if (lead and lead.shop_name and not lead.shop_name.startswith('Lead ')) else None,
+                'lead_category': lead.category if (lead and lead.category and lead.category != 'General') else None,
+                'lead_status': lead.status if lead else None
             })
         return results
 
@@ -1706,7 +1714,11 @@ async def get_chat_list():
             'unread_count': c['unread_count'],
             'is_on_whatsapp': c['is_on_whatsapp'],
             'profile_picture': pic,
-            'is_bot_active': is_bot_active
+            'is_bot_active': is_bot_active,
+            'lead_id': c.get('lead_id'),
+            'lead_shop_name': c.get('lead_shop_name'),
+            'lead_category': c.get('lead_category'),
+            'lead_status': c.get('lead_status')
         })
 
     final_chats.sort(key=lambda x: x['last_message_time'], reverse=True)
@@ -2310,3 +2322,53 @@ async def get_customer_memory_api(phone: str):
     if not mem:
         mem = get_customer_memory(phone)
     return mem or {}
+
+
+class SuggestReplyRequest(BaseModel):
+    phone: str
+    hint: str | None = None
+
+@app.post("/api/bot/suggest-reply")
+@app.post("/api/bot/suggest-reply/")
+async def suggest_bot_reply(payload: SuggestReplyRequest):
+    digits = re.sub(r'\D', '', payload.phone)
+    local_phone = '0' + digits[2:] if (digits.startswith('8801') and len(digits) == 13) else digits
+
+    def _get_history():
+        msgs = ChatMessage.objects.filter(phone=local_phone).order_by('-timestamp')[:8]
+        return [
+            {
+                "message_text": m.message_text,
+                "is_from_me": m.is_from_me,
+                "timestamp": m.timestamp.isoformat()
+            }
+            for m in reversed(msgs)
+        ]
+
+    history = await sync_to_async(_get_history)()
+    last_user_msg = next((h["message_text"] for h in reversed(history) if not h["is_from_me"]), "")
+    
+    if payload.hint:
+        last_user_msg += f" (অপারেটরের বাড়তি নোট: {payload.hint})"
+
+    from crm_core.ai_bot import generate_bot_reply
+    bot_result = await generate_bot_reply(
+        phone=local_phone,
+        sender_name="Customer",
+        message_text=last_user_msg or "Hello",
+        chat_history=history
+    )
+    return {"draft_reply": bot_result.get("reply_text", "")}
+
+@app.post("/api/chats/{phone}/memory")
+@app.post("/api/chats/{phone}/memory/")
+async def update_customer_memory_api(phone: str, payload: Dict[str, Any]):
+    from crm_core.learning_engine import save_customer_memory, get_customer_memory
+    digits = re.sub(r'\D', '', phone)
+    local_phone = '0' + digits[2:] if (digits.startswith('8801') and len(digits) == 13) else digits
+    
+    existing = get_customer_memory(local_phone)
+    existing.update(payload)
+    existing["updated_at"] = datetime.now().isoformat()
+    success = save_customer_memory(local_phone, existing)
+    return {"success": success, "memory": existing}

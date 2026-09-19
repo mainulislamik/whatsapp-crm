@@ -96,6 +96,22 @@ export default function LiveChat({ onBack }: LiveChatProps) {
 
   // Preview Lightbox
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [generatingDraft, setGeneratingDraft] = useState<boolean>(false);
+
+  const handleGenerateDraft = async () => {
+    if (!selectedChat || generatingDraft) return;
+    setGeneratingDraft(true);
+    try {
+      const res = await BotService.suggestReply(selectedChat.phone);
+      if (res.data?.draft_reply) {
+        setMessageText(res.data.draft_reply);
+      }
+    } catch (err) {
+      console.error('Failed to generate draft:', err);
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
 
   // Selected Chat Lead Details
   const [chatLead, setChatLead] = useState<Lead | null>(null);
@@ -669,6 +685,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                           </Box>
                         }
                         secondary={
+                          <Box component="div">
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.3 }}>
                             <Typography
                               variant="body2"
@@ -696,6 +713,32 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                                 }}
                               />
                             )}
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mt: 0.4, flexWrap: 'wrap' }}>
+                            {chat.lead_category && (
+                              <Chip
+                                size="small"
+                                label={chat.lead_category}
+                                sx={{ height: 16, fontSize: 9.5, fontWeight: 700, bgcolor: '#f1f5f9', color: '#334155' }}
+                              />
+                            )}
+                            {chat.lead_status && chat.lead_status !== 'NEW' && (
+                              <Chip
+                                size="small"
+                                label={chat.lead_status}
+                                color={chat.lead_status === 'QUALIFIED' ? 'success' : chat.lead_status === 'WON' ? 'primary' : 'default'}
+                                sx={{ height: 16, fontSize: 9, fontWeight: 700 }}
+                              />
+                            )}
+                            {chat.is_bot_active && (
+                              <Chip
+                                size="small"
+                                icon={<SmartToyIcon sx={{ fontSize: '10px !important' }} />}
+                                label="AI"
+                                sx={{ height: 16, fontSize: 9, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', pl: 0.3 }}
+                              />
+                            )}
+                          </Box>
                           </Box>
                         }
                       />
@@ -1047,6 +1090,73 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                 </IconButton>
               </Box>
             )}
+
+            {/* AI Co-Pilot & Quick Sales Actions */}
+            <Box
+              sx={{
+                px: 1.5,
+                py: 0.8,
+                bgcolor: '#ffffff',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                overflowX: 'auto',
+                flexShrink: 0,
+              }}
+            >
+              <Button
+                size="small"
+                variant="contained"
+                disabled={generatingDraft}
+                onClick={handleGenerateDraft}
+                startIcon={generatingDraft ? <CircularProgress size={12} color="inherit" /> : <AutoAwesomeIcon sx={{ fontSize: 15 }} />}
+                sx={{
+                  bgcolor: '#0284c7',
+                  color: '#ffffff',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: 11.5,
+                  py: 0.4,
+                  px: 1.2,
+                  borderRadius: 1.5,
+                  boxShadow: 'none',
+                  flexShrink: 0,
+                  '&:hover': { bgcolor: '#0369a1', boxShadow: 'none' }
+                }}
+              >
+                {generatingDraft ? 'AI ড্রাফট তৈরি হচ্ছে...' : '✨ AI স্মার্ট ড্রাফট'}
+              </Button>
+
+              <Chip
+                clickable
+                size="small"
+                label="⚡ ভিডিও ডেমো"
+                onClick={() => setMessageText('StockWhisk সফটওয়্যারের পূর্ণাঙ্গ ডেমো ভিডিওটি একনজরে দেখে নিন ভাই: https://www.youtube.com/watch?v=X_9ZRcIA3JI')}
+                sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0, '&:hover': { bgcolor: '#e2e8f0' } }}
+              />
+              <Chip
+                clickable
+                size="small"
+                label="💰 প্যাকেজ ও প্রাইসিং"
+                onClick={() => setMessageText('StockWhisk স্পেশাল অফার: Opening Offer মাত্র ৳৪৯৯/মাস (বাৎসরিক ৳৬,০০০) এবং এন্টারপ্রাইজ আনলিমিটেড প্ল্যান মাত্র ৳৯৯৯/মাস। ফ্রি ডেমো টেস্ট করতে পারেন stockwhisk.com থেকে!')}
+                sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0, '&:hover': { bgcolor: '#e2e8f0' } }}
+              />
+              <Chip
+                clickable
+                size="small"
+                label="🚀 সাইন-আপ লিংক"
+                onClick={() => setMessageText('StockWhisk-এ আপনার নতুন শপের জন্য সরাসরি সাইন-আপ করতে ভিজিট করুন: https://app.stockwhisk.com')}
+                sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0, '&:hover': { bgcolor: '#e2e8f0' } }}
+              />
+              <Chip
+                clickable
+                size="small"
+                label="📞 ১-অন-১ লাইভ মিটিং"
+                onClick={() => setMessageText('আমরা গুগল মিটের মাধ্যমে আপনাকে সম্পূর্ণ ফ্রিতে ১-অন-১ লাইভ ডেমো ও শপ সেটআপ সহায়তা দিতে পারি ভাই। কখন ফ্রি আছেন জানাবেন?')}
+                sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0, '&:hover': { bgcolor: '#e2e8f0' } }}
+              />
+            </Box>
 
             {/* WhatsApp Input Bar */}
             <Box
