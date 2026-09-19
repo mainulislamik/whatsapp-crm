@@ -75,6 +75,10 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import LanguageIcon from '@mui/icons-material/Language';
 import EmailIcon from '@mui/icons-material/Email';
 import LinkIcon from '@mui/icons-material/Link';
+import BuildIcon from '@mui/icons-material/Build';
+import BatteryChargingFullIcon from '@mui/icons-material/BatteryChargingFull';
+import DevicesIcon from '@mui/icons-material/Devices';
+import ScienceIcon from '@mui/icons-material/Science';
 
 import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead } from '@/lib/api';
 
@@ -196,6 +200,11 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
 
   // 🤖 Auto Lead Generator Hub State
   const [openAutoGenerator, setOpenAutoGenerator] = useState<boolean>(false);
+  // 🚀 1-Click AI Pitch Modal State
+  const [pitchModalOpen, setPitchModalOpen] = useState<boolean>(false);
+  const [selectedLeadForPitch, setSelectedLeadForPitch] = useState<GeneratedLead | null>(null);
+  const [activePitchText, setActivePitchText] = useState<string>('');
+  const [sendingPitch, setSendingPitch] = useState<boolean>(false);
   const [genQuery, setGenQuery] = useState<string>('clothing shop in dhaka');
   const [genCountry, setGenCountry] = useState<string>('BD');
   const [genLimit, setGenLimit] = useState<number>(50);
@@ -417,20 +426,22 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   // =========================================================================
   // 🤖 AUTO LEAD GENERATOR LOGIC
   // =========================================================================
-  const handleStartLeadGeneration = async () => {
-    if (!genQuery.trim()) {
-      showNotification('Please enter a search query or tag (e.g. electronics in mirpur)', 'warning');
+  const handleStartLeadGeneration = async (overrideQuery?: string, overrideCategory?: string) => {
+    const q = overrideQuery !== undefined ? overrideQuery : genQuery;
+    const cat = overrideCategory !== undefined ? overrideCategory : genCategory;
+    if (!q.trim()) {
+      showNotification('Please enter a search query or select a preset', 'warning');
       return;
     }
     setGeneratingLeads(true);
     setSelectedStagedIds(new Set());
     try {
       const res = await LeadService.autoGenerate({
-        query: genQuery.trim(),
+        query: q.trim(),
         country: genCountry,
         limit: genLimit,
         only_whatsapp: genOnlyWhatsapp,
-        category: genCategory !== 'All' ? genCategory : undefined,
+        category: cat !== 'All' ? cat : undefined,
         exclude_existing: true,
       });
       const fetched = res.data.leads || [];
@@ -446,6 +457,73 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
       showNotification(e?.response?.data?.detail || 'Failed to generate leads. Please try again.', 'error');
     } finally {
       setGeneratingLeads(false);
+    }
+  };
+
+  const handleApplyPreset = (category: string, defaultQuery: string) => {
+    setGenCategory(category);
+    setGenQuery(defaultQuery);
+    handleStartLeadGeneration(defaultQuery, category);
+  };
+
+  const handleApplyCity = (city: string) => {
+    const cities = ["Dhaka", "Chittagong", "Sylhet", "Bogura", "Rajshahi", "Khulna"];
+    let newQ = genQuery;
+    let replaced = false;
+    for (const c of cities) {
+      if (new RegExp(`\\b${c}\\b`, "i").test(newQ)) {
+        newQ = newQ.replace(new RegExp(`\\b${c}\\b`, "i"), city);
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) {
+      newQ = `${newQ} in ${city}`.trim();
+    }
+    setGenQuery(newQ);
+    handleStartLeadGeneration(newQ, genCategory);
+  };
+
+  const handleOpenPitchModal = async (lead: GeneratedLead) => {
+    setSelectedLeadForPitch(lead);
+    if (lead.suggested_pitch) {
+      setActivePitchText(lead.suggested_pitch);
+      setPitchModalOpen(true);
+    } else {
+      try {
+        const res = await LeadService.generatePitch({
+          shop_name: lead.shop_name,
+          category: lead.category || "General",
+          address: lead.address || ""
+        });
+        setActivePitchText(res.data.pitch);
+        setPitchModalOpen(true);
+      } catch (e) {
+        setActivePitchText(`আসসালামু আলাইকুম স্যার!\n\nআপনার প্রতিষ্ঠান ${lead.shop_name}-এর জন্য StockWhisk ERP-তে রয়েছে বিশেষ ডেমো অফার। ভিজিট করুন: https://app.stockwhisk.com`);
+        setPitchModalOpen(true);
+      }
+    }
+  };
+
+  const handleSendPitchNow = async () => {
+    if (!selectedLeadForPitch) return;
+    setSendingPitch(true);
+    try {
+      await LeadService.sendPitch({
+        phone: selectedLeadForPitch.phone,
+        pitch: activePitchText,
+        shop_name: selectedLeadForPitch.shop_name,
+        category: selectedLeadForPitch.category || "General"
+      });
+      showNotification(`Pitch sent to ${selectedLeadForPitch.shop_name} via WhatsApp!`, "success");
+      setStagedLeads(prev => prev.map(l => l.id === selectedLeadForPitch.id ? { ...l, already_in_crm: true } : l));
+      fetchLeadsAndCategories();
+      setPitchModalOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      showNotification(e?.response?.data?.detail || "Failed to send pitch via WhatsApp", "error");
+    } finally {
+      setSendingPitch(false);
     }
   };
 
@@ -2664,6 +2742,95 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
               border: '1px solid #e2e8f0',
             }}
           >
+            {/* 1-Click Priority Industry Presets */}
+            <Box sx={{ mb: 2.5, p: 2, bgcolor: '#ffffff', borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                <AutoAwesomeIcon sx={{ fontSize: 14, color: '#6366f1' }} /> 1-Click High-Priority Lead Generators
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                <Chip
+                  icon={<BuildIcon fontSize="small" style={{ color: '#7c3aed' }} />}
+                  label="📱 Mobile Repair & Servicing"
+                  onClick={() => handleApplyPreset("Mobile Repair Shop", "mobile repair shop in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Mobile Repair Shop" ? '#ede9fe' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Mobile Repair Shop" ? '#7c3aed' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#6d28d9',
+                    '&:hover': { bgcolor: '#f5f3ff' }
+                  }}
+                />
+                <Chip
+                  icon={<BatteryChargingFullIcon fontSize="small" style={{ color: '#ea580c' }} />}
+                  label="🔋 Battery, IPS & Solar"
+                  onClick={() => handleApplyPreset("Battery Shop", "battery ips shop in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Battery Shop" ? '#ffedd5' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Battery Shop" ? '#ea580c' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#c2410c',
+                    '&:hover': { bgcolor: '#fff7ed' }
+                  }}
+                />
+                <Chip
+                  icon={<DevicesIcon fontSize="small" style={{ color: '#2563eb' }} />}
+                  label="💻 Electronics & Gadget"
+                  onClick={() => handleApplyPreset("Electronics", "electronics gadget showroom in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Electronics" ? '#dbeafe' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Electronics" ? '#2563eb' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#1d4ed8',
+                    '&:hover': { bgcolor: '#eff6ff' }
+                  }}
+                />
+                <Chip
+                  icon={<ScienceIcon fontSize="small" style={{ color: '#059669' }} />}
+                  label="🧪 Chemical & Industrial"
+                  onClick={() => handleApplyPreset("Chemical", "industrial chemical store in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Chemical" ? '#d1fae5' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Chemical" ? '#059669' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#047857',
+                    '&:hover': { bgcolor: '#ecfdf5' }
+                  }}
+                />
+              </Stack>
+
+              {/* Quick City Filters */}
+              <Stack direction="row" spacing={0.8} sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', mr: 0.5 }}>
+                  City Filter:
+                </Typography>
+                {["Dhaka", "Chittagong", "Sylhet", "Bogura", "Rajshahi", "Khulna"].map((city) => (
+                  <Chip
+                    key={city}
+                    label={city}
+                    size="small"
+                    onClick={() => handleApplyCity(city)}
+                    clickable
+                    sx={{
+                      height: 22,
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      bgcolor: genQuery.toLowerCase().includes(city.toLowerCase()) ? '#e0e7ff' : '#f8fafc',
+                      color: genQuery.toLowerCase().includes(city.toLowerCase()) ? '#4338ca' : '#475569',
+                      border: '1px solid #e2e8f0',
+                    }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+
             <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
               <SearchIcon fontSize="small" sx={{ color: '#6366f1' }} /> Targeted Business Search Criteria
             </Typography>
@@ -2760,7 +2927,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                   variant="contained"
                   size="medium"
                   disabled={generatingLeads || !genQuery.trim()}
-                  onClick={handleStartLeadGeneration}
+                  onClick={() => handleStartLeadGeneration()}
                   startIcon={generatingLeads ? <CircularProgress size={16} color="inherit" /> : <SearchIcon />}
                   sx={{
                     bgcolor: '#6366f1',
@@ -3164,11 +3331,16 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                                 height: 22,
                                 fontSize: '0.7rem',
                                 fontWeight: 700,
-                                bgcolor: '#f1f5f9',
-                                color: '#334155',
+                                bgcolor: lead.category === 'Mobile Repair Shop' ? '#ede9fe' : lead.category === 'Battery Shop' ? '#ffedd5' : lead.category === 'Electronics' ? '#dbeafe' : lead.category === 'Chemical' ? '#d1fae5' : '#f1f5f9',
+                                color: lead.category === 'Mobile Repair Shop' ? '#6d28d9' : lead.category === 'Battery Shop' ? '#c2410c' : lead.category === 'Electronics' ? '#1d4ed8' : lead.category === 'Chemical' ? '#047857' : '#334155',
                                 border: '1px solid #e2e8f0',
                               }}
                             />
+                            {lead.quality_tier && (
+                              <Typography variant="caption" sx={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#f59e0b', mt: 0.3 }}>
+                                {lead.quality_tier}
+                              </Typography>
+                            )}
                           </TableCell>
 
                           <TableCell align="right">
@@ -3188,6 +3360,28 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                                   >
                                     <EditNoteIcon fontSize="small" />
                                   </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Preview & Send AI Sales Pitch via WhatsApp">
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => handleOpenPitchModal(lead)}
+                                    startIcon={<AutoAwesomeIcon sx={{ fontSize: 13 }} />}
+                                    sx={{
+                                      fontSize: '0.68rem',
+                                      fontWeight: 800,
+                                      textTransform: 'none',
+                                      py: 0.3,
+                                      px: 1,
+                                      bgcolor: '#6366f1',
+                                      color: '#fff',
+                                      borderRadius: 1.5,
+                                      boxShadow: 'none',
+                                      '&:hover': { bgcolor: '#4f46e5', boxShadow: 'none' }
+                                    }}
+                                  >
+                                    AI Pitch
+                                  </Button>
                                 </Tooltip>
                                 <Tooltip title="Assign to Leads">
                                   <IconButton
@@ -3456,7 +3650,93 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                 border: '2px solid rgba(255,255,255,0.15)',
               }}
             />
+          
+      {/* 🚀 AI Pitch Preview & WhatsApp Send Modal */}
+      <Dialog
+        open={pitchModalOpen}
+        onClose={() => setPitchModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#0f172a', color: '#ffffff', py: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AutoAwesomeIcon sx={{ color: '#818cf8' }} />
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff' }}>
+              Personalized AI Sales Pitch
+            </Typography>
           </Box>
+          <IconButton onClick={() => setPitchModalOpen(false)} sx={{ color: '#94a3b8' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          {selectedLeadForPitch && (
+            <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                {selectedLeadForPitch.shop_name}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                📞 {selectedLeadForPitch.phone} • 🏷️ {selectedLeadForPitch.category || 'General'}
+              </Typography>
+            </Box>
+          )}
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', mb: 1, display: 'block' }}>
+            Tailored StockWhisk Proposal Message (Editable):
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={8}
+            value={activePitchText}
+            onChange={(e) => setActivePitchText(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                fontFamily: 'inherit',
+                fontSize: '0.88rem',
+                bgcolor: '#ffffff',
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', justifyContent: 'space-between' }}>
+          <Button
+            variant="outlined"
+            startIcon={<ContentCopyIcon />}
+            onClick={() => {
+              navigator.clipboard.writeText(activePitchText);
+              showNotification('Pitch copied to clipboard!', 'info');
+            }}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Copy Text
+          </Button>
+          <Stack direction="row" spacing={1.5}>
+            <Button
+              onClick={() => setPitchModalOpen(false)}
+              sx={{ textTransform: 'none', fontWeight: 700, color: '#64748b' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={sendingPitch ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <SendIcon />}
+              onClick={handleSendPitchNow}
+              disabled={sendingPitch}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 800,
+                bgcolor: '#25d366',
+                color: '#ffffff',
+                '&:hover': { bgcolor: '#22c55e' }
+              }}
+            >
+              {sendingPitch ? 'Sending...' : 'Send via WhatsApp Now'}
+            </Button>
+          </Stack>
+        </DialogActions>
+      </Dialog>
+</Box>
         )}
       </Dialog>
 

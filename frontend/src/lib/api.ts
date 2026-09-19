@@ -195,6 +195,10 @@ export interface GeneratedLead {
   whatsapp_name?: string;
   notes?: string;
   already_in_crm?: boolean;
+  quality_score?: number;
+  quality_tier?: string;
+  suggested_pitch?: string;
+  key_features?: string;
 }
 
 export const WhatsAppService = {
@@ -373,6 +377,10 @@ export const LeadService = {
   }) => api.post<{ count: number; leads: GeneratedLead[] }>('/leads/auto-generate', data),
   batchImport: (leads: Partial<GeneratedLead>[]) =>
     api.post<{ imported_count: number; skipped_count: number; imported: any[] }>('/leads/batch-import', { leads }),
+  generatePitch: (data: { shop_name: string; category: string; owner_name?: string; address?: string }) =>
+    api.post<{ pitch: string }>('/leads/generate-pitch', data),
+  sendPitch: (data: { phone: string; pitch: string; shop_name?: string; category?: string }) =>
+    api.post<{ success: boolean; lead_id?: number; phone: string }>('/leads/send-pitch', data),
 };
 
 export const ChatService = {

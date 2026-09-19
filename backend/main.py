@@ -1081,6 +1081,88 @@ async def generate_leads_endpoint(payload: AutoLeadGenerateRequest):
         print(f"Error generating leads: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class GeneratePitchRequest(BaseModel):
+    shop_name: str
+    category: str
+    owner_name: Optional[str] = ""
+    address: Optional[str] = ""
+
+class SendPitchRequest(BaseModel):
+    phone: str
+    pitch: str
+    shop_name: Optional[str] = ""
+    category: Optional[str] = ""
+
+@app.post("/api/leads/generate-pitch")
+async def generate_pitch_endpoint(payload: GeneratePitchRequest):
+    from crm_core.lead_generator import TARGET_CATEGORY_PROFILES
+    matched = TARGET_CATEGORY_PROFILES.get(payload.category)
+    if not matched:
+        for k, v in TARGET_CATEGORY_PROFILES.items():
+            if any(alias in payload.shop_name.lower() or alias in payload.category.lower() for alias in v["aliases"]):
+                matched = v
+                break
+
+    pitch_tpl = matched["pitch_template"] if matched else (
+        "আসসালামু আলাইকুম স্যার/ম্যাম!\n\n"
+        f"আপনার প্রতিষ্ঠান **{payload.shop_name}**-এর বিক্রয়, ইনভেন্টরি ও বাকির ডিজিটাল হিসাবের জন্য StockWhisk ERP এখন মাত্র ৪৯৯ টাকায়!\n"
+        "ফ্রি ১-অন-১ লাইভ ডেমো দেখতে ভিজিট করুন: https://app.stockwhisk.com"
+    )
+    pitch = pitch_tpl.format(
+        shop_name=payload.shop_name or "প্রতিষ্ঠান",
+        owner_or_sir=payload.owner_name or "স্যার"
+    )
+    return {"pitch": pitch}
+
+@app.post("/api/leads/send-pitch")
+async def send_pitch_endpoint(payload: SendPitchRequest):
+    raw_phone = payload.phone.strip()
+    digits = re.sub(r'\D', '', raw_phone)
+    if digits.startswith('8801') and len(digits) == 13:
+        phone = '0' + digits[3:]
+    elif digits.startswith('01') and len(digits) == 11:
+        phone = digits
+    elif digits.startswith('1') and len(digits) == 10:
+        phone = '0' + digits
+    else:
+        phone = raw_phone
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        wa_engine_url = "http://wa-engine:5001"
+        resp = await client.post(f"{wa_engine_url}/send-message", json={"phone": phone, "text": payload.pitch})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"WhatsApp sending failed: {resp.text}")
+
+    def _update_lead_status():
+        from django.utils import timezone as django_tz
+        lead = Lead.objects.filter(phone=phone).first()
+        if not lead and raw_phone != phone:
+            lead = Lead.objects.filter(phone=raw_phone).first()
+        if not lead:
+            lead = Lead(
+                phone=phone,
+                shop_name=payload.shop_name or f"Lead {phone[-4:]}",
+                category=payload.category or "General",
+                status="CONTACTED",
+                is_contacted=True,
+                last_contacted_at=django_tz.now(),
+                sent_messages_count=1
+            )
+            lead.save()
+        else:
+            lead.is_contacted = True
+            if lead.status == "NEW":
+                lead.status = "CONTACTED"
+            lead.last_contacted_at = django_tz.now()
+            lead.sent_messages_count = (lead.sent_messages_count or 0) + 1
+            lead.save()
+        return lead.id
+
+    lead_id = await sync_to_async(_update_lead_status)()
+    return {"success": True, "lead_id": lead_id, "phone": phone}
+
+
 @app.post("/api/leads/batch-import")
 async def batch_import_leads_endpoint(payload: AutoLeadAssignRequest):
     """

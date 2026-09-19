@@ -228,6 +228,82 @@ COUNTRY_METADATA = {
 }
 
 
+
+TARGET_CATEGORY_PROFILES = {
+    "Mobile Repair Shop": {
+        "aliases": ["mobile repair", "phone servicing", "smartphone repair", "mobile lab", "touch display repair", "servicing shop"],
+        "queries": [
+            "{city} mobile repair servicing center contact phone",
+            "{city} smartphone repair shop whatsapp",
+            "{city} mobile touch display replacement facebook",
+            "{city} mobile parts servicing lab"
+        ],
+        "key_features": "সার্ভিসিং টিকেটিং, কাস্টমার জব শিট, টেকনিশিয়ান কমিশন ও পার্টস ইনভেন্টরি ট্র্যাকিং",
+        "pitch_template": (
+            "আসসালামু আলাইকুম স্যার/ম্যাম!\n\n"
+            "আপনার প্রতিষ্ঠান **{shop_name}**-এর মোবাইল রিপেয়ার ও সার্ভিসিং কাজের হিসাব আরও সহজ ও নিখুঁত করতে StockWhisk ERP-তে রয়েছে ডেডিকেটেড ফিচার:\n\n"
+            "• **সার্ভিস টিকেটিং ও জব শিট:** কাস্টমার মোবাইল জমা দিলে তাৎক্ষণিক রিসিট মেমো ও ডেলিভারি স্ট্যাটাস ট্র্যাকিং।\n"
+            "• **টেকনিশিয়ান কমিশন:** কোন টেকনিশিয়ান কয়টি মোবাইল মেরামত করলেন তার স্বয়ংক্রিয় কাজের কমিশন হিসাব।\n"
+            "• **পার্টস ও ডিসপ্লে ইনভেন্টরি:** ব্যাটারি, ডিসপ্লে ও স্পেয়ার পার্টসের নিখুঁত স্টক হিসাব।\n\n"
+            "স্পেশাল অফারে মাত্র **৳৪৯৯/মাস**-এ পাচ্ছেন সম্পূর্ণ সফটওয়্যার। ফ্রি ১-অন-১ লাইভ ডেমো দেখতে ভিজিট করুন https://app.stockwhisk.com অথবা আমাদের জানাতে পারেন স্যার!"
+        )
+    },
+    "Battery Shop": {
+        "aliases": ["battery shop", "ips battery", "car battery dealer", "solar battery", "hamko battery", "lucas battery", "battery store"],
+        "queries": [
+            "{city} battery ips shop contact phone",
+            "{city} car automobile battery dealer whatsapp",
+            "{city} ips solar battery store facebook",
+            "{city} hamko rimso lucas battery dealer"
+        ],
+        "key_features": "ব্যাটারি ওয়ারেন্টি সিরিয়াল ট্র্যাকিং, পুরাতন/বাতিল ব্যাটারি স্ক্র্যাপ এডজাস্টমেন্ট ও হোলসেল চালান",
+        "pitch_template": (
+            "আসসালামু আলাইকুম স্যার/ম্যাম!\n\n"
+            "আপনার প্রতিষ্ঠান **{shop_name}**-এর ব্যাটারি ও আইপিএস ব্যবসার বিক্রয় ও হিসাব পরিচালনার জন্য StockWhisk ERP নিয়ে এসেছে বিশেষ সুবিধা:\n\n"
+            "• **ব্যাটারি সিরিয়াল ও ওয়ারেন্টি ট্র্যাকিং:** প্রতিটি ব্যাটারির ইউনিক সিরিয়াল নম্বর দিয়ে ওয়ারেন্টি কার্ড প্রিন্ট ও ক্লেইম ট্র্যাকিং।\n"
+            "• **পুরাতন ব্যাটারি এডজাস্টমেন্ট:** নতুন ব্যাটারি বিক্রির সময় কাস্টমারের পুরাতন/বাতিল ব্যাটারির দাম বিলে স্বয়ংক্রিয় মাইনাস।\n"
+            "• **ডিলার ও পাইকারি চালান:** কার্টন ও পিসের দ্রুত পাইকারি চালান ও বাকি খাতার এসএমএস।\n\n"
+            "স্পেশাল অফারে মাত্র **৳৪৯৯/মাস**-এ সফটওয়্যারটি চালু করতে ভিজিট করুন https://app.stockwhisk.com অথবা লাইভ ডেমোর জন্য আমাদের জানাতে পারেন স্যার!"
+        )
+    },
+    "Electronics": {
+        "aliases": ["electronics", "gadget", "mobile showroom", "refrigerator tv", "home appliance", "electronics store"],
+        "queries": [
+            "{city} electronics showroom contact phone",
+            "{city} mobile gadget shop whatsapp",
+            "{city} home appliance refrigerator tv store facebook",
+            "{city} electronics dealer store"
+        ],
+        "key_features": "৩-লেয়ার IMEI ও সিরিয়াল ট্র্যাকিং, ওয়ারেন্টি মেমো প্রিন্ট ও কিস্তি (EMI) সেলস",
+        "pitch_template": (
+            "আসসালামু আলাইকুম স্যার/ম্যাম!\n\n"
+            "আপনার প্রতিষ্ঠান **{shop_name}**-এর ইলেকট্রনিক্স ও গ্যাজেট শপের জন্য StockWhisk ERP-তে রয়েছে আধুনিক সব ফিচার:\n\n"
+            "• **IMEI ও সিরিয়াল ট্র্যাকিং:** প্রতিটি মোবাইল, ল্যাপটপ বা ডিভাইসের ইউনিক IMEI দিয়ে স্টক ও বিলিং।\n"
+            "• **ওয়ারেন্টি কার্ড ও সার্ভিস ট্র্যাকিং:** মেমোতে স্বয়ংক্রিয় ওয়ারেন্টি প্রিন্ট ও মেয়াদ ট্র্যাকিং।\n"
+            "• **কিস্তি বা ইএমআই (EMI) সেলস:** ডাউন পেমেন্ট, মাসিক কিস্তির শিডিউল ও স্বয়ংক্রিয় কাস্টমার এসএমএস।\n\n"
+            "আমাদের Opening Offer-এ মাত্র **৳৪৯৯/মাস**-এ সম্পূর্ণ সিস্টেম চালু করতে ভিজিট করুন https://app.stockwhisk.com অথবা একটি ফ্রি ১-অন-১ লাইভ ডেমো নিতে পারেন স্যার!"
+        )
+    },
+    "Chemical": {
+        "aliases": ["chemical", "industrial chemical", "paint chemical", "textile chemical", "chemical supplier", "chemical store"],
+        "queries": [
+            "{city} industrial chemical store contact phone",
+            "{city} textile chemical supplier whatsapp",
+            "{city} raw material chemical dealer facebook",
+            "{city} chemical trading company"
+        ],
+        "key_features": "ড্রাম/কেজি/লিটার ইউনিট কনভার্সন, ব্যাচ নম্বর ট্র্যাকিং ও বড় পাইকারি চালান মেমো",
+        "pitch_template": (
+            "আসসালামু আলাইকুম স্যার/ম্যাম!\n\n"
+            "আপনার প্রতিষ্ঠান **{shop_name}**-এর কেমিক্যাল ও ইন্ডাস্ট্রিয়াল সাপ্লাই ব্যবসার নিখুঁত ইনভেন্টরির জন্য StockWhisk ERP সম্পূর্ণ প্রস্তুত:\n\n"
+            "• **মাল্টি-ইউনিট ও কনভার্সন:** ড্রাম, কেজি, লিটার ও কন্টেইনারের স্বয়ংক্রিয় কনভার্সন ও স্টক ট্র্যাকিং।\n"
+            "• **ব্যাচ ও লট ট্র্যাকিং:** কেমিক্যালের ব্যাচ নম্বর, গ্রেড ও আমদানির চালান ট্র্যাকিং।\n"
+            "• **পাইকারি চালান ও লেজার:** বড় বড় কারখানা ও পার্টির বাকি খাতা, ডেবিট-ক্রেডিট লেজার ও চালান প্রিন্ট।\n\n"
+            "স্পেশাল অফারে মাত্র **৳৪৯৯/মাস**-এ সিস্টেমটি চালিয়ে দেখতে ভিজিট করুন https://app.stockwhisk.com অথবা ফ্রি ডেমোর জন্য আমাদের জানাতে পারেন স্যার!"
+        )
+    }
+}
+
 class LeadScraperEngine:
     def __init__(self, searxng_url: str = "http://searxng:8080", wa_engine_url: str = "http://wa-engine:5001"):
         self.searxng_url = searxng_url
@@ -336,7 +412,29 @@ class LeadScraperEngine:
                 valid.append(email_clean)
         return list(dict.fromkeys(valid))
 
-    def generate_worldwide_search_queries(self, base_query: str, country: str) -> List[str]:
+    def generate_worldwide_search_queries(self, base_query: str, country: str, category: Optional[str] = None) -> List[str]:
+        queries = []
+        country_info = COUNTRY_METADATA.get(country, COUNTRY_METADATA['GLOBAL'])
+        country_name = country_info['name']
+
+        # Check if matching special target profile
+        cat_key = category or ""
+        if not cat_key:
+            for k, v in TARGET_CATEGORY_PROFILES.items():
+                if any(alias in base_query.lower() for alias in v["aliases"]):
+                    cat_key = k
+                    break
+
+        if cat_key in TARGET_CATEGORY_PROFILES:
+            profile = TARGET_CATEGORY_PROFILES[cat_key]
+            cities = country_info.get('cities', ['Dhaka', 'Chittagong', 'Sylhet'])
+            for q_tpl in profile["queries"]:
+                for city in cities[:3]:
+                    queries.append(q_tpl.format(city=city))
+            queries.append(f"{base_query} contact phone")
+            queries.append(f"{base_query} whatsapp")
+            queries.append(f"{base_query} site:facebook.com")
+            return list(dict.fromkeys(queries))
         """Generate high-yield worldwide multi-engine search queries."""
         queries = []
         country_info = COUNTRY_METADATA.get(country, COUNTRY_METADATA['GLOBAL'])
@@ -439,7 +537,7 @@ class LeadScraperEngine:
             except Exception:
                 pass
 
-        search_queries = self.generate_worldwide_search_queries(query, country)
+        search_queries = self.generate_worldwide_search_queries(query, country, lead_category)
         collected_items = []
         seen_urls: Set[str] = set()
 
@@ -564,6 +662,33 @@ class LeadScraperEngine:
                 facebook_url = url if 'facebook.com' in url else None
                 lead_id = hashlib.md5(f"{phone}_{shop_name}".encode()).hexdigest()[:12]
 
+                # Determine profile match and suggested pitch
+                matched_profile = TARGET_CATEGORY_PROFILES.get(lead_category)
+                if not matched_profile:
+                    for k, v in TARGET_CATEGORY_PROFILES.items():
+                        if any(alias in shop_name.lower() or alias in combined_text.lower() for alias in v["aliases"]):
+                            matched_profile = v
+                            lead_category = k
+                            break
+
+                pitch_tpl = matched_profile["pitch_template"] if matched_profile else (
+                    "আসসালামু আলাইকুম স্যার/ম্যাম!\n\n"
+                    f"আপনার প্রতিষ্ঠান **{shop_name}**-এর বিক্রয়, ইনভেন্টরি ও বাকির নিখুঁত ডিজিটাল হিসাবের জন্য StockWhisk ERP এখন মাত্র ৪৯৯ টাকায়!\n"
+                    "ফ্রি লাইভ ডেমো দেখতে ভিজিট করুন: https://app.stockwhisk.com"
+                )
+                suggested_pitch = pitch_tpl.format(
+                    shop_name=shop_name,
+                    owner_or_sir="স্যার"
+                )
+
+                # Quality Score
+                score = 3
+                if is_on_wa:
+                    score += 1
+                if wa_pic or (emails and len(emails) > 0):
+                    score += 1
+                quality_tier = "⭐⭐⭐⭐⭐ High Priority" if score >= 5 else ("⭐⭐⭐⭐ Qualified" if score == 4 else "⭐⭐⭐ Standard")
+
                 leads.append({
                     'id': lead_id,
                     'shop_name': shop_name,
@@ -578,6 +703,10 @@ class LeadScraperEngine:
                     'whatsapp_profile_pic': wa_pic,
                     'profile_picture_url': profile_pic,
                     'already_in_crm': phone in existing_phones,
+                    'quality_score': score,
+                    'quality_tier': quality_tier,
+                    'suggested_pitch': suggested_pitch,
+                    'key_features': matched_profile.get("key_features", "") if matched_profile else "",
                     'scraped_source': 'Concurrent Multi-Engine Search',
                 })
 
