@@ -27,6 +27,21 @@ app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 const MEDIA_DIR = process.env.MEDIA_DIR || '/app/media';
 const AUTH_DIR = process.env.AUTH_DIR || '/app/auth_info_baileys';
 
+// In-memory message store for E2E retry handshake
+const messageStore = new Map();
+const msgRetryCounterCache = new Map();
+
+function cacheMessage(msg) {
+  if (msg?.key?.id && msg?.message) {
+    messageStore.set(msg.key.id, msg.message);
+    if (messageStore.size > 3000) {
+      const oldestKey = messageStore.keys().next().value;
+      messageStore.delete(oldestKey);
+    }
+  }
+}
+
+
 if (!fs.existsSync(MEDIA_DIR)) {
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
 }
@@ -348,8 +363,19 @@ async function connectToWhatsApp() {
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
     keepAliveIntervalMs: 25000,
-    retryRequestDelayMs: 3000,
-    maxMsgRetryCount: 5
+    retryRequestDelayMs: 2000,
+    maxMsgRetryCount: 5,
+    msgRetryCounterCache: {
+      get: (k) => msgRetryCounterCache.get(k),
+      set: (k, v) => msgRetryCounterCache.set(k, v),
+      del: (k) => msgRetryCounterCache.delete(k)
+    },
+    getMessage: async (key) => {
+      if (messageStore.has(key.id)) {
+        return messageStore.get(key.id);
+      }
+      return proto.Message.fromObject({});
+    }
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -727,6 +753,7 @@ app.post('/send', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Message text or attachment is required.' });
       }
       sentMsg = await sock.sendMessage(jid, { text: String(text) });
+      if (sentMsg) cacheMessage(sentMsg);
     }
 
     const messageId = sentMsg?.key?.id || `msg_${Date.now()}`;
@@ -787,6 +814,7 @@ app.post('/send-message', async (req, res) => {
       }
     } else {
       sentMsg = await sock.sendMessage(jid, { text: String(text || '') });
+      if (sentMsg) cacheMessage(sentMsg);
     }
 
     const messageId = sentMsg?.key?.id || `msg_${Date.now()}`;
