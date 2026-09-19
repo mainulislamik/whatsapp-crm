@@ -46,8 +46,10 @@ services:
       - ./backend:/app
     depends_on: [whatsapp-engine, searxng]
     networks:
-      - default
-      - stockwhisk_net
+      default:
+      stockwhisk_net:
+        aliases:
+          - wa-backend
 
   frontend:
     build: ./frontend
