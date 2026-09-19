@@ -13,6 +13,8 @@ import re
 import random
 import csv
 import io
+import time
+import phonenumbers
 from datetime import datetime, timezone
 from django.utils import timezone as django_tz
 from typing import List, Optional, Dict, Any, Set
@@ -1433,17 +1435,24 @@ class ChatListItem(BaseModel):
     phone: str
     name: str
     jid: str
+    display_phone: str | None = None
+    country_code: str | None = None
+    is_lid: bool = False
     last_message: str
     last_message_time: str
     unread_count: int
     is_on_whatsapp: bool
     profile_picture: str | None = None
+    is_bot_active: bool = True
 
 class ChatMessageOut(BaseModel):
     id: int
     whatsapp_msg_id: str
     phone: str
     jid: str
+    display_phone: str | None = None
+    country_code: str | None = None
+    is_lid: bool = False
     sender_name: str
     is_from_me: bool
     message_text: str
@@ -1454,6 +1463,9 @@ class ChatMessageOut(BaseModel):
     status: str
     is_read: bool
     timestamp: str
+
+class LinkPhoneRequest(BaseModel):
+    phone: str
 
 class SendMessageRequest(BaseModel):
     message: str = ""
@@ -1499,6 +1511,64 @@ class BatchIncomingMessageWebhook(BaseModel):
     messages: List[IncomingMessageWebhook]
 
 _chat_meta_cache = {}
+_lid_map_cache = {}
+_lid_map_last_fetch = 0.0
+
+async def get_lid_map():
+    global _lid_map_cache, _lid_map_last_fetch
+    now = time.time()
+    if now - _lid_map_last_fetch < 10.0 and _lid_map_cache:
+        return _lid_map_cache
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{WHATSAPP_ENGINE_URL}/api/lid-mappings")
+            if resp.status_code == 200:
+                data = resp.json()
+                _lid_map_cache = data.get("mappings", {})
+                _lid_map_last_fetch = now
+    except Exception:
+        pass
+    return _lid_map_cache
+
+def compute_display_phone_and_meta(phone: str, jid: str = "", lid_map: dict = None):
+    import phonenumbers
+    if not phone:
+        return "", "", False
+    if "@g.us" in phone or "@g.us" in jid or phone.startswith("120363"):
+        return "Group Chat", "", False
+
+    clean_digits = re.sub(r"\D", "", phone)
+    is_lid = (len(clean_digits) >= 14 and not clean_digits.startswith("8801")) or (jid and jid.endswith("@lid"))
+
+    resolved_phone = clean_digits
+    if is_lid and lid_map:
+        mapped = lid_map.get(clean_digits) or lid_map.get(f"{clean_digits}@lid")
+        if mapped:
+            resolved_phone = re.sub(r"\D", "", mapped)
+            is_lid = False
+
+    if is_lid:
+        return f"WhatsApp ID: {clean_digits}", "", True
+
+    try:
+        default_region = "BD" if resolved_phone.startswith("01") or resolved_phone.startswith("880") else None
+        raw_to_parse = ("+" + resolved_phone) if (resolved_phone.startswith("880") or resolved_phone.startswith("1") or resolved_phone.startswith("44") or resolved_phone.startswith("971")) else resolved_phone
+        parsed = phonenumbers.parse(raw_to_parse, default_region)
+        if phonenumbers.is_valid_number(parsed):
+            fmt = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
+            cc = f"+{parsed.country_code}"
+            return fmt, cc, False
+    except Exception:
+        pass
+
+    if resolved_phone.startswith("8801") and len(resolved_phone) == 13:
+        return f"+880 {resolved_phone[3:7]}-{resolved_phone[7:]}", "+880", False
+    elif resolved_phone.startswith("01") and len(resolved_phone) == 11:
+        return f"+880 {resolved_phone[1:5]}-{resolved_phone[5:]}", "+880", False
+    elif len(resolved_phone) >= 10:
+        return f"+{resolved_phone}", "+", False
+
+    return phone, "", False
 
 @app.get("/api/chats", response_model=List[ChatListItem])
 async def get_chat_list():
@@ -1599,18 +1669,28 @@ async def get_chat_list():
     except Exception:
         pass
 
+    lid_map = await get_lid_map()
+    from crm_core.ai_bot import load_bot_config
+    bot_cfg = load_bot_config()
+    bot_globally_on = bot_cfg.get('enabled', True)
+    disabled_set = set(re.sub(r'\D', '', x) for x in bot_cfg.get('disabled_phones', []))
+
     final_chats = []
     for c in db_chats:
+        clean_item_phone = re.sub(r'\D', '', c['phone'])
+        is_bot_active = bot_globally_on and (clean_item_phone not in disabled_set)
         phone = c['phone']
         jid = c.get('jid') or f"{phone}@s.whatsapp.net"
         meta = resolved_meta.get(phone) or resolved_meta.get(jid) or resolved_meta.get(phone.replace('8801', '01')) or resolved_meta.get('88' + phone if phone.startswith('01') else phone) or {}
 
+        disp_phone, country_code, is_lid = compute_display_phone_and_meta(phone, jid, lid_map)
+
         pic = c.get('lead_pic') or meta.get('profile_picture') or meta.get('profilePictureUrl') or _chat_meta_cache.get(jid, {}).get('profilePictureUrl')
         name = meta.get('name') or c.get('name')
         if not name or name == phone or name == 'WhatsApp Group' or '(WhatsApp Group)' in str(name):
-            name = _chat_meta_cache.get(jid, {}).get('name') or meta.get('name') or name or phone
+            name = _chat_meta_cache.get(jid, {}).get('name') or meta.get('name') or name or disp_phone
 
-        disp_name = name or phone
+        disp_name = name or disp_phone
         while disp_name.startswith('00') and len(disp_name) > 2:
             disp_name = disp_name[1:]
 
@@ -1618,11 +1698,15 @@ async def get_chat_list():
             'phone': phone,
             'name': disp_name,
             'jid': jid,
+            'display_phone': disp_phone,
+            'country_code': country_code,
+            'is_lid': is_lid,
             'last_message': c['last_message'],
             'last_message_time': c['last_message_time'],
             'unread_count': c['unread_count'],
             'is_on_whatsapp': c['is_on_whatsapp'],
-            'profile_picture': pic
+            'profile_picture': pic,
+            'is_bot_active': is_bot_active
         })
 
     final_chats.sort(key=lambda x: x['last_message_time'], reverse=True)
@@ -1630,6 +1714,9 @@ async def get_chat_list():
 
 @app.get("/api/chats/{phone}/messages", response_model=List[ChatMessageOut])
 async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None = None):
+    lid_map = await get_lid_map()
+    disp_phone, country_code, is_lid = compute_display_phone_and_meta(phone, phone + "@s.whatsapp.net", lid_map)
+
     def _get_msgs():
         qs = ChatMessage.objects.filter(phone=phone).order_by('-timestamp')
         if before_id:
@@ -1643,6 +1730,9 @@ async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None 
             "whatsapp_msg_id": m.whatsapp_msg_id,
             "phone": m.phone,
             "jid": m.jid,
+            "display_phone": disp_phone,
+            "country_code": country_code,
+            "is_lid": is_lid,
             "sender_name": m.sender_name,
             "is_from_me": m.is_from_me,
             "message_text": m.message_text,
@@ -1656,6 +1746,94 @@ async def get_chat_messages(phone: str, limit: int = 100, before_id: int | None 
         }
         for m in msgs
     ]
+
+@app.post("/api/chats/{phone}/link-phone")
+async def link_chat_phone(phone: str, req: LinkPhoneRequest):
+    new_phone = re.sub(r"\D", "", req.phone)
+    if new_phone.startswith("8801") and len(new_phone) == 13:
+        new_phone = "0" + new_phone[2:]
+    elif not new_phone.startswith("01") and len(new_phone) == 10:
+        new_phone = "0" + new_phone
+
+    if not new_phone:
+        raise HTTPException(status_code=400, detail="Valid phone number required")
+
+    def _update_db():
+        count = ChatMessage.objects.filter(phone=phone).update(phone=new_phone)
+        return count
+
+    updated_count = await sync_to_async(_update_db)()
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(f"{WHATSAPP_ENGINE_URL}/api/set-lid-mapping", json={
+                "lid": phone,
+                "phone": new_phone
+            })
+    except Exception:
+        pass
+
+    global _lid_map_last_fetch
+    _lid_map_last_fetch = 0.0
+
+    return {
+        "success": True,
+        "old_phone": phone,
+        "new_phone": new_phone,
+        "messages_updated": updated_count
+    }
+
+class BotConfigRequest(BaseModel):
+    enabled: Optional[bool] = None
+    auto_lead_gen: Optional[bool] = None
+    model: Optional[str] = None
+    reply_delay_seconds: Optional[int] = None
+
+class BotToggleRequest(BaseModel):
+    enabled: bool
+
+@app.get("/api/bot/config")
+async def get_bot_config_api():
+    from crm_core.ai_bot import load_bot_config
+    return load_bot_config()
+
+@app.post("/api/bot/config")
+async def update_bot_config_api(req: BotConfigRequest):
+    from crm_core.ai_bot import load_bot_config, save_bot_config
+    cfg = load_bot_config()
+    if req.enabled is not None:
+        cfg["enabled"] = req.enabled
+    if req.auto_lead_gen is not None:
+        cfg["auto_lead_gen"] = req.auto_lead_gen
+    if req.model is not None:
+        cfg["model"] = req.model
+    if req.reply_delay_seconds is not None:
+        cfg["reply_delay_seconds"] = max(1, min(30, req.reply_delay_seconds))
+    save_bot_config(cfg)
+    return {"success": True, "config": cfg}
+
+@app.get("/api/chats/{phone}/bot-status")
+async def get_chat_bot_status(phone: str):
+    from crm_core.ai_bot import load_bot_config
+    cfg = load_bot_config()
+    clean_digits = re.sub(r'\D', '', phone)
+    disabled_list = [re.sub(r'\D', '', p) for p in cfg.get("disabled_phones", [])]
+    is_active = cfg.get("enabled", True) and (clean_digits not in disabled_list)
+    return {"phone": phone, "is_bot_active": is_active, "globally_enabled": cfg.get("enabled", True)}
+
+@app.post("/api/chats/{phone}/bot-toggle")
+async def toggle_chat_bot_status(phone: str, req: BotToggleRequest):
+    from crm_core.ai_bot import load_bot_config, save_bot_config
+    cfg = load_bot_config()
+    clean_digits = re.sub(r'\D', '', phone)
+    disabled = set(re.sub(r'\D', '', p) for p in cfg.get("disabled_phones", []))
+    if req.enabled:
+        disabled.discard(clean_digits)
+    else:
+        disabled.add(clean_digits)
+    cfg["disabled_phones"] = list(disabled)
+    save_bot_config(cfg)
+    return {"phone": phone, "is_bot_active": req.enabled}
 
 @app.post("/api/chats/{phone}/read")
 async def mark_chat_read(phone: str):
@@ -1813,6 +1991,21 @@ async def incoming_message_webhook(payload: IncomingMessageWebhook):
 
         msg, created = await sync_to_async(_save_incoming)()
         if created:
+            if not payload.is_from_me:
+                try:
+                    from crm_core.ai_bot import handle_incoming_message_for_bot
+                    asyncio.create_task(
+                        handle_incoming_message_for_bot(
+                            phone=payload.phone,
+                            jid=payload.jid,
+                            sender_name=payload.sender_name or "",
+                            message_text=payload.message_text or payload.media_caption or "",
+                            wa_engine_url=WHATSAPP_ENGINE_URL
+                        )
+                    )
+                except Exception as bot_err:
+                    print(f"Bot dispatch error: {bot_err}")
+
             try:
                 asyncio.create_task(ws_chat_manager.broadcast({
                     "type": "NEW_MESSAGE",

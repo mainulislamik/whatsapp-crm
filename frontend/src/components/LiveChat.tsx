@@ -57,9 +57,11 @@ import {
   InfoOutlined as InfoIcon,
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
+  SmartToy as SmartToyIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { ChatService, ChatListItem, ChatMessage, Lead, LeadService, WhatsAppService } from '@/lib/api';
+import { ChatService, ChatListItem, ChatMessage, Lead, LeadService, WhatsAppService, BotService } from '@/lib/api';
 
 interface LiveChatProps {
   onBack?: () => void;
@@ -80,6 +82,8 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [tabFilter, setTabFilter] = useState<'all' | 'unread' | 'direct' | 'groups'>('all');
   const [waConnected, setWaConnected] = useState(true);
+  const [isBotActive, setIsBotActive] = useState<boolean>(true);
+  const [botToggling, setBotToggling] = useState<boolean>(false);
   
   // Attachments state
   const [attachAnchorEl, setAttachAnchorEl] = useState<null | HTMLElement>(null);
@@ -271,9 +275,32 @@ export default function LiveChat({ onBack }: LiveChatProps) {
     return () => clearInterval(interval);
   }, [selectedChat?.phone]);
 
+  const handleToggleBot = async () => {
+    if (!selectedChat || botToggling) return;
+    setBotToggling(true);
+    try {
+      const targetState = !isBotActive;
+      const res = await BotService.toggleChat(selectedChat.phone, targetState);
+      setIsBotActive(res.data.is_bot_active);
+      setChats((prev) =>
+        prev.map((c) =>
+          c.phone === selectedChat.phone ? { ...c, is_bot_active: res.data.is_bot_active } : c
+        )
+      );
+    } catch (e) {
+      console.error('Failed to toggle AI Bot:', e);
+    } finally {
+      setBotToggling(false);
+    }
+  };
+
   const handleSelectChat = (chat: ChatListItem) => {
     selectedPhoneRef.current = chat.phone;
     setSelectedChat(chat);
+    setIsBotActive(chat.is_bot_active !== false);
+    BotService.getChatStatus(chat.phone)
+      .then((res) => setIsBotActive(res.data.is_bot_active))
+      .catch(() => {});
     setPendingFile(null);
     setMessageText('');
     setChats((prev) =>
@@ -746,6 +773,24 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                     sx={{ fontWeight: 600, fontSize: 11 }}
                   />
                 )}
+                <Tooltip title={isBotActive ? "AI Bot সক্রিয় আছে (পজ করতে ক্লিক করুন)" : "AI Bot পজ করা আছে (চালু করতে ক্লিক করুন)"}>
+                  <Chip
+                    icon={<SmartToyIcon sx={{ fontSize: '15px !important' }} />}
+                    label={isBotActive ? "AI Bot: ON" : "AI Bot: OFF"}
+                    size="small"
+                    color={isBotActive ? "success" : "default"}
+                    variant={isBotActive ? "filled" : "outlined"}
+                    onClick={handleToggleBot}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      bgcolor: isBotActive ? '#10b981' : undefined,
+                      color: isBotActive ? '#ffffff' : '#64748b',
+                      '&:hover': { opacity: 0.9 },
+                    }}
+                  />
+                </Tooltip>
                 <Tooltip title="Contact Info & Intelligence">
                   <IconButton
                     size="small"
@@ -821,7 +866,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                           px: 1.5,
                           maxWidth: { xs: '88%', sm: '75%', md: '65%' },
                           minWidth: 90,
-                          bgcolor: isFromMe ? '#d9fdd3' : '#ffffff',
+                          bgcolor: isFromMe ? (m.sender_name === 'StockWhisk AI' ? '#e0f2fe' : '#d9fdd3') : '#ffffff',
                           color: '#111b21',
                           borderRadius: isFromMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                           boxShadow: '0 1px 1px rgba(0,0,0,0.1)',
@@ -829,6 +874,15 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                           wordBreak: 'break-word',
                         }}
                       >
+                        {/* StockWhisk AI Sender Badge */}
+                        {isFromMe && m.sender_name === 'StockWhisk AI' && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.4 }}>
+                            <SmartToyIcon sx={{ fontSize: 13, color: '#0284c7' }} />
+                            <Typography variant="caption" sx={{ color: '#0284c7', fontWeight: 700, fontSize: 10 }}>
+                              StockWhisk AI Assistant
+                            </Typography>
+                          </Box>
+                        )}
                         {/* Group Sender Name */}
                         {!isFromMe && m.sender_name && m.sender_name !== 'Me' && selectedChat.phone.includes('@g.us') && (
                           <Typography

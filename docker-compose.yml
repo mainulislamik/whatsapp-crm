@@ -22,6 +22,7 @@ services:
     volumes:
       - ./wa_auth_data:/app/auth_info_baileys
       - ./wa_media_data:/app/media
+      - ./whatsapp-engine/server.js:/app/server.js
 
   backend:
     build: ./backend
@@ -36,11 +37,17 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-stockwhisk}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-imontouhid4992}
       - DEBUG=True
+      - OMNIROUTE_URL=http://172.20.0.1:20128/v1
+      - OMNIROUTE_API_KEY=sk-9cc...fc4f
+      - STOCKWHISK_DB_URL=postgresql://stockwhisk:stockwhisk_password@stockwhisk_updated-db-1:5432/stockwhisk
     volumes:
       - ./wa_backend_data:/app/data
       - ./wa_media_data:/app/media
       - ./backend:/app
     depends_on: [whatsapp-engine, searxng]
+    networks:
+      - default
+      - stockwhisk_net
 
   frontend:
     build: ./frontend
@@ -51,3 +58,9 @@ services:
     environment:
       - BACKEND_INTERNAL_URL=http://backend:8000
     depends_on: [backend]
+
+networks:
+  default:
+  stockwhisk_net:
+    external: true
+    name: stockwhisk_updated_default

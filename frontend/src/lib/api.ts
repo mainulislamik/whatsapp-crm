@@ -75,11 +75,15 @@ export interface ChatListItem {
   phone: string;
   name: string;
   jid: string;
+  display_phone?: string | null;
+  country_code?: string | null;
+  is_lid?: boolean;
   last_message: string;
   last_message_time: string;
   unread_count: number;
   is_on_whatsapp: boolean;
   profile_picture?: string | null;
+  is_bot_active?: boolean;
 }
 
 export interface ChatMessage {
@@ -332,6 +336,33 @@ export const ChatService = {
   send: (phone: string, data: { message?: string; media_type?: string; media_url?: string; media_base64?: string; file_name?: string; mime_type?: string }) =>
     api.post(`/chats/${encodeURIComponent(phone)}/send`, data),
   markRead: (phone: string) => api.post(`/chats/${encodeURIComponent(phone)}/read`),
+};
+
+export const BotService = {
+  getConfig: () =>
+    api.get<{
+      enabled: boolean;
+      auto_lead_gen: boolean;
+      model: string;
+      fallback_model: string;
+      reply_delay_seconds: number;
+      disabled_phones: string[];
+    }>('/bot/config'),
+  updateConfig: (data: Partial<{
+    enabled: boolean;
+    auto_lead_gen: boolean;
+    model: string;
+    reply_delay_seconds: number;
+  }>) => api.post('/bot/config', data),
+  getChatStatus: (phone: string) =>
+    api.get<{ phone: string; is_bot_active: boolean; globally_enabled: boolean }>(
+      `/chats/${encodeURIComponent(phone)}/bot-status`
+    ),
+  toggleChat: (phone: string, enabled: boolean) =>
+    api.post<{ phone: string; is_bot_active: boolean }>(
+      `/chats/${encodeURIComponent(phone)}/bot-toggle`,
+      { enabled }
+    ),
 };
 
 export const AuthService = {

@@ -51,6 +51,57 @@ const groupsStore = new Map();
 const profilePicsCache = new Map();
 const unreadCountsMap = new Map();
 
+const LID_MAP_FILE = path.join(AUTH_DIR, 'lid_mapping.json');
+
+function loadLidMapping() {
+  try {
+    if (fs.existsSync(LID_MAP_FILE)) {
+      const data = JSON.parse(fs.readFileSync(LID_MAP_FILE, 'utf8'));
+      for (const [k, v] of Object.entries(data)) {
+        if (v && typeof v === 'string' && !k.endsWith('_jid')) {
+          lidToPhoneMap.set(k, v);
+          const cleanKey = k.replace('@lid', '');
+          lidToPhoneMap.set(cleanKey, v);
+        }
+      }
+      console.log();
+    }
+  } catch (err) {
+    console.warn('[LID Mapping] Load warning:', err.message);
+  }
+}
+
+function saveLidMapping(lid, phone, verifiedJid) {
+  if (!lid || !phone) return;
+  try {
+    const cleanLid = String(lid).replace('@lid', '').trim();
+    const cleanPhone = normalizePhone(phone);
+    if (!cleanLid || !cleanPhone) return;
+
+    lidToPhoneMap.set(cleanLid, cleanPhone);
+    lidToPhoneMap.set(cleanLid + '@lid', cleanPhone);
+
+    let data = {};
+    if (fs.existsSync(LID_MAP_FILE)) {
+      try {
+        data = JSON.parse(fs.readFileSync(LID_MAP_FILE, 'utf8'));
+      } catch (e) {
+        data = {};
+      }
+    }
+    data[cleanLid] = cleanPhone;
+    data[cleanLid + '@lid'] = cleanPhone;
+    if (verifiedJid) {
+      data[cleanLid + '_jid'] = verifiedJid;
+    }
+    fs.writeFileSync(LID_MAP_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[LID Mapping] Save warning:', err.message);
+  }
+}
+
+loadLidMapping();
+
 function normalizePhone(raw) {
   if (!raw) return '';
   if (raw.includes('@g.us')) return raw.split('@')[0];
@@ -72,10 +123,12 @@ function saveContact(c) {
 
   if (c.lid) {
     const lidNum = c.lid.split('@')[0];
-    lidToPhoneMap.set(lidNum, normalized || numOnly);
+    const mappedPhone = normalized || numOnly;
+    lidToPhoneMap.set(lidNum, mappedPhone);
     lidToPhoneMap.set(c.lid, rawId);
     contactsStore.set(c.lid, c);
     contactsStore.set(lidNum, c);
+    saveLidMapping(c.lid, mappedPhone, rawId);
   }
 
   const existing = contactsStore.get(rawId) || {};
@@ -87,7 +140,7 @@ function saveContact(c) {
   }
 }
 
-function resolvePhoneAndName(remoteJid, participantJid, pushName) {
+function resolvePhoneAndName(remoteJid, participantJid, pushName, senderPn) {
   let jid = remoteJid || '';
   let isGroup = jid.endsWith('@g.us');
   let senderName = pushName || '';
@@ -107,12 +160,24 @@ function resolvePhoneAndName(remoteJid, participantJid, pushName) {
 
   let phone = jid.split('@')[0];
 
-  if (jid.endsWith('@lid')) {
+  if (senderPn) {
+    const cleanPn = normalizePhone(senderPn);
+    if (cleanPn) {
+      phone = cleanPn;
+      if (jid.endsWith('@lid')) {
+        const lidNum = jid.split('@')[0];
+        saveLidMapping(lidNum, cleanPn, (cleanPn.startsWith('01') ? '88' + cleanPn : cleanPn) + '@s.whatsapp.net');
+      }
+      jid = (phone.startsWith('01') ? '88' + phone : phone) + '@s.whatsapp.net';
+    }
+  }
+
+  if (jid.endsWith('@lid') || (phone.length >= 14 && !phone.startsWith('8801'))) {
     const lidNum = jid.split('@')[0];
     const mappedPhone = lidToPhoneMap.get(lidNum) || lidToPhoneMap.get(jid);
     if (mappedPhone) {
       phone = mappedPhone;
-      jid = `${phone.startsWith('01') ? '88' + phone : phone}@s.whatsapp.net`;
+      jid = (phone.startsWith('01') ? '88' + phone : phone) + '@s.whatsapp.net';
     }
   }
 
@@ -141,8 +206,9 @@ async function extractMessageInfo(m) {
   const isFromMe = Boolean(msgKey.fromMe);
   const participant = msgKey.participant || '';
   const pushName = m.pushName || '';
+  const senderPn = msgKey.senderPn || msgKey.participantPn || m.senderPn || '';
 
-  const { phone, jid, isGroup, senderName, groupTitle } = resolvePhoneAndName(remoteJid, participant, pushName);
+  const { phone, jid, isGroup, senderName, groupTitle } = resolvePhoneAndName(remoteJid, participant, pushName, senderPn);
 
   let messageText = '';
   let mediaType = '';
@@ -371,6 +437,10 @@ async function connectToWhatsApp() {
       const parsedBatch = [];
       for (const m of messages) {
         const sender = m.key?.remoteJid;
+        const senderPn = m.key?.senderPn || m.key?.participantPn || m.senderPn || '';
+        if (sender && senderPn && sender.endsWith('@lid')) {
+          saveLidMapping(sender, senderPn);
+        }
         if (sender && m.pushName) {
           saveContact({ id: sender, notify: m.pushName, pushName: m.pushName });
         }
@@ -513,10 +583,19 @@ async function forwardBatchToBackend(msgBatch) {
 function formatJID(phone) {
   if (!phone) return '';
   let str = String(phone).trim();
-  if (str.includes('@g.us') || str.includes('@s.whatsapp.net')) {
+  if (str.includes('@g.us') || str.includes('@s.whatsapp.net') || str.includes('@lid')) {
     return str;
   }
-  let cleaned = str.replace(/\D/g, '');
+  const cleanDigits = str.replace(/\D/g, '');
+  const mapped = lidToPhoneMap.get(cleanDigits) || lidToPhoneMap.get(str);
+  if (mapped) {
+    const norm = normalizePhone(mapped);
+    return (norm.startsWith('01') ? '88' + norm : norm) + '@s.whatsapp.net';
+  }
+  if (cleanDigits.length >= 14 && !cleanDigits.startsWith('8801')) {
+    return cleanDigits + '@lid';
+  }
+  let cleaned = cleanDigits;
   if (cleaned.startsWith('01') && cleaned.length === 11) {
     cleaned = '88' + cleaned;
   }
@@ -859,6 +938,7 @@ app.get('/check-contact', async (req, res) => {
 
     let exists = false;
     let verifiedJid = null;
+    let foundLid = null;
 
     try {
       const results = await sock.onWhatsApp(...jidsToCheck);
@@ -867,6 +947,10 @@ app.get('/check-contact', async (req, res) => {
         if (found) {
           exists = true;
           verifiedJid = found.jid;
+          if (found.lid) {
+            foundLid = found.lid;
+            saveLidMapping(found.lid, phone, verifiedJid);
+          }
         }
       }
     } catch (e) {
@@ -901,6 +985,7 @@ app.get('/check-contact', async (req, res) => {
       connected: connectionStatus === 'CONNECTED',
       exists,
       jid: verifiedJid || (phone.startsWith('01') ? '88' + phone + '@s.whatsapp.net' : phone + '@s.whatsapp.net'),
+      lid: foundLid,
       name,
       profilePictureUrl,
       about,
@@ -910,6 +995,72 @@ app.get('/check-contact', async (req, res) => {
     console.error('Error in /check-contact:', err);
     res.status(500).json({ error: err.message, exists: false });
   }
+});
+
+// Bulk sync LIDs for phone numbers
+app.post('/api/sync-lids', async (req, res) => {
+  try {
+    if (!sock || connectionStatus !== 'CONNECTED') {
+      return res.status(400).json({ error: 'WhatsApp is not connected' });
+    }
+    const { phones } = req.body;
+    if (!Array.isArray(phones) || phones.length === 0) {
+      return res.status(400).json({ error: 'Array of phones required' });
+    }
+
+    const discovered = {};
+    for (const raw of phones) {
+      let p = String(raw).replace(/\D/g, '');
+      if (!p) continue;
+      let checkList = [];
+      if (p.startsWith('01') && p.length === 11) {
+        checkList.push('88' + p + '@s.whatsapp.net');
+      } else if (p.startsWith('8801') && p.length === 13) {
+        checkList.push(p + '@s.whatsapp.net');
+      } else {
+        checkList.push(p + '@s.whatsapp.net');
+      }
+
+      try {
+        const results = await sock.onWhatsApp(...checkList);
+        if (Array.isArray(results)) {
+          const found = results.find(r => r && r.exists);
+          if (found && found.lid) {
+            const cleanLid = found.lid.split('@')[0];
+            const normPhone = normalizePhone(p);
+            saveLidMapping(cleanLid, normPhone, found.jid);
+            discovered[cleanLid] = normPhone;
+          }
+        }
+      } catch (err) {}
+    }
+
+    res.json({ success: true, count: Object.keys(discovered).length, discovered });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Set manual LID mapping
+app.post('/api/set-lid-mapping', (req, res) => {
+  const { lid, phone } = req.body;
+  if (!lid || !phone) {
+    return res.status(400).json({ error: 'lid and phone required' });
+  }
+  const normPhone = normalizePhone(phone);
+  saveLidMapping(lid, normPhone);
+  res.json({ success: true, lid, phone: normPhone });
+});
+
+// Get all LID mappings
+app.get('/api/lid-mappings', (req, res) => {
+  let data = {};
+  if (fs.existsSync(LID_MAP_FILE)) {
+    try {
+      data = JSON.parse(fs.readFileSync(LID_MAP_FILE, 'utf8'));
+    } catch (e) {}
+  }
+  res.json({ count: Object.keys(data).length, mappings: data });
 });
 
 // Start WhatsApp socket & server
