@@ -1132,7 +1132,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                 clickable
                 size="small"
                 label="⚡ ভিডিও ডেমো"
-                onClick={() => setMessageText('StockWhisk সফটওয়্যারের পূর্ণাঙ্গ ডেমো ভিডিওটি একনজরে দেখে নিন ভাই: https://www.youtube.com/watch?v=X_9ZRcIA3JI')}
+                onClick={() => setMessageText('StockWhisk সফটওয়্যারের পূর্ণাঙ্গ ডেমো ভিডিওটি একনজরে দেখে নিতে পারেন স্যার: https://www.youtube.com/watch?v=X_9ZRcIA3JI')}
                 sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0, '&:hover': { bgcolor: '#e2e8f0' } }}
               />
               <Chip
@@ -1153,7 +1153,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                 clickable
                 size="small"
                 label="📞 ১-অন-১ লাইভ মিটিং"
-                onClick={() => setMessageText('আমরা গুগল মিটের মাধ্যমে আপনাকে সম্পূর্ণ ফ্রিতে ১-অন-১ লাইভ ডেমো ও শপ সেটআপ সহায়তা দিতে পারি ভাই। কখন ফ্রি আছেন জানাবেন?')}
+                onClick={() => setMessageText('আমরা গুগল মিটের মাধ্যমে আপনাকে সম্পূর্ণ ফ্রিতে ১-অন-১ লাইভ ডেমো ও শপ সেটআপ সহায়তা দিতে পারি স্যার। কখন ফ্রি আছেন জানাবেন?')}
                 sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0, '&:hover': { bgcolor: '#e2e8f0' } }}
               />
             </Box>
