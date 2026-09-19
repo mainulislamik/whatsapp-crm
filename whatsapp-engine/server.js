@@ -777,12 +777,12 @@ app.post('/send-message', async (req, res) => {
       return res.status(400).json({ success: false, error: 'WhatsApp is not connected. Please scan QR code.' });
     }
 
-    const { phone, text, mediaType, mediaUrl, fileName } = req.body;
-    if (!phone) {
-      return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
+    const { phone, jid: directJid, text, mediaType, mediaUrl, fileName } = req.body;
+    if (!phone && !directJid) {
+      return res.status(400).json({ success: false, error: 'Recipient phone number or JID is required.' });
     }
 
-    const jid = formatJID(phone);
+    const jid = directJid || formatJID(phone);
     let sentMsg;
 
     // Simulate typing

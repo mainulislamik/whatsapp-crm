@@ -462,6 +462,7 @@ async def handle_incoming_message_for_bot(
         try:
             req_data = {
                 "phone": phone,
+                "jid": jid,
                 "text": reply_text
             }
             resp = await client.post(f"{wa_engine_url}/send-message", json=req_data)
