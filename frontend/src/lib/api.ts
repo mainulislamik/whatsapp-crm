@@ -542,3 +542,34 @@ export const RegDbService = {
   }) => api.post('/reg-db/manual-shop', data),
   deleteManualShop: (manualId: string) => api.delete(`/reg-db/manual-shop/${encodeURIComponent(manualId)}`),
 };
+
+
+export interface AutopilotStatus {
+  enabled: boolean;
+  interval_minutes: number;
+  batch_size: number;
+  is_running: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  total_harvested: number;
+  last_log: string;
+  current_category: string;
+  current_city: string;
+  rotation_preset_index: number;
+  rotation_city_index: number;
+  history?: Array<{
+    timestamp: string;
+    category: string;
+    city: string;
+    count: number;
+    log: string;
+  }>;
+}
+
+export const AutopilotService = {
+  getStatus: () => api.get<AutopilotStatus>('/leads/autopilot/status'),
+  toggle: (enabled: boolean) => api.post<{ success: boolean; status: AutopilotStatus }>('/leads/autopilot/toggle', { enabled }),
+  runNow: () => api.post<{ success: boolean; message: string }>('/leads/autopilot/run-now'),
+  updateSettings: (settings: { interval_minutes?: number; batch_size?: number }) =>
+    api.post<{ success: boolean; status: AutopilotStatus }>('/leads/autopilot/settings', settings),
+};

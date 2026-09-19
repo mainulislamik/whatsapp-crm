@@ -39,6 +39,7 @@ import {
   Snackbar,
   Checkbox,
   FormControlLabel,
+  Switch,
 } from '@mui/material';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import AddIcon from '@mui/icons-material/Add';
@@ -80,7 +81,7 @@ import BatteryChargingFullIcon from '@mui/icons-material/BatteryChargingFull';
 import DevicesIcon from '@mui/icons-material/Devices';
 import ScienceIcon from '@mui/icons-material/Science';
 
-import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead } from '@/lib/api';
+import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead, AutopilotStatus, AutopilotService } from '@/lib/api';
 
 // Supported Target Countries for Worldwide Lead Discovery
 const DISCOVERY_COUNTRIES = [
@@ -218,6 +219,53 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   const [editingStagedLead, setEditingStagedLead] = useState<GeneratedLead | null>(null);
   const [batchCategoryAssign, setBatchCategoryAssign] = useState<string>('Clothing');
 
+  // 🤖 24/7 Autonomous AI Lead Harvester State
+  const [autopilotStatus, setAutopilotStatus] = useState<AutopilotStatus | null>(null);
+  const [isTogglingAutopilot, setIsTogglingAutopilot] = useState<boolean>(false);
+  const [isRunningAutopilotNow, setIsRunningAutopilotNow] = useState<boolean>(false);
+
+  const fetchAutopilotStatus = async () => {
+    try {
+      const res = await AutopilotService.getStatus();
+      setAutopilotStatus(res.data);
+    } catch (e) {
+      console.error('Failed to fetch autopilot status:', e);
+    }
+  };
+
+  const handleToggleAutopilot = async (newVal: boolean) => {
+    setIsTogglingAutopilot(true);
+    try {
+      const res = await AutopilotService.toggle(newVal);
+      setAutopilotStatus(res.data.status);
+      if (newVal) {
+        showNotification('🚀 Autonomous AI Lead Harvester ACTIVATED! 20 verified leads will be auto-generated every 30 minutes category-wise.', 'success');
+      } else {
+        showNotification('⏸️ Autonomous AI Lead Harvester PAUSED.', 'info');
+      }
+      fetchLeadsAndCategories();
+    } catch (e: any) {
+      showNotification(e?.response?.data?.detail || 'Failed to update autopilot status', 'error');
+    } finally {
+      setIsTogglingAutopilot(false);
+    }
+  };
+
+  const handleTriggerAutopilotNow = async () => {
+    setIsRunningAutopilotNow(true);
+    try {
+      await AutopilotService.runNow();
+      showNotification('⚡ Immediate 20-lead AI harvest cycle started in background! Newly verified leads will appear automatically.', 'success');
+      setTimeout(fetchAutopilotStatus, 3000);
+      setTimeout(fetchLeadsAndCategories, 6000);
+    } catch (e: any) {
+      showNotification(e?.response?.data?.detail || 'Failed to trigger harvest cycle', 'error');
+    } finally {
+      setIsRunningAutopilotNow(false);
+    }
+  };
+
+
   // Snackbar Notification State
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
@@ -295,6 +343,15 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
       setLoading(false);
     }
   };
+
+  
+  useEffect(() => {
+    fetchAutopilotStatus();
+    const interval = setInterval(() => {
+      fetchAutopilotStatus();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     fetchLeadsAndCategories();
@@ -873,6 +930,21 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
             >
               Export CSV
             </Button>
+            {autopilotStatus?.enabled && (
+              <Chip
+                size="small"
+                icon={<Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#22c55e', ml: 1, boxShadow: '0 0 6px #22c55e' }} />}
+                label={`Harvester Active (${autopilotStatus.total_harvested || 0} Added)`}
+                sx={{
+                  bgcolor: '#f0fdf4',
+                  color: '#166534',
+                  fontWeight: 800,
+                  fontSize: '0.72rem',
+                  border: '1px solid #bbf7d0',
+                  height: 28,
+                }}
+              />
+            )}
             <Button
               variant="contained"
               size="small"
@@ -2743,11 +2815,131 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
               border: '1px solid #e2e8f0',
             }}
           >
-            {/* 1-Click Priority Industry Presets */}
-            <Box sx={{ mb: 2.5, p: 2, bgcolor: '#ffffff', borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-              <Typography variant="caption" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                <AutoAwesomeIcon sx={{ fontSize: 14, color: '#6366f1' }} /> 1-Click High-Priority Lead Generators
-              </Typography>
+            {/* 1-Click Priority Industry Presets + Modernized 24/7 AI Harvester Switch */}
+            <Box sx={{ mb: 2.5, p: 2, bgcolor: '#ffffff', borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              {/* Header Flex: Left Title, Right Modernized 24/7 Autopilot Control */}
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 1.8, gap: 1.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                  <AutoAwesomeIcon sx={{ fontSize: 14, color: '#6366f1' }} /> 1-Click High-Priority Lead Generators
+                </Typography>
+
+                {/* 🚀 MODERN 24/7 AI AUTOPILOT TOGGLE CARD (Circled Red Area) */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    px: 1.6,
+                    py: 0.6,
+                    borderRadius: 2.5,
+                    bgcolor: autopilotStatus?.enabled ? '#f0fdf4' : '#f8fafc',
+                    border: '1.5px solid',
+                    borderColor: autopilotStatus?.enabled ? '#22c55e' : '#cbd5e1',
+                    boxShadow: autopilotStatus?.enabled ? '0 0 14px rgba(34, 197, 94, 0.22)' : 'none',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                >
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, justifyContent: 'flex-end' }}>
+                      <Box
+                        sx={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: '50%',
+                          bgcolor: autopilotStatus?.enabled ? '#16a34a' : '#94a3b8',
+                          boxShadow: autopilotStatus?.enabled ? '0 0 10px #22c55e' : 'none',
+                          animation: autopilotStatus?.enabled ? 'pulseDot 1.6s infinite' : 'none',
+                          '@keyframes pulseDot': {
+                            '0%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(34, 197, 94, 0.7)' },
+                            '70%': { transform: 'scale(1.15)', boxShadow: '0 0 0 6px rgba(34, 197, 94, 0)' },
+                            '100%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(34, 197, 94, 0)' }
+                          }
+                        }}
+                      />
+                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 800, color: autopilotStatus?.enabled ? '#15803d' : '#475569', letterSpacing: 0.3 }}>
+                        {autopilotStatus?.enabled ? 'AI AUTOPILOT ON' : 'AI AUTOPILOT OFF'}
+                      </Typography>
+                    </Box>
+                    <Typography sx={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>
+                      {autopilotStatus?.enabled
+                        ? `20 leads / 30m • Added: ${autopilotStatus?.total_harvested || 0}`
+                        : 'Auto-harvests 20 BD leads every 30m'}
+                    </Typography>
+                  </Box>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={!!autopilotStatus?.enabled}
+                        onChange={(e) => handleToggleAutopilot(e.target.checked)}
+                        disabled={isTogglingAutopilot}
+                        color="success"
+                      />
+                    }
+                    label=""
+                    sx={{ m: 0 }}
+                  />
+
+                  {autopilotStatus?.enabled && (
+                    <Tooltip title="Run an immediate 20-lead harvest cycle in background">
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={handleTriggerAutopilotNow}
+                        disabled={autopilotStatus?.is_running || isRunningAutopilotNow}
+                        sx={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          py: 0.4,
+                          px: 1.2,
+                          textTransform: 'none',
+                          borderRadius: 1.5,
+                          bgcolor: '#16a34a',
+                          '&:hover': { bgcolor: '#15803d' }
+                        }}
+                      >
+                        {autopilotStatus?.is_running ? <CircularProgress size={13} sx={{ color: '#fff' }} /> : '⚡ Run Now'}
+                      </Button>
+                    </Tooltip>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 🟢 Live Autopilot Pulse & Activity Sub-Banner */}
+              {autopilotStatus?.enabled && (
+                <Box
+                  sx={{
+                    mb: 1.8,
+                    p: 1.2,
+                    px: 1.8,
+                    bgcolor: '#f0fdf4',
+                    borderRadius: 2,
+                    border: '1px dashed #86efac',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 1.2
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography sx={{ fontSize: '0.76rem', color: '#166534', fontWeight: 700 }}>
+                      🎯 <strong>Current Target:</strong> {autopilotStatus.current_category} in {autopilotStatus.current_city}
+                    </Typography>
+                    {autopilotStatus.is_running && (
+                      <Chip size="small" label="Scraping & Verifying..." color="success" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }} />
+                    )}
+                  </Box>
+                  <Typography sx={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 600 }}>
+                    {autopilotStatus.next_run_at
+                      ? `⏳ Next run: ${new Date(autopilotStatus.next_run_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : '⏳ Auto-running periodically'}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', width: '100%' }}>
+                    💡 <em>{autopilotStatus.last_log}</em>
+                  </Typography>
+                </Box>
+              )}
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                 <Chip
                   icon={<BuildIcon fontSize="small" style={{ color: '#7c3aed' }} />}

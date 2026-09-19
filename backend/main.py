@@ -119,6 +119,42 @@ async def scheduled_campaign_checker():
         except Exception as e:
             print("Error in scheduler:", e)
 
+
+# --- 24/7 AUTONOMOUS AI LEAD HARVESTER WORKER ---
+async def autonomous_lead_harvester_loop():
+    """
+    Background autonomous worker that runs periodically.
+    When enabled, searches & verifies 20 genuine BD retail leads every 30 minutes.
+    """
+    from crm_core.auto_harvester import auto_harvester
+    while True:
+        try:
+            await asyncio.sleep(25)
+            cfg = auto_harvester.ensure_config()
+            if not cfg.get("enabled"):
+                continue
+            if cfg.get("is_running"):
+                continue
+
+            next_run_str = cfg.get("next_run_at")
+            now = datetime.now(timezone.utc)
+            should_run = False
+
+            if not next_run_str:
+                should_run = True
+            else:
+                try:
+                    next_run_dt = datetime.fromisoformat(next_run_str)
+                    if now >= next_run_dt:
+                        should_run = True
+                except Exception:
+                    should_run = True
+
+            if should_run:
+                asyncio.create_task(auto_harvester.run_harvest_cycle(manual=False))
+        except Exception as e:
+            print("Error in autonomous_lead_harvester_loop:", e)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     def _setup_db_wal():
@@ -151,8 +187,10 @@ async def lifespan(app: FastAPI):
         pass
 
     task = asyncio.create_task(scheduled_campaign_checker())
+    harvester_task = asyncio.create_task(autonomous_lead_harvester_loop())
     yield
     task.cancel()
+    harvester_task.cancel()
 
 app = FastAPI(title="WhatsApp CRM Backend API", version="2.0.0", lifespan=lifespan)
 
@@ -1059,6 +1097,45 @@ class AutoLeadGenerateRequest(BaseModel):
 
 class AutoLeadAssignRequest(BaseModel):
     leads: List[Dict[str, Any]]
+
+
+class HarvesterToggleRequest(BaseModel):
+    enabled: bool
+
+class HarvesterSettingsRequest(BaseModel):
+    interval_minutes: Optional[int] = 30
+    batch_size: Optional[int] = 20
+
+@app.get("/api/leads/autopilot/status")
+async def get_harvester_status():
+    from crm_core.auto_harvester import auto_harvester
+    return auto_harvester.get_status()
+
+@app.post("/api/leads/autopilot/toggle")
+async def toggle_harvester(payload: HarvesterToggleRequest):
+    from crm_core.auto_harvester import auto_harvester
+    status = auto_harvester.set_enabled(payload.enabled)
+    return {"success": True, "status": status}
+
+@app.post("/api/leads/autopilot/run-now")
+async def trigger_harvester_now(background_tasks: BackgroundTasks):
+    from crm_core.auto_harvester import auto_harvester
+    cfg = auto_harvester.ensure_config()
+    if cfg.get("is_running"):
+        return {"success": False, "message": "Harvest cycle is already in progress"}
+    background_tasks.add_task(auto_harvester.run_harvest_cycle, manual=True)
+    return {"success": True, "message": "Harvest cycle triggered in background"}
+
+@app.post("/api/leads/autopilot/settings")
+async def update_harvester_settings(payload: HarvesterSettingsRequest):
+    from crm_core.auto_harvester import auto_harvester
+    cfg = auto_harvester.ensure_config()
+    if payload.interval_minutes is not None:
+        cfg["interval_minutes"] = max(5, payload.interval_minutes)
+    if payload.batch_size is not None:
+        cfg["batch_size"] = max(1, min(50, payload.batch_size))
+    auto_harvester.save_config(cfg)
+    return {"success": True, "status": cfg}
 
 @app.post("/api/leads/auto-generate")
 async def generate_leads_endpoint(payload: AutoLeadGenerateRequest):
