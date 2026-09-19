@@ -241,7 +241,7 @@ async def call_llm(messages: List[Dict[str, str]], model: Optional[str] = None) 
             resp = await client.post(
                 endpoint,
                 headers=headers,
-                json={"model": target_model, "messages": messages, "temperature": 0.4}
+                json={"model": target_model, "messages": messages, "temperature": 0.3, "max_tokens": 550}
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -257,7 +257,7 @@ async def call_llm(messages: List[Dict[str, str]], model: Optional[str] = None) 
                 resp = await client.post(
                     endpoint,
                     headers=headers,
-                    json={"model": fallback_model, "messages": messages, "temperature": 0.4}
+                    json={"model": fallback_model, "messages": messages, "temperature": 0.3, "max_tokens": 550}
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -274,6 +274,23 @@ async def generate_bot_reply(
     message_text: str,
     chat_history: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
+    # ⚡ Ultra-Fast Path: Instant QA Rule Match (<5ms)
+    try:
+        from crm_core.qa_rules_manager import find_matching_rule
+        matched_rule = find_matching_rule(message_text)
+        if matched_rule and matched_rule.get("answer"):
+            reply = matched_rule["answer"].replace("ভাইয়া", "স্যার").replace("ভাই", "স্যার")
+            clean_name = str(sender_name).strip()
+            if clean_name and clean_name not in ["Customer", "Lead", "User", "None"]:
+                if "স্যার" in reply and not any(p in reply for p in [f"{clean_name} স্যার", f"{clean_name} sir"]):
+                    reply = reply.replace("স্যার!", f"{clean_name} স্যার!").replace("স্যার,", f"{clean_name} স্যার,")
+            return {
+                "reply_text": reply,
+                "reg_info": {},
+                "source": "fast_path_qa"
+            }
+    except Exception as e:
+        logger.warning(f"Fast-path check error: {e}")
     reg_info = await sync_to_async(inspect_reg_db)(phone)
     
     customer_context = ""
@@ -555,8 +572,19 @@ async def handle_incoming_message_for_bot(
 
     history = await sync_to_async(_fetch_history)()
 
-    delay = cfg.get("reply_delay_seconds", 4)
-    await asyncio.sleep(delay)
+    # 1. Instantly trigger typing presence to eliminate perceived wait time
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as quick_client:
+            await quick_client.post(
+                f"{wa_engine_url}/presence",
+                json={"jid": jid, "phone": phone, "status": "composing"}
+            )
+    except Exception as e:
+        logger.debug(f"Immediate presence: {e}")
+
+    delay = cfg.get("reply_delay_seconds", 0)
+    if delay > 0:
+        await asyncio.sleep(delay)
 
     bot_result = await generate_bot_reply(
         phone=phone,

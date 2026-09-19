@@ -233,3 +233,19 @@ def format_qa_rules_for_prompt() -> str:
         lines.append(f"• বিষয়/প্রশ্ন: {q}\n  ট্রিগার কি-ওয়ার্ড: [{kw}]\n  উত্তর ও তথ্য: {a}\n")
     
     return "\n".join(lines)
+
+
+def find_matching_rule(message_text: str) -> Optional[Dict[str, Any]]:
+    if not message_text or not isinstance(message_text, str):
+        return None
+    text_clean = message_text.lower().strip()
+    rules = load_qa_rules()
+    for r in rules:
+        if not r.get("is_active", True):
+            continue
+        keywords = r.get("keywords", [])
+        for kw in keywords:
+            kw_clean = str(kw).lower().strip()
+            if kw_clean and len(kw_clean) >= 3 and kw_clean in text_clean:
+                return r
+    return None

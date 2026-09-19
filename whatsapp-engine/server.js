@@ -785,11 +785,8 @@ app.post('/send-message', async (req, res) => {
     const jid = directJid || formatJID(phone);
     let sentMsg;
 
-    // Simulate typing
+    // Fast presence status
     try {
-      await sock.presenceSubscribe(jid);
-      await sock.sendPresenceUpdate('composing', jid);
-      await new Promise(r => setTimeout(r, 800));
       await sock.sendPresenceUpdate('paused', jid);
     } catch (e) {}
 
@@ -831,6 +828,28 @@ app.post('/send-message', async (req, res) => {
 });
 
 // Mark messages as read endpoint
+
+// Instant typing presence endpoint
+app.post('/presence', async (req, res) => {
+  try {
+    if (!sock || connectionStatus !== 'CONNECTED') {
+      return res.status(400).json({ success: false, error: 'WhatsApp is not connected.' });
+    }
+    const { phone, jid: directJid, status } = req.body;
+    const targetJid = directJid || formatJID(phone);
+    if (!targetJid) {
+      return res.status(400).json({ success: false, error: 'Recipient JID or phone required.' });
+    }
+    try {
+      await sock.presenceSubscribe(targetJid);
+      await sock.sendPresenceUpdate(status || 'composing', targetJid);
+    } catch (pe) {}
+    return res.json({ success: true, jid: targetJid, status: status || 'composing' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/mark-read', async (req, res) => {
   try {
     const { keys } = req.body;
