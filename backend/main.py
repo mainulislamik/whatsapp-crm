@@ -2058,6 +2058,20 @@ async def send_chat_message(phone: str, req: SendMessageRequest):
             return msg
 
         saved_msg = await sync_to_async(_save_outgoing)()
+
+        try:
+            from crm_core.learning_engine import observe_human_reply, update_customer_memory_from_chat
+            digits = re.sub(r'\D', '', phone)
+            local_phone = '0' + digits[2:] if (digits.startswith('8801') and len(digits) == 13) else digits
+            def _get_last_customer_text():
+                last_in = ChatMessage.objects.filter(phone=local_phone, is_from_me=False).order_by('-timestamp').first()
+                return last_in.message_text if last_in else ""
+            prev_text = await sync_to_async(_get_last_customer_text)()
+            if prev_text:
+                asyncio.create_task(observe_human_reply(local_phone, req.message, prev_text))
+                asyncio.create_task(update_customer_memory_from_chat(local_phone, "Operator", prev_text, req.message))
+        except Exception as e:
+            logger.warning(f"Error observing human reply for learning: {e}")
         try:
             asyncio.create_task(ws_chat_manager.broadcast({
                 "type": "NEW_MESSAGE",
@@ -2254,3 +2268,45 @@ async def websocket_chat_endpoint(websocket: WebSocket):
         ws_chat_manager.disconnect(websocket)
     except Exception:
         ws_chat_manager.disconnect(websocket)
+
+# --- CONTINUOUS LEARNING ENGINE & SUGGESTIONS ---
+
+@app.get("/api/reg-db/learned-suggestions")
+@app.get("/api/reg-db/learned-suggestions/")
+async def get_learned_suggestions_api():
+    from crm_core.learning_engine import get_learned_suggestions
+    return get_learned_suggestions()
+
+@app.post("/api/reg-db/learned-suggestions/{suggestion_id}/approve")
+@app.post("/api/reg-db/learned-suggestions/{suggestion_id}/approve/")
+async def approve_suggestion_api(suggestion_id: str):
+    from crm_core.learning_engine import approve_suggestion
+    res = approve_suggestion(suggestion_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    return {"success": True, "rule": res}
+
+@app.delete("/api/reg-db/learned-suggestions/{suggestion_id}")
+@app.delete("/api/reg-db/learned-suggestions/{suggestion_id}/")
+async def dismiss_suggestion_api(suggestion_id: str):
+    from crm_core.learning_engine import dismiss_suggestion
+    success = dismiss_suggestion(suggestion_id)
+    return {"success": success}
+
+@app.post("/api/reg-db/mine-chats")
+@app.post("/api/reg-db/mine-chats/")
+async def mine_chats_api(limit: int = 40):
+    from crm_core.learning_engine import mine_historical_chats
+    res = await mine_historical_chats(sample_limit=limit)
+    return res
+
+@app.get("/api/chats/{phone}/memory")
+@app.get("/api/chats/{phone}/memory/")
+async def get_customer_memory_api(phone: str):
+    from crm_core.learning_engine import get_customer_memory
+    digits = re.sub(r'\D', '', phone)
+    local_phone = '0' + digits[2:] if (digits.startswith('8801') and len(digits) == 13) else digits
+    mem = get_customer_memory(local_phone)
+    if not mem:
+        mem = get_customer_memory(phone)
+    return mem or {}

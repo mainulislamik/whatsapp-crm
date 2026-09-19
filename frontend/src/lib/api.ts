@@ -423,6 +423,29 @@ export const SystemService = {
 };
 
 
+export interface LearnedSuggestion {
+  id: string;
+  question: string;
+  keywords: string[];
+  answer: string;
+  category: string;
+  source: string;
+  confidence: number;
+  customer_query_sample: string;
+  created_at: string;
+}
+
+export interface CustomerMemory {
+  shop_name?: string;
+  owner_name?: string;
+  business_type?: string;
+  location?: string;
+  key_interests?: string;
+  last_topic?: string;
+  special_notes?: string;
+  updated_at?: string;
+}
+
 export interface QARule {
   id: string;
   question: string;
@@ -474,6 +497,13 @@ export interface RegDbListResponse {
 export const RegDbService = {
     getQARules: () => api.get<QARule[]>('/reg-db/qa-rules'),
   saveQARule: (rule: Partial<QARule>) => api.post<QARule>('/reg-db/qa-rules', rule),
+    getLearnedSuggestions: () => api.get<LearnedSuggestion[]>('/reg-db/learned-suggestions/'),
+  approveSuggestion: (id: string) =>
+    api.post<{ success: boolean; rule: QARule }>(`/reg-db/learned-suggestions/${encodeURIComponent(id)}/approve/`),
+  dismissSuggestion: (id: string) =>
+    api.delete<{ success: boolean }>(`/reg-db/learned-suggestions/${encodeURIComponent(id)}/`),
+  mineChats: () => api.post<{ mined_count: number; suggestions: LearnedSuggestion[] }>('/reg-db/mine-chats/'),
+  getCustomerMemory: (phone: string) => api.get<CustomerMemory>(`/chats/${encodeURIComponent(phone)}/memory/`),
   deleteQARule: (ruleId: string) => api.delete<{ success: boolean }>(`/reg-db/qa-rules/${encodeURIComponent(ruleId)}`),
   getShops: (params?: { search?: string; plan?: string; status?: string }) =>
     api.get<RegDbListResponse>('/reg-db/shops', { params }),

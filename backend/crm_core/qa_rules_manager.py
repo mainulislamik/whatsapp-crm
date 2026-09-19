@@ -10,130 +10,212 @@ QA_RULES_FILE = "/app/data/ai_qa_rules.json"
 
 DEFAULT_QA_RULES = [
     {
+        "id": "rule_ad_inquiry",
+        "question": "বিজ্ঞাপনের অটো-মেসেজ ও প্রাথমিক বিস্তারিত (Hello! Can I get more info on this? / বিস্তারিত জানতে চাই)",
+        "keywords": ["hello", "more info", "can i get more info", "বিস্তারিত", "kivabe kaj kore", "kemon", "কীভাবে কাজ করে", "details"],
+        "answer": "আসসালামু আলাইকুম ভাই! StockWhisk (স্টকহুইস্ক)-এ আপনাকে স্বাগতম। 🎉\n\nStockWhisk হলো রিটেইল, গ্রোসারি, সুপারশপ, মোবাইল/ইলেকট্রনিক্স ও পাইকারি ব্যবসার জন্য একটি সম্পূর্ণ অল-ইন-ওয়ান ক্লাউড ইআরপি ও পিওএস সফটওয়্যার। এর মাধ্যমে আপনি দ্রুত ক্যাশ মেমো প্রিন্ট, ডিজিটাল স্কেলে ওজন মেপে বারকোড সেল, বাকির হিসাব, স্টক ইনভেন্টরি ও দৈনিক লাভ-ক্ষতির সম্পূর্ণ হিসাব রাখতে পারবেন। এমনকি ইন্টারনেট চলে গেলেও আমাদের অফলাইন পিওএস মোডে সেল বন্ধ থাকবে না!\n\n📺 আমাদের লাইভ ডেমো ভিডিওটি একনজরে দেখে নিন:\n👉 https://www.youtube.com/watch?v=X_9ZRcIA3JI\n\nভাই, আপনার দোকানের নাম এবং কোন ধরনের ব্যবসা করছেন তা কি জানতে পারি?",
+        "category": "General",
+        "is_active": True
+    },
+    {
         "id": "rule_pricing",
         "question": "সফটওয়্যারের দাম কত বা প্যাকেজ কী কী আছে?",
-        "keywords": ["দাম", "প্রাইস", "price", "খরচ", "প্যাকেজ", "package", "টাকা", "অফার", "রেট", "cost"],
-        "answer": "আমাদের বর্তমান স্পেশাল ওপেনিং অফার মাত্র ৳৪৯৯/মাস (৬ মাসের সাবস্ক্রিপশনে বা বাৎসরিক ৳৬,০০০)। এতে পাচ্ছেন ১টি ব্রাঞ্চ, ২ জন ইউজার ও ফুল পিওএস ফিচার। এছাড়া বড় ব্যবসা ও আনলিমিটেড ব্রাঞ্চের জন্য এন্টারপ্রাইজ প্ল্যান মাত্র ৳৯৯৯/মাস। সম্পূর্ণ ফ্রিতে ডেমো দেখার সুবিধাও রয়েছে।",
+        "keywords": ["দাম", "প্রাইস", "price", "খরচ", "প্যাকেজ", "package", "টাকা", "অফার", "রেট", "subscription", "চার্জ", "cost"],
+        "answer": "আমাদের প্যাকেজ ও প্রাইসিং অত্যন্ত সাশ্রয়ী এবং ছোট-বড় সব ব্যবসার উপযোগী:\n\n১. 🌟 **স্পেশাল ওপেনিং অফার:** মাত্র **৳৪৯৯/মাস** (৬ মাসের সাবস্ক্রিপশন বা বাৎসরিক মাত্র ৳৬,০০০ এককালীন)। এতে পাচ্ছেন ১টি ব্রাঞ্চ, ২ জন ইউজার, ফুল পিওএস ও ইনভেন্টরি ফিচার।\n২. 🚀 **কাস্টমাইজড / এন্টারপ্রাইজ প্ল্যান:** মাত্র **৳৯৯৯/মাস** (বাৎসরিক ছাড়সহ মাত্র ৳৯,৫৮৮)। এতে পাচ্ছেন আনলিমিটেড ব্রাঞ্চ, আনলিমিটেড ইউজার, মাল্টি-গোডাউন ও সব প্রিমিয়াম ফিচার।\n\nকোনো হিডেন বা লুকানো চার্জ নেই। এছাড়া আপনি চাইলে সম্পূর্ণ ফ্রিতে ওয়েবসাইট (stockwhisk.com) থেকে ডেমো টেস্ট করে নিতে পারেন।\n\nভাই, আপনার ব্যবসাটি কয়টি ব্রাঞ্চের?",
         "category": "Pricing",
         "is_active": True
     },
     {
-        "id": "rule_scale",
-        "question": "ডিজিটাল ওজন স্কেল ও বারকোড প্রিন্টার সাপোর্ট করে কি না?",
-        "keywords": ["ওজন স্কেল", "পাল্লা", "স্কেল", "বারকোড", "ডিজিটাল স্কেল", "weight scale", "barcode", "scale"],
-        "answer": "জি ভাই, একশো ভাগ সাপোর্ট করে! গ্রোসারি, সুপারশপ ও মিষ্টির দোকানের জন্য আমাদের সফটওয়্যারে ডিজিটাল ওজন স্কেল বারকোড (20[PLU][Weight]C) সরাসরি ইন্টিগ্রেটেড। স্কেল থেকে প্রিন্ট হওয়া বারকোড স্ক্যান করলেই পণ্যের সঠিক ওজন ও দাম স্বয়ংক্রিয়ভাবে ক্যাশ মেমোতে চলে আসে।",
-        "category": "Hardware & POS",
-        "is_active": True
-    },
-    {
-        "id": "rule_offline",
-        "question": "ইন্টারনেট না থাকলে কি সেল করা যাবে (অফলাইন মোড)?",
-        "keywords": ["ইন্টারনেট না থাকলে", "অফলাইন", "নেট ছাড়া", "offline", "net chara", "internet bondho", "কারেন্ট গেলে"],
-        "answer": "জি ভাই, ইন্টারনেট না থাকলেও আপনার দোকানের ক্যাশ কাউন্টার ও বিক্রি বন্ধ থাকবে না! StockWhisk-এ রয়েছে লোকাল ব্রাউজার অফলাইন পিওএস সুবিধা। নেট চলে গেলেও নিয়মিত বিল ও রসিদ প্রিন্ট করতে পারবেন, আবার নেট কানেকশন আসলে সব ডাটা স্বয়ংক্রিয়ভাবে সেন্ট্রাল সার্ভারে সিঙ্ক হয়ে যাবে।",
-        "category": "Features",
-        "is_active": True
-    },
-    {
-        "id": "rule_mobile_electronics",
-        "question": "মোবাইল ও ইলেকট্রনিক্স শপের জন্য কী কী ফিচার আছে?",
-        "keywords": ["মোবাইল", "ইলেকট্রনিক্স", "imei", "আইএমইআই", "ওয়ারেন্টি", "সার্ভিসিং", "mobile", "electronics", "warranty"],
-        "answer": "মোবাইল ও ইলেকট্রনিক্স ব্যবসার জন্য রয়েছে স্পেশাল ৩-লেভেল আইএমইআই (IMEI) ট্র্যাকিং, কাস্টমার সার্ভিসিং ও রিপেয়ারিং টিকেটিং, মেকানিক কমিশন এবং পার্টস ও প্রোডাক্ট ওয়ারেন্টি ম্যানেজমেন্টের সম্পূর্ণ সুবিধা।",
-        "category": "Features",
-        "is_active": True
-    },
-    {
-        "id": "rule_demo",
-        "question": "সফটওয়্যারটি কীভাবে দেখব বা ফ্রি ডেমো টেস্ট করার উপায় কী?",
-        "keywords": ["ডেমো", "ট্রায়াল", "টেস্ট", "demo", "trial", "check", "kivabe dekhbo", "কিভাবে দেখব", "ফ্রি"],
-        "answer": "জি ভাই, আপনি চাইলে সম্পূর্ণ ফ্রিতে আমাদের সফটওয়্যারটি টেস্ট করে দেখতে পারেন! আমাদের ওয়েবসাইট stockwhisk.com-এ গিয়ে সরাসরি লাইভ ডেমো দেখে নিতে পারেন, অথবা আপনি চাইলে আমরা আপনাকে একটি ফ্রি ট্রায়াল অ্যাকাউন্ট তৈরি করে দিতে পারি।",
+        "id": "rule_video_demo",
+        "question": "সফটওয়্যারটির ডেমো ভিডিও বা ফ্রি ট্রায়াল কীভাবে দেখবো?",
+        "keywords": ["ভিডিও", "video", "ডেমো", "demo", "ট্রায়াল", "trial", "test", "dekhi", "দেখবো", "কীভাবে দেখব"],
+        "answer": "জি ভাই! আপনি চাইলে সম্পূর্ণ ফ্রিতে সফটওয়্যারটি যাচাই করে দেখতে পারেন:\n\n📺 **টিউটোরিয়াল ও ডেমো ভিডিও:**\n👉 https://www.youtube.com/watch?v=X_9ZRcIA3JI\n\n🌐 **লাইভ ওয়েবসাইট ও ফ্রি ট্রায়াল:**\n👉 https://stockwhisk.com\n\nআপনি চাইলে আমরা আপনাকে একটি টেস্ট অ্যাকাউন্টও খুলে দিতে পারি। ভাই, আপনার দোকানটি কোথায় অবস্থিত?",
         "category": "Demo & Trial",
         "is_active": True
     },
     {
-        "id": "rule_pharmacy",
-        "question": "ফার্মেসি বা ওষুধের মেয়াদ (Expiry Date) ট্র্যাকিং সুবিধা আছে?",
-        "keywords": ["ফার্মেসি", "ওষুধ", "মেয়াদ", "ডেট", "expiry", "date", "medicine", "pharmacy", "ব্যাচ"],
-        "answer": "জি ভাই! ব্যাচ অনুযায়ী ওষুধের ম্যানুফ্যাকচারিং ও এক্সপায়ারি ডেট ট্র্যাক করা যায়। কোনো পণ্যের মেয়াদ শেষ হওয়ার আগেই সফটওয়্যার আপনাকে স্বয়ংক্রিয় লাল সতর্কবার্তা (Alert) দেবে যাতে মেয়াদোত্তীর্ণ পণ্য বিক্রি না হয়।",
+        "id": "rule_dealer_wholesale",
+        "question": "ডিলারশিপ, এজেন্সি ও পাইকারি ব্যবসার জন্য কী সুবিধা আছে?",
+        "keywords": ["ডিলার", "dealer", "এজেন্সি", "agency", "পাইকারি", "wholesale", "ডিস্ট্রিবিউটর", "distributor", "কার্টন"],
+        "answer": "ডিলার ও পাইকারি ডিস্ট্রিবিউশন ব্যবসার জন্য StockWhisk-এ রয়েছে বিশেষ সুবিধা:\n\n• কাস্টমার অনুযায়ী ক্রেডিট লিমিট ও বাকির সিলিং নির্ধারণ।\n• কার্টন বা পেটি থেকে পিস/প্যাকেটের অটোমেটিক কনভার্সন হিসাব।\n• বিক্রয় প্রতিনিধি (SR) অনুযায়ী ডেলিভারি চালান ও কালেকশন শিট তৈরি।\n• পাইকারি ও খুচরা বিক্রির জন্য আলাদা রেট কার্ড।\n\nআপনি সহজে বড় বড় সাপ্লায়ার ও কোম্পানির স্টক ট্র্যাক করতে পারবেন।",
         "category": "Features",
         "is_active": True
     },
     {
-        "id": "rule_due_emi",
-        "question": "বাকির খাতা ও কিস্তিতে (EMI) বিক্রির সুবিধা আছে কি না?",
-        "keywords": ["বাকি", "বাকি খাতা", "কিস্তি", "ইএমআই", "emi", "installment", "baki", "due", "দেনা", "পাওনা"],
-        "answer": "জি ভাই! কাস্টমারের বাকির হিসাব, স্বয়ংক্রিয় এসএমএস রিমাইন্ডার এবং কিস্তি বা ইএমআই (EMI) বিক্রির সম্পূর্ণ ব্যবস্থা রয়েছে। ডাউন পেমেন্ট, প্রতি কিস্তির তারিখ ও বকেয়া হিসাব সফটওয়্যারে পরিষ্কারভাবে লিপিবদ্ধ থাকে।",
+        "id": "rule_scale_barcode",
+        "question": "ডিজিটাল ওজন স্কেল ও বারকোড প্রিন্টার সাপোর্ট করে কি না?",
+        "keywords": ["ওজন স্কেল", "পাল্লা", "স্কেল", "বারকোড", "ডিজিটাল স্কেল", "weight scale", "barcode", "scale", "কাঁচাবাজার", "সুপারশপ"],
+        "answer": "জি ভাই, শতভাগ সাপোর্ট করে! গ্রোসারি, সুপারশপ ও মিষ্টির দোকানের দ্রুত বিক্রির জন্য StockWhisk-এ ডিজিটাল ওজন স্কেল বারকোড (**20[PLU][Weight]C**) সরাসরি ইন্টিগ্রেটেড।\n\nস্কেল থেকে প্রিন্ট হওয়া বারকোড স্ক্যান করলেই পণ্যের নাম, নিখুঁত ওজন ও দাম স্বয়ংক্রিয়ভাবে বিলে চলে আসবে। ক্যাশিয়ারকে আলাদা কোনো টাইপ করতে হবে না, ফলে কয়েক সেকেন্ডেই কাস্টমারের মেমো কমপ্লিট হবে!",
+        "category": "Hardware & POS",
+        "is_active": True
+    },
+    {
+        "id": "rule_offline_pos",
+        "question": "ইন্টারনেট বা বিদ্যুৎ চলে গেলে কি সেল করা যাবে (অফলাইন মোড)?",
+        "keywords": ["ইন্টারনেট", "অফলাইন", "নেট ছাড়া", "offline", "net chara", "বিদ্যুৎ", "নেট বন্ধ", "লোডশেডিং"],
+        "answer": "জি ভাই! ইন্টারনেট চলে গেলেও আপনার ক্যাশ কাউন্টার কখনো বন্ধ হবে না। StockWhisk-এ রয়েছে লোকাল ব্রাউজার অফলাইন পিওএস মোড।\n\nইন্টারনেট বা ওয়াইফাই বন্ধ থাকলেও ক্যাশিয়ার স্বাভাবিকভাবে বিল করতে পারবেন এবং ক্যাশ মেমো প্রিন্ট হবে। পরবর্তীতে ইন্টারনেট কানেকশন ফিরে আসার সাথে সাথে সমস্ত সেলস ও ইনভেন্টরি ডাটা স্বয়ংক্রিয়ভাবে ক্লাউডে সিঙ্ক হয়ে যাবে।",
         "category": "Features",
         "is_active": True
     },
     {
-        "id": "rule_multibranch",
-        "question": "আমার একাধিক দোকান বা ব্রাঞ্চ থাকলে কীভাবে পরিচালনা করব?",
-        "keywords": ["একাধিক ব্রাঞ্চ", "ব্রাঞ্চ", "শাখা", "একাধিক দোকান", "multi branch", "warehouse", "গোডাউন", "ওয়্যারহাউজ"],
-        "answer": "জি ভাই! আপনার একাধিক ব্রাঞ্চ বা ওয়্যারহাউজ থাকলে একটি সেন্ট্রাল অ্যাডমিন ড্যাশবোর্ড থেকেই সব ব্রাঞ্চের লাইভ সেলস, ইনভেন্টরি ও ক্যাশ হিসাব দেখতে পারবেন এবং এক ব্রাঞ্চ থেকে অন্য ব্রাঞ্চে নিমেষেই স্টক ট্রান্সফার করতে পারবেন।",
+        "id": "rule_mobile_gadget",
+        "question": "মোবাইল ও ইলেকট্রনিক্স শপের জন্য কী কী বিশেষ ফিচার আছে?",
+        "keywords": ["মোবাইল", "ইলেকট্রনিক্স", "imei", "ওয়ারেন্টি", "সার্ভিসিং", "mobile", "electronics", "warranty", "repair", "repairing"],
+        "answer": "মোবাইল ও গ্যাজেট শপের জন্য StockWhisk-এ রয়েছে স্পেশালাইজড ফিচার:\n\n• **৩-লেভেল IMEI ট্র্যাকিং:** প্রতিটি হ্যান্ডসেটের আইএমইআই নম্বর দিয়ে ইনভেন্টরি ও সেল ট্র্যাকিং।\n• **সার্ভিসিং টিকেটিং:** কাস্টমারের মোবাইল রিপেয়ারিংয়ের জন্য জব শিট ও স্ট্যাটাস ট্র্যাকিং।\n• **মেকানিক কমিশন:** সার্ভিসিং টেকনিশিয়ানদের কাজের কমিশন হিসাব।\n• **ওয়ারেন্টি ম্যানেজমেন্ট:** পণ্য বা পার্টসের মেয়াদ ও ওয়ারেন্টি কার্ড প্রিন্ট।",
         "category": "Features",
+        "is_active": True
+    },
+    {
+        "id": "rule_pharmacy_expiry",
+        "question": "ফার্মেসি বা খাদ্যপণ্যের মেয়াদ (Expiry Date) দেখার সুবিধা আছে?",
+        "keywords": ["ফার্মেসি", "ঔষধ", "মেয়াদ", "ডেট", "expiry", "date", "medicine", "pharmacy", "batch", "মেয়াদ শেষ"],
+        "answer": "জি ভাই! ফার্মেসি ও গ্রোসারি শপের জন্য রয়েছে প্রতি ব্যাচ অনুযায়ী এক্সপায়ারি ডেট ট্র্যাকিং।\n\nকোনো প্রোডাক্টের মেয়াদ শেষ হওয়ার ১৫ থেকে ৩০ দিন আগেই সফটওয়্যার ড্যাশবোর্ডে লাল সতর্কবার্তা (Alert) দেবে, যাতে মেয়াদোত্তীর্ণ হওয়ার আগেই আপনি পণ্যটি ফেরত বা বিক্রি করতে পারেন।",
+        "category": "Features",
+        "is_active": True
+    },
+    {
+        "id": "rule_hardware_printer",
+        "question": "কোন ধরনের প্রিন্টার ও বারকোড স্ক্যানার সাপোর্ট করে?",
+        "keywords": ["প্রিন্টার", "printer", "thermal", "pos printer", "scanner", "হ্যান্ডহোল্ড", "স্ক্যানার", "রিসিট", "মেমো প্রিন্ট"],
+        "answer": "StockWhisk বাজারের যেকোনো প্রচলিত হার্ডওয়্যারের সাথে শতভাগ সামঞ্জস্যপূর্ণ:\n\n• **থার্মাল প্রিন্টার:** 58mm (২ ইঞ্চি) এবং 80mm (৩ ইঞ্চি) ব্লুটুথ, ইউএসবি ও ওয়াইফাই থার্মাল পিওএস প্রিন্টার।\n• **বারকোড স্ক্যানার:** তারযুক্ত ও ওয়্যারলেস যেকোনো 1D এবং 2D কিউআর কোড স্ক্যানার।\n• **ডিভাইস সাপোর্ট:** মোবাইল, ট্যাব, ল্যাপটপ বা ডেস্কটপ যেকোনো ডিভাইসে ব্রাউজার থেকেই চালাতে পারবেন।",
+        "category": "Hardware & POS",
+        "is_active": True
+    },
+    {
+        "id": "rule_multi_branch",
+        "question": "একাধিক ব্রাঞ্চ বা শাখা ও গোডাউন একসাথে ম্যানেজ করা যাবে?",
+        "keywords": ["একাধিক ব্রাঞ্চ", "ব্রাঞ্চ", "শাখা", "একাধিক দোকান", "multi branch", "warehouse", "গোডাউন", "স্টক ট্রান্সফার"],
+        "answer": "জি ভাই! আপনার একাধিক দোকান বা সেন্ট্রাল গোডাউন থাকলে একটি সেন্ট্রাল অ্যাকাউন্ট থেকেই সবকিছু রিয়েল-টাইম পরিচালনা করতে পারবেন:\n\n• সব ব্রাঞ্চের মোট সেলস ও ক্যাশ হিসাব এক ড্যাশবোর্ডে।\n• এক ব্রাঞ্চ থেকে অন্য ব্রাঞ্চে পণ্য ট্রান্সফার চালান।\n• গোডাউন থেকে ব্রাঞ্চে স্টক সরবরাহ এবং সেন্ট্রাল পারচেজ।",
+        "category": "Features",
+        "is_active": True
+    },
+    {
+        "id": "rule_due_emi_sms",
+        "question": "কাস্টমারের বাকির খাতা ও কিস্তি/ইএমআই সেল হিসাব রাখা যাবে?",
+        "keywords": ["বাকি", "বাকি খাতা", "কিস্তি", "ইএমআই", "emi", "installment", "baki", "due", "এসএমএস", "sms"],
+        "answer": "জি ভাই! বাকির খাতার দিন শেষ। StockWhisk-এ রয়েছে স্বয়ংক্রিয় বাকি ও কিস্তির হিসাব:\n\n• কাস্টমারের পূর্বের বাকি ব্যালেন্স ও লেজার স্টেটমেন্ট।\n• কাস্টমারকে বকেয়া পরিশোধের তাগাদা দিতে অটোমেটিক এসএমএস পাঠানো।\n• পণ্য বিক্রির কিস্তি/ইএমআই শিডিউল ও মাসিক পেমেন্ট কালেকশন।",
+        "category": "Features",
+        "is_active": True
+    },
+    {
+        "id": "rule_accounting_profit",
+        "question": "দৈনিক লাভ-ক্ষতি ও দোকানের হিসাব-নিকাশ কীভাবে দেখা যাবে?",
+        "keywords": ["লাভ", "ক্ষতি", "হিসাব", "profit", "loss", "ledger", "expense", "খরচ", "দৈনিক হিসাব", "ক্যাশ মেমো"],
+        "answer": "StockWhisk-এ রয়েছে অটোমেটিক আধুনিক হিসাবব্যবস্থা:\n\n• প্রতিদিনের ক্যাশ কাউন্টার ক্লোজিং ও Z-Report।\n• ক্রয়মূল্য ও বিক্রয়মূল্যের পার্থক্যে সঠিক গ্রস প্রফিট ও নিট লাভ।\n• দোকান ভাড়া, বিদ্যুৎ বিল, কর্মচারীর বেতন ইত্যাদি খরচের আলাদা লেজার রিপোর্ট।",
+        "category": "Features",
+        "is_active": True
+    },
+    {
+        "id": "rule_security_rbac",
+        "question": "ক্যাশিয়ার বা স্টাফরা কি হিসাব জালিয়াতি বা দেখতে পারবে?",
+        "keywords": ["স্টাফ", "ম্যানেজার", "ক্যাশিয়ার", "নিরাপত্তা", "security", "permission", "অনুমতি", "চুরি", "ডিলিট"],
+        "answer": "না ভাই! StockWhisk-এ রয়েছে কঠোর রোল-বেজড অ্যাক্সেস কন্ট্রোল (RBAC):\n\n• ক্যাশিয়ার শুধু কাস্টমারের কাছে সেল করতে পারবে এবং বিল প্রিন্ট দিতে পারবে।\n• কোনো ক্যাশিয়ার পূর্বের সেল বা ইনভয়েস ডিলিট করতে পারবে না।\n• প্রোডাক্টের ক্রয়মূল্য বা দোকানের মোট লাভ ক্যাশিয়ারের কাছে গোপন থাকবে। শুধুমাত্র ওনার বা অনুমোদিত ম্যানেজার তা দেখতে পারবেন।",
+        "category": "Features",
+        "is_active": True
+    },
+    {
+        "id": "rule_excel_import",
+        "question": "পুরোনো প্রোডাক্ট ও কাস্টমার ডাটা কি এক্সেল থেকে তোলা যাবে?",
+        "keywords": ["এক্সেল", "excel", "ডাটা", "import", "পুরাতন হিসাব", "bulk", "csv", "আপলোড"],
+        "answer": "জি ভাই, খুব সহজেই পারবেন! আপনার আগের প্রোডাক্ট লিস্ট বা কাস্টমার ডাটা যদি এক্সেল (Excel/CSV) ফাইলে থাকে, তবে এক ক্লিকেই হাজার হাজার আইটেম সরাসরি সফটওয়্যারে আপলোড করে নিতে পারবেন। আমাদের টেকনিক্যাল টিম আপনাকে ডাটা কনভার্ট করে দিতে সম্পূর্ণ সহযোগিতা করবে।",
+        "category": "General",
+        "is_active": True
+    },
+    {
+        "id": "rule_onboarding_start",
+        "question": "সফটওয়্যারটি নিতে চাইলে কীভাবে শুরু করবো?",
+        "keywords": ["নিতে চাই", "নিব", "শুরু করতে চাই", "কীভাবে নিব", "onboarding", "signup", "কিভাবে পাব", "অর্ডার"],
+        "answer": "শুরু করা খুবই সহজ ভাই! মাত্র ৩ মিনিটে শুরু করতে পারবেন:\n\n১. আমাদের ওয়েবসাইট **stockwhisk.com**-এ গিয়ে আপনার ফোন নম্বর দিয়ে সাইন-আপ করুন।\n২. মোবাইলে আসা ওটিপি কোড দিলেই তাৎক্ষণিকভাবে আপনার শপ রেডি হয়ে যাবে।\n৩. আমাদের সাপোর্ট টিম সাথে সাথেই আপনাকে কল দিয়ে আপনার দোকানের প্রোডাক্ট আপলোড ও ট্রেনিং সম্পূর্ণ ফ্রিতে করিয়ে দেবে।\n\nআপনি চাইলে এখনই আপনার শপের নাম ও এরিয়া লিখে দিন, আমরা আপনার ট্রায়াল সেটআপ করে দিচ্ছি!",
+        "category": "General",
         "is_active": True
     }
 ]
 
-def load_qa_rules() -> List[Dict[str, Any]]:
+def ensure_qa_rules_file():
+    os.makedirs(os.path.dirname(QA_RULES_FILE), exist_ok=True)
     if not os.path.exists(QA_RULES_FILE):
-        save_qa_rules(DEFAULT_QA_RULES)
+        with open(QA_RULES_FILE, "w", encoding="utf-8") as f:
+            json.dump(DEFAULT_QA_RULES, f, ensure_ascii=False, indent=2)
         return DEFAULT_QA_RULES
     try:
         with open(QA_RULES_FILE, "r", encoding="utf-8") as f:
-            rules = json.load(f)
-            if not isinstance(rules, list) or len(rules) == 0:
-                save_qa_rules(DEFAULT_QA_RULES)
+            data = json.load(f)
+            if not isinstance(data, list) or len(data) == 0:
+                with open(QA_RULES_FILE, "w", encoding="utf-8") as f2:
+                    json.dump(DEFAULT_QA_RULES, f2, ensure_ascii=False, indent=2)
                 return DEFAULT_QA_RULES
-            return rules
+            return data
     except Exception as e:
-        logger.error(f"Error reading QA rules: {e}")
+        logger.error(f"Error reading {QA_RULES_FILE}: {e}")
         return DEFAULT_QA_RULES
 
-def save_qa_rules(rules: List[Dict[str, Any]]):
+def load_qa_rules() -> List[Dict[str, Any]]:
+    return ensure_qa_rules_file()
+
+def save_all_qa_rules(rules: List[Dict[str, Any]]) -> bool:
     try:
         os.makedirs(os.path.dirname(QA_RULES_FILE), exist_ok=True)
-        tmp = f"{QA_RULES_FILE}.tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
+        with open(QA_RULES_FILE, "w", encoding="utf-8") as f:
             json.dump(rules, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, QA_RULES_FILE)
+        return True
     except Exception as e:
         logger.error(f"Error saving QA rules: {e}")
+        return False
 
 def add_or_update_qa_rule(rule_data: Dict[str, Any]) -> Dict[str, Any]:
     rules = load_qa_rules()
     rule_id = rule_data.get("id")
-    if not rule_id:
-        rule_id = f"rule_{uuid.uuid4().hex[:8]}"
-        rule_data["id"] = rule_id
-
-    # normalize keywords
-    raw_kw = rule_data.get("keywords", [])
-    if isinstance(raw_kw, str):
-        keywords = [k.strip() for k in raw_kw.split(",") if k.strip()]
+    
+    keywords = rule_data.get("keywords", [])
+    if isinstance(keywords, str):
+        keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+    
+    if rule_id:
+        found = False
+        for i, r in enumerate(rules):
+            if r.get("id") == rule_id:
+                rules[i] = {
+                    "id": rule_id,
+                    "question": rule_data.get("question", r.get("question", "")),
+                    "keywords": keywords if keywords else r.get("keywords", []),
+                    "answer": rule_data.get("answer", r.get("answer", "")),
+                    "category": rule_data.get("category", r.get("category", "General")),
+                    "is_active": rule_data.get("is_active", r.get("is_active", True))
+                }
+                found = True
+                rule_item = rules[i]
+                break
+        if not found:
+            rule_item = {
+                "id": rule_id,
+                "question": rule_data.get("question", ""),
+                "keywords": keywords,
+                "answer": rule_data.get("answer", ""),
+                "category": rule_data.get("category", "General"),
+                "is_active": rule_data.get("is_active", True)
+            }
+            rules.append(rule_item)
     else:
-        keywords = [str(k).strip() for k in raw_kw if str(k).strip()]
-    rule_data["keywords"] = keywords
+        new_id = f"rule_{uuid.uuid4().hex[:8]}"
+        rule_item = {
+            "id": new_id,
+            "question": rule_data.get("question", ""),
+            "keywords": keywords,
+            "answer": rule_data.get("answer", ""),
+            "category": rule_data.get("category", "General"),
+            "is_active": rule_data.get("is_active", True)
+        }
+        rules.insert(0, rule_item)
 
-    updated = False
-    for i, r in enumerate(rules):
-        if r.get("id") == rule_id:
-            rules[i] = {**r, **rule_data}
-            updated = True
-            break
-
-    if not updated:
-        rules.insert(0, rule_data)
-
-    save_qa_rules(rules)
-    return rule_data
+    save_all_qa_rules(rules)
+    return rule_item
 
 def delete_qa_rule(rule_id: str) -> bool:
     rules = load_qa_rules()
     initial_len = len(rules)
-    rules = [r for r in rules if r.get("id") != rule_id]
-    if len(rules) < initial_len:
-        save_qa_rules(rules)
+    filtered = [r for r in rules if r.get("id") != rule_id]
+    if len(filtered) < initial_len:
+        save_all_qa_rules(filtered)
         return True
     return False
 
@@ -141,12 +223,13 @@ def format_qa_rules_for_prompt() -> str:
     rules = load_qa_rules()
     active_rules = [r for r in rules if r.get("is_active", True)]
     if not active_rules:
-        return ""
+        return "কোনো বিশেষ প্রশ্নোত্তর সেট করা নেই।"
     
     lines = []
-    for idx, r in enumerate(active_rules, 1):
-        q = r.get("question", "")
+    for r in active_rules:
         kw = ", ".join(r.get("keywords", []))
+        q = r.get("question", "")
         a = r.get("answer", "")
-        lines.append(f"{idx}. প্রশ্ন/টপিক: {q}\n   কি-ওয়ার্ড: [{kw}]\n   নির্ধারিত উত্তর/তথ্য: {a}")
-    return "\n\n".join(lines)
+        lines.append(f"• বিষয়/প্রশ্ন: {q}\n  ট্রিগার কি-ওয়ার্ড: [{kw}]\n  উত্তর ও তথ্য: {a}\n")
+    
+    return "\n".join(lines)

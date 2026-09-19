@@ -61,7 +61,7 @@ import {
   AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { ChatService, ChatListItem, ChatMessage, Lead, LeadService, WhatsAppService, BotService } from '@/lib/api';
+import api, { ChatService, ChatListItem, ChatMessage, Lead, LeadService, WhatsAppService, BotService, CustomerMemory, RegDbService } from '@/lib/api';
 
 interface LiveChatProps {
   onBack?: () => void;
@@ -100,6 +100,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   // Selected Chat Lead Details
   const [chatLead, setChatLead] = useState<Lead | null>(null);
   const [regInfo, setRegInfo] = useState<any | null>(null);
+  const [customerMemory, setCustomerMemory] = useState<CustomerMemory | null>(null);
   const [loadingRegInfo, setLoadingRegInfo] = useState<boolean>(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
 
@@ -309,6 +310,14 @@ export default function LiveChat({ onBack }: LiveChatProps) {
       prev.map((c) => (c.phone === chat.phone ? { ...c, unread_count: 0 } : c))
     );
     ChatService.markRead(chat.phone).catch(() => {});
+    setRegInfo(null);
+    setCustomerMemory(null);
+    api.get(`/chats/${encodeURIComponent(chat.phone)}/reg-info`)
+      .then(r => setRegInfo(r.data))
+      .catch(() => {});
+    RegDbService.getCustomerMemory(chat.phone)
+      .then(r => setCustomerMemory(r.data))
+      .catch(() => {});
   };
 
   // Format timestamps nicely like WhatsApp Web
@@ -1275,6 +1284,58 @@ export default function LiveChat({ onBack }: LiveChatProps) {
               </Typography>
             )}
           </Box>
+
+          {/* AI Customer Long-Term Memory */}
+          {customerMemory && Object.keys(customerMemory).length > 0 && (
+            <Box sx={{ p: 2.5, borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  🧠 AI Customer Memory
+                </Typography>
+                <Chip size="small" label="Auto-Learned" sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1' }} />
+              </Box>
+              <Stack spacing={1.2}>
+                {customerMemory.shop_name && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Detected Shop</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>{customerMemory.shop_name}</Typography>
+                  </Box>
+                )}
+                {customerMemory.owner_name && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Owner / Contact Person</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>{customerMemory.owner_name}</Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  {customerMemory.business_type && (
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#64748b' }}>Business Type</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#0284c7' }}>{customerMemory.business_type}</Typography>
+                    </Box>
+                  )}
+                  {customerMemory.location && (
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#64748b' }}>Location</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>{customerMemory.location}</Typography>
+                    </Box>
+                  )}
+                </Box>
+                {customerMemory.key_interests && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Key Interests</Typography>
+                    <Typography variant="body2" sx={{ color: '#334155', fontSize: 13 }}>{customerMemory.key_interests}</Typography>
+                  </Box>
+                )}
+                {customerMemory.last_topic && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Last Topic Discussed</Typography>
+                    <Typography variant="body2" sx={{ color: '#475569', fontSize: 13, fontStyle: 'italic' }}>{customerMemory.last_topic}</Typography>
+                  </Box>
+                )}
+              </Stack>
+            </Box>
+          )}
 
           {/* Lead Intelligence Data */}
           {chatLead ? (

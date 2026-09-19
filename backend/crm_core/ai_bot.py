@@ -250,6 +250,13 @@ async def generate_bot_reply(
         logger.warning(f"Error loading QA rules: {e}")
         qa_rules_text = "কোনো বিশেষ কাস্টম প্রশ্নোত্তর সেট করা নেই। সাধারণ নলেজবেস অনুসরণ করুন।"
 
+    try:
+        from crm_core.learning_engine import format_customer_memory_for_prompt
+        customer_memory_text = format_customer_memory_for_prompt(phone)
+    except Exception as e:
+        logger.warning(f"Error loading customer memory: {e}")
+        customer_memory_text = "কোনো বিশেষ স্মৃতি সংরক্ষিত নেই।"
+
     system_prompt = f"""
 আপনি হলেন StockWhisk (স্টকহুইস্ক)-এর আন্তরিক, স্মার্ট ও প্রফেশনাল এআই সেলস এবং কাস্টমার সাপোর্ট এক্সিকিউটিভ।
 আপনার দায়িত্ব গ্রাহকের সাথে অত্যন্ত অমায়িক, প্রফেশনাল ও মিষ্টি বাংলায় কথা বলা।
@@ -259,6 +266,9 @@ async def generate_bot_reply(
 
 StockWhisk সফটওয়্যার সম্পর্কিত সঠিক তথ্য ভাণ্ডার:
 {STOCKWHISK_KNOWLEDGE}
+
+গ্রাহকের দীর্ঘমেয়াদী পূর্ববর্তী স্মৃতি ও প্রোফাইল (Long-term Customer Memory):
+{customer_memory_text}
 
 গ্রাহকের নির্দিষ্ট প্রশ্ন ও উত্তরের কাস্টম নির্দেশিকা (কী প্রশ্ন করলে কী উত্তর দেবেন - FAQ Rules):
 {qa_rules_text}
@@ -271,6 +281,7 @@ StockWhisk সফটওয়্যার সম্পর্কিত সঠিক 
 5. যদি প্রাইস জানতে চায়, স্পেশাল ওপেনিং অফার (মাত্র ৳৪৯৯/মাস, ৬ মাস) এবং কাস্টমাইজড প্ল্যান (৳৯৯৯/মাস) পরিষ্কারভাবে জানান এবং ফ্রি লাইভ ডেমো দেখার আমন্ত্রণ জানান।
 6. কথোপকথনের ফাঁকে মিষ্টিভাবে গ্রাহকের দোকানের নাম, ব্যবসার ক্যাটাগরি বা কয়টি ব্রাঞ্চ আছে তা জানার চেষ্টা করুন (যেমন: "ভাই আপনার দোকানের নামটা কি জানতে পারি? কয়টি ব্রাঞ্চ রয়েছে আপনার?")।
 7. উত্তর খুব বেশি বড় বা ক্লান্তিকর করবেন না। হোয়াটসঅ্যাপে পড়ার উপযোগী আকর্ষণীয় ২-৩টি ছোট অনুচ্ছেদ বা প্রয়োজনীয় পয়েন্ট আকারে লিখুন।
+8. যদি গ্রাহকের পূর্ববর্তী কোনো স্মৃতি, দোকানের তথ্য বা আগের প্রসঙ্গের বিবরণ উপরে দেওয়া থাকে, তবে গ্রাহককে আগের আলাপের সূত্র ধরে অত্যন্ত আপন ও ব্যক্তিগতভাবে রেসপন্স দিন।
 """
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -282,6 +293,12 @@ StockWhisk সফটওয়্যার সম্পর্কিত সঠিক 
     messages.append({"role": "user", "content": message_text})
 
     reply_text = await call_llm(messages)
+
+    try:
+        from crm_core.learning_engine import update_customer_memory_from_chat
+        asyncio.create_task(update_customer_memory_from_chat(phone, sender_name, message_text, reply_text))
+    except Exception as e:
+        logger.warning(f"Error scheduling customer memory update: {e}")
 
     return {
         "reply_text": reply_text,
