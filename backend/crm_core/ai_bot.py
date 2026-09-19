@@ -33,7 +33,7 @@ STOCKWHISK_DB_URL = os.environ.get(
     'postgresql://stockwhisk:stockwhisk_password@stockwhisk_updated-db-1:5432/stockwhisk'
 )
 OMNIROUTE_URL = os.environ.get('OMNIROUTE_URL', 'http://172.20.0.1:20128/v1/chat/completions')
-OMNIROUTE_KEY = os.environ.get('OMNIROUTE_KEY', 'sk-9cc...fc4f')
+OMNIROUTE_KEY = os.environ.get('OMNIROUTE_API_KEY', os.environ.get('OMNIROUTE_KEY', ''))
 CONFIG_PATH = '/app/data/ai_bot_config.json'
 
 DEFAULT_CONFIG = {

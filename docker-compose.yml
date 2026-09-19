@@ -38,7 +38,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-imontouhid4992}
       - DEBUG=True
       - OMNIROUTE_URL=http://172.20.0.1:20128/v1
-      - OMNIROUTE_API_KEY=sk-9cc...fc4f
+      - OMNIROUTE_API_KEY=${OMNIROUTE_API_KEY}
       - STOCKWHISK_DB_URL=postgresql://stockwhisk:stockwhisk_password@stockwhisk_updated-db-1:5432/stockwhisk
     volumes:
       - ./wa_backend_data:/app/data
