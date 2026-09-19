@@ -21,6 +21,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import StorageIcon from '@mui/icons-material/Storage';
 import MarkChatReadIcon from '@mui/icons-material/MarkChatRead';
 
 export interface NavItem {
@@ -32,6 +33,7 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { id: 'overview', label: 'Dashboard Overview', sublabel: 'Summary & Metrics', icon: <DashboardIcon /> },
+  { id: 'regdb', label: 'StockWhisk Reg DB', sublabel: 'Customer & Shop Registry', icon: <StorageIcon /> },
   { id: 'leads', label: 'Lead Management', sublabel: 'Shops & WhatsApp Scan', icon: <StorefrontIcon /> },
   { id: 'broadcast', label: 'Bulk Broadcast', sublabel: 'Media & Spintax', icon: <CampaignIcon /> },
   { id: 'livechat', label: 'Live Chat', sublabel: 'Real-time Conversations', icon: <MarkChatReadIcon /> },

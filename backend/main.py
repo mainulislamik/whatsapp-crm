@@ -1903,6 +1903,61 @@ async def get_chat_reg_info(phone: str):
     info = inspect_reg_db(clean_digits)
     return info
 
+
+# ==================== STOCKWHISK REG DB MANAGEMENT API ====================
+class ShopCustomInfoRequest(BaseModel):
+    custom_notes: Optional[str] = ""
+    ai_instructions: Optional[str] = ""
+    custom_whatsapp_phone: Optional[str] = ""
+    tags: Optional[List[str]] = []
+    phone: Optional[str] = ""
+
+class ManualShopRequest(BaseModel):
+    id: Optional[str] = None
+    name: str
+    owner_name: Optional[str] = ""
+    phone: str
+    custom_whatsapp_phone: Optional[str] = ""
+    business_type: Optional[str] = "general"
+    plan_name: Optional[str] = "Opening Offer 6 Months"
+    plan_tier: Optional[str] = "enterprise"
+    is_active: Optional[bool] = True
+    custom_notes: Optional[str] = ""
+    ai_instructions: Optional[str] = ""
+    tags: Optional[List[str]] = ["Manual Entry"]
+
+@app.get("/api/reg-db/shops")
+@app.get("/api/reg-db/shops/")
+async def get_reg_db_shops_api(
+    search: Optional[str] = "",
+    plan: Optional[str] = "",
+    status: Optional[str] = ""
+):
+    from crm_core.reg_db_manager import get_all_shops_with_custom
+    return get_all_shops_with_custom(search=search or "", plan_filter=plan or "", status_filter=status or "")
+
+@app.get("/api/reg-db/pending")
+@app.get("/api/reg-db/pending/")
+async def get_reg_db_pending_api():
+    from crm_core.reg_db_manager import get_all_pending_with_custom
+    return get_all_pending_with_custom()
+
+@app.post("/api/reg-db/shops/{shop_id}/custom")
+async def update_reg_db_shop_custom_api(shop_id: str, req: ShopCustomInfoRequest):
+    from crm_core.reg_db_manager import update_shop_custom_info
+    return update_shop_custom_info(shop_id, req.dict())
+
+@app.post("/api/reg-db/manual-shop")
+async def add_or_update_manual_shop_api(req: ManualShopRequest):
+    from crm_core.reg_db_manager import add_or_update_manual_shop
+    return add_or_update_manual_shop(req.dict())
+
+@app.delete("/api/reg-db/manual-shop/{manual_id}")
+async def delete_manual_shop_api(manual_id: str):
+    from crm_core.reg_db_manager import delete_manual_shop
+    success = delete_manual_shop(manual_id)
+    return {"success": success}
+
 @app.post("/api/chats/{phone}/bot-toggle")
 async def toggle_chat_bot_status(phone: str, req: BotToggleRequest):
     from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY, save_bot_config

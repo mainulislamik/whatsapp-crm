@@ -23,6 +23,7 @@ import PeopleIcon from '@mui/icons-material/People';
 
 import Sidebar, { navItems } from '@/components/Sidebar';
 import Overview from '@/components/Overview';
+import RegDatabase from '@/components/RegDatabase';
 import TemplateManager from '@/components/TemplateManager';
 import BroadcastSender from '@/components/BroadcastSender';
 import CampaignHistory from '@/components/CampaignHistory';
@@ -302,6 +303,16 @@ export default function Dashboard() {
           {/* 1. Dashboard Overview */}
           {activeSection === 'overview' && (
             <Overview onNavigate={(sec) => updateSection(sec)} />
+          )}
+
+          {/* StockWhisk Registration Database */}
+          {activeSection === 'regdb' && (
+            <RegDatabase
+              onDirectMessage={(phone) => {
+                setDirectChatPhone(phone);
+                updateSection('quickchat');
+              }}
+            />
           )}
 
           {/* 2. Lead Management (Unified Contact & Lead Directory) */}

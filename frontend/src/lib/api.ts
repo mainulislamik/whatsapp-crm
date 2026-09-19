@@ -421,3 +421,68 @@ export default api;
 export const SystemService = {
   getStatus: () => api.get<SystemStatus>('/system/status'),
 };
+
+
+export interface RegShop {
+  id: number | string;
+  name: string;
+  slug: string;
+  business_type: string;
+  phone: string;
+  email: string;
+  address: string;
+  is_active: boolean;
+  created_at: string | null;
+  trial_ends_at: string | null;
+  plan_name: string;
+  plan_tier: string;
+  is_manual: boolean;
+  custom_notes: string;
+  ai_instructions: string;
+  custom_whatsapp_phone: string;
+  tags: string[];
+  customized: boolean;
+}
+
+export interface RegPending {
+  id: number;
+  shop_name: string;
+  owner_name: string;
+  email: string;
+  phone: string;
+  business_type: string;
+  created_at: string | null;
+  custom_notes?: string;
+}
+
+export interface RegDbListResponse {
+  total_shops: number;
+  active_shops: number;
+  customized_count: number;
+  shops: RegShop[];
+}
+
+export const RegDbService = {
+  getShops: (params?: { search?: string; plan?: string; status?: string }) =>
+    api.get<RegDbListResponse>('/reg-db/shops', { params }),
+  getPending: () => api.get<RegPending[]>('/reg-db/pending'),
+  saveShopCustom: (shopId: number | string, data: {
+    custom_notes: string;
+    ai_instructions: string;
+    custom_whatsapp_phone: string;
+    tags: string[];
+  }) => api.post(`/reg-db/shops/${encodeURIComponent(shopId)}/custom`, data),
+  saveManualShop: (data: {
+    id?: string;
+    shop_name: string;
+    owner_name: string;
+    phone: string;
+    business_type: string;
+    plan_name: string;
+    is_active: boolean;
+    custom_notes: string;
+    ai_instructions: string;
+    tags: string[];
+  }) => api.post('/reg-db/manual-shop', data),
+  deleteManualShop: (manualId: string) => api.delete(`/reg-db/manual-shop/${encodeURIComponent(manualId)}`),
+};

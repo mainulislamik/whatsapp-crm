@@ -116,6 +116,43 @@ def inspect_reg_db(phone: str) -> Dict[str, Any]:
         conn.close()
     except Exception as e:
         logger.warning(f"StockWhisk Reg DB lookup warning: {e}")
+
+    try:
+        from crm_core.reg_db_manager import load_custom_reg_data
+        custom_data = load_custom_reg_data()
+        by_shop_id = custom_data.get("by_shop_id", {})
+        
+        # Attach custom info to existing shops
+        for s in res["shops"]:
+            sid = str(s.get("id"))
+            if sid in by_shop_id:
+                s["custom_notes"] = by_shop_id[sid].get("custom_notes", "")
+                s["ai_instructions"] = by_shop_id[sid].get("ai_instructions", "")
+                s["tags"] = by_shop_id[sid].get("tags", [])
+
+        # Check manual entries if not registered in DB
+        if not res["is_registered"]:
+            for m in custom_data.get("manual_entries", []):
+                m_phone = re.sub(r'\D', '', m.get("phone", "") or m.get("custom_whatsapp_phone", ""))
+                if m_phone and m_phone.endswith(tail):
+                    res["is_registered"] = True
+                    res["shops"].append({
+                        "id": m.get("id"),
+                        "name": m.get("name") or m.get("shop_name", ""),
+                        "business_type": m.get("business_type", "general"),
+                        "phone": m.get("phone", ""),
+                        "plan_name": m.get("plan_name", "Customized"),
+                        "tier": m.get("plan_tier", "enterprise"),
+                        "is_active": m.get("is_active", True),
+                        "custom_notes": m.get("custom_notes", ""),
+                        "ai_instructions": m.get("ai_instructions", ""),
+                        "tags": m.get("tags", ["Manual Entry"]),
+                        "is_manual": True
+                    })
+                    break
+    except Exception as e:
+        logger.warning(f"Error checking custom reg data in inspect_reg_db: {e}")
+
     return res
 
 # 2. RAG Knowledge Base for StockWhisk
@@ -194,7 +231,11 @@ async def generate_bot_reply(
     customer_context = ""
     if reg_info.get("is_registered"):
         shop = reg_info["shops"][0]
-        customer_context = f"গ্রাহক StockWhisk-এ রেজিস্টার্ড শপ ওনার। দোকানের নাম: {shop['name']}, প্যাকেজ: {shop['plan_name']}, অ্যাক্টিভ: {shop['is_active']}।"
+        customer_context = f"গ্রাহক StockWhisk-এ রেজিস্টার্ড শপ ওনার। দোকানের নাম: {shop['name']}, প্যাকেজ: {shop['plan_name']}, অ্যাক্টিভ: {shop['is_active']}。"
+        if shop.get("custom_notes"):
+            customer_context += f"\nদোকান সম্পর্কিত কাস্টম তথ্য/নোট: {shop['custom_notes']}"
+        if shop.get("ai_instructions"):
+            customer_context += f"\nঅপারেটর কর্তৃক বিশেষ AI নির্দেশনা (এই অনুযায়ী গ্রাহককে ডিল করুন): {shop['ai_instructions']}"
     elif reg_info.get("is_pending"):
         p = reg_info["pending"][0]
         customer_context = f"গ্রাহক রেজিস্ট্রেশন শুরু করেছিলেন কিন্তু সম্পন্ন করেননি। দোকানের নাম: {p['shop_name']}, ওনার: {p['owner_name']}।"
