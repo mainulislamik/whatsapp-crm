@@ -1,3 +1,48 @@
+export interface SystemStatus {
+  whatsapp: {
+    status: string;
+    phone: string;
+  };
+  ai_engine: {
+    status: string;
+    provider: string;
+    model: string;
+    bot_enabled: boolean;
+  };
+  reg_db: {
+    status: string;
+    database: string;
+    indexed_shops: number;
+  };
+}
+
+export interface RegInfo {
+  is_registered: boolean;
+  is_pending: boolean;
+  shops: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    business_type: string;
+    phone: string;
+    email: string;
+    trial_ends_at: string | null;
+    is_active: boolean;
+    plan_name: string;
+    tier: string;
+  }>;
+  pending: Array<{
+    id: number;
+    shop_name: string;
+    owner_name: string;
+    email: string;
+    phone: string;
+    business_type: string;
+    created_at: string;
+  }>;
+  user_profile?: any;
+}
+
 import axios from 'axios';
 
 const api = axios.create({
@@ -373,3 +418,6 @@ export const AuthService = {
 };
 
 export default api;
+export const SystemService = {
+  getStatus: () => api.get<SystemStatus>('/system/status'),
+};

@@ -1670,7 +1670,7 @@ async def get_chat_list():
         pass
 
     lid_map = await get_lid_map()
-    from crm_core.ai_bot import load_bot_config
+    from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY
     bot_cfg = load_bot_config()
     bot_globally_on = bot_cfg.get('enabled', True)
     disabled_set = set(re.sub(r'\D', '', x) for x in bot_cfg.get('disabled_phones', []))
@@ -1794,12 +1794,12 @@ class BotToggleRequest(BaseModel):
 
 @app.get("/api/bot/config")
 async def get_bot_config_api():
-    from crm_core.ai_bot import load_bot_config
+    from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY
     return load_bot_config()
 
 @app.post("/api/bot/config")
 async def update_bot_config_api(req: BotConfigRequest):
-    from crm_core.ai_bot import load_bot_config, save_bot_config
+    from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY, save_bot_config
     cfg = load_bot_config()
     if req.enabled is not None:
         cfg["enabled"] = req.enabled
@@ -1814,16 +1814,98 @@ async def update_bot_config_api(req: BotConfigRequest):
 
 @app.get("/api/chats/{phone}/bot-status")
 async def get_chat_bot_status(phone: str):
-    from crm_core.ai_bot import load_bot_config
+    from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY
     cfg = load_bot_config()
     clean_digits = re.sub(r'\D', '', phone)
     disabled_list = [re.sub(r'\D', '', p) for p in cfg.get("disabled_phones", [])]
     is_active = cfg.get("enabled", True) and (clean_digits not in disabled_list)
     return {"phone": phone, "is_bot_active": is_active, "globally_enabled": cfg.get("enabled", True)}
 
+_system_status_cache = {"data": None, "ts": 0}
+
+@app.get("/api/system/status")
+async def get_system_status():
+    import time, psycopg2
+    from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY
+    
+    now = time.time()
+    if _system_status_cache["data"] and (now - _system_status_cache["ts"] < 30):
+        return _system_status_cache["data"]
+
+    # 1. Reg DB check
+    db_ok = False
+    total_shops = 0
+    db_url = os.getenv("STOCKWHISK_DB_URL", "postgresql://stockwhisk:stockwhisk_password@stockwhisk_updated-db-1:5432/stockwhisk")
+    try:
+        conn = psycopg2.connect(db_url, connect_timeout=2)
+        cur = conn.cursor()
+        cur.execute("SELECT count(*) FROM tenants_shop;")
+        total_shops = cur.fetchone()[0]
+        conn.close()
+        db_ok = True
+    except Exception:
+        pass
+
+    # 2. WhatsApp Engine check
+    wa_ok = False
+    wa_phone = "8801613511887"
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{WHATSAPP_ENGINE_URL}/status")
+            if resp.status_code == 200:
+                data = resp.json()
+                wa_ok = str(data.get("status", "")).upper() == "CONNECTED"
+                if data.get("user", {}).get("id"):
+                    wa_phone = data["user"]["id"].split(":")[0]
+    except Exception:
+        pass
+
+    # 3. OmniRoute LLM check
+    ai_ok = False
+    ai_model = load_bot_config().get("model", "agy/gemini-3.8-flash-high")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                OMNIROUTE_URL if OMNIROUTE_URL.endswith("/chat/completions") else f"{OMNIROUTE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"},
+                json={"model": ai_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+            )
+            if resp.status_code == 200:
+                ai_ok = True
+    except Exception:
+        pass
+
+    result = {
+        "whatsapp": {
+            "status": "connected" if wa_ok else "disconnected",
+            "phone": wa_phone
+        },
+        "ai_engine": {
+            "status": "online" if ai_ok else "offline",
+            "provider": "OmniRoute",
+            "model": ai_model,
+            "bot_enabled": load_bot_config().get("enabled", True)
+        },
+        "reg_db": {
+            "status": "connected" if db_ok else "disconnected",
+            "database": "StockWhisk PostgreSQL (Read-Only)",
+            "indexed_shops": total_shops
+        }
+    }
+    _system_status_cache["data"] = result
+    _system_status_cache["ts"] = now
+    return result
+
+@app.get("/api/chats/{phone}/reg-info")
+async def get_chat_reg_info(phone: str):
+    from crm_core.ai_bot import inspect_reg_db
+    clean_digits = re.sub(r'\D', '', phone)
+    info = inspect_reg_db(clean_digits)
+    return info
+
 @app.post("/api/chats/{phone}/bot-toggle")
 async def toggle_chat_bot_status(phone: str, req: BotToggleRequest):
-    from crm_core.ai_bot import load_bot_config, save_bot_config
+    from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY, save_bot_config
     cfg = load_bot_config()
     clean_digits = re.sub(r'\D', '', phone)
     disabled = set(re.sub(r'\D', '', p) for p in cfg.get("disabled_phones", []))

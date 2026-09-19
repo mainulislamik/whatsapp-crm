@@ -99,6 +99,8 @@ export default function LiveChat({ onBack }: LiveChatProps) {
 
   // Selected Chat Lead Details
   const [chatLead, setChatLead] = useState<Lead | null>(null);
+  const [regInfo, setRegInfo] = useState<any | null>(null);
+  const [loadingRegInfo, setLoadingRegInfo] = useState<boolean>(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
 
   // Hidden File Inputs
@@ -1219,6 +1221,58 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                 color="success"
                 sx={{ fontSize: 11, fontWeight: 600 }}
               />
+            )}
+          </Box>
+
+          {/* StockWhisk Reg DB Profile */}
+          <Box sx={{ p: 2.5, borderBottom: '1px solid #e2e8f0', bgcolor: regInfo?.is_registered ? '#f0fdf4' : '#f8fafc' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                StockWhisk Reg Status
+              </Typography>
+              {regInfo?.is_registered ? (
+                <Chip size="small" color="success" label="Registered Shop" sx={{ height: 20, fontSize: 10, fontWeight: 700 }} />
+              ) : regInfo?.is_pending ? (
+                <Chip size="small" color="warning" label="Pending OTP" sx={{ height: 20, fontSize: 10, fontWeight: 700 }} />
+              ) : (
+                <Chip size="small" color="default" label="Not Registered" sx={{ height: 20, fontSize: 10, fontWeight: 600 }} />
+              )}
+            </Box>
+
+            {regInfo?.is_registered && regInfo.shops && regInfo.shops.length > 0 ? (
+              <Stack spacing={1.2}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: '#64748b' }}>Registered Shop Name</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                    {regInfo.shops[0].name}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Plan Tier</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                      {regInfo.shops[0].plan_name || 'Standard'} ({regInfo.shops[0].tier || 'active'})
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Type</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>
+                      {regInfo.shops[0].business_type || 'Retail'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Stack>
+            ) : regInfo?.is_pending && regInfo.pending && regInfo.pending.length > 0 ? (
+              <Box>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>Pending Registration</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: '#d97706' }}>
+                  {regInfo.pending[0].shop_name} ({regInfo.pending[0].owner_name || 'Owner'})
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                Not registered as a customer in StockWhisk PostgreSQL DB yet.
+              </Typography>
             )}
           </Box>
 

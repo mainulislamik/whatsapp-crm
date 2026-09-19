@@ -22,7 +22,9 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import DescriptionIcon from '@mui/icons-material/Description';
-import { ContactService, BroadcastService, WhatsAppService, LeadService, Campaign } from '@/lib/api';
+import { ContactService, BroadcastService, WhatsAppService, LeadService, Campaign, SystemService, SystemStatus } from '@/lib/api';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
+import StorageIcon from '@mui/icons-material/Storage';
 
 interface OverviewProps {
   onNavigate: (section: string) => void;
@@ -37,17 +39,22 @@ export default function Overview({ onNavigate }: OverviewProps) {
     failedCount: 0,
   });
   const [waStatus, setWaStatus] = useState<{ status: string; user?: any; hasQr: boolean } | null>(null);
+  const [sysStatus, setSysStatus] = useState<SystemStatus | null>(null);
   const [recentCampaigns, setRecentCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const loadData = async () => {
     try {
-      const [contactsRes, leadsRes, campsRes, waRes] = await Promise.all([
+      const [contactsRes, leadsRes, campsRes, waRes, sysRes] = await Promise.all([
         ContactService.list(),
         LeadService.list(),
         BroadcastService.listCampaigns(),
         WhatsAppService.getStatus(),
+        SystemService.getStatus().catch(() => ({ data: null })),
       ]);
+      if (sysRes && sysRes.data) {
+        setSysStatus(sysRes.data);
+      }
 
       const contacts = contactsRes.data || [];
       const leads = leadsRes.data || [];
@@ -255,6 +262,108 @@ export default function Overview({ onNavigate }: OverviewProps) {
           </CardContent>
         </Card>
       </Box>
+
+      {/* System Integrations & AI Engine Status */}
+      <Card sx={{ mb: 3.5, bgcolor: '#ffffff', borderRadius: 3, border: '1px solid #e2e8f0' }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                System Integrations & AI Engine Status
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                Real-time connection health between WhatsApp Baileys, OmniRoute AI, and StockWhisk PostgreSQL
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              color={sysStatus?.ai_engine.status === 'online' && sysStatus?.reg_db.status === 'connected' ? 'success' : 'warning'}
+              label={sysStatus?.ai_engine.status === 'online' && sysStatus?.reg_db.status === 'connected' ? 'All Systems Operational' : 'Partial Connectivity'}
+              sx={{ fontWeight: 700 }}
+            />
+          </Stack>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
+            {/* 1. WhatsApp Engine */}
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#dcfce7', color: '#16a34a' }}>
+                  <WhatsAppIcon />
+                </Box>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>
+                    WHATSAPP ENGINE
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                    {sysStatus?.whatsapp.status === 'connected' ? `+${sysStatus.whatsapp.phone}` : 'Disconnected'}
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={sysStatus?.whatsapp.status === 'connected' ? 'success' : 'error'}
+                  label={sysStatus?.whatsapp.status === 'connected' ? 'Connected' : 'Offline'}
+                  sx={{ fontWeight: 700, fontSize: 10, height: 20 }}
+                />
+              </Stack>
+              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 1 }}>
+                Baileys Multi-Device socket with auto LID discovery
+              </Typography>
+            </Box>
+
+            {/* 2. OmniRoute AI */}
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#ede9fe', color: '#7c3aed' }}>
+                  <SmartToyIcon />
+                </Box>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>
+                    OMNIROUTE AI BOT
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                    {sysStatus?.ai_engine.model || 'gemini-3.8-flash-high'}
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={sysStatus?.ai_engine.status === 'online' ? 'success' : 'error'}
+                  label={sysStatus?.ai_engine.status === 'online' ? 'Online' : 'Offline'}
+                  sx={{ fontWeight: 700, fontSize: 10, height: 20 }}
+                />
+              </Stack>
+              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 1 }}>
+                Bengali sales conversational agent & auto-lead generator
+              </Typography>
+            </Box>
+
+            {/* 3. StockWhisk Reg DB */}
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box sx={{ p: 1, borderRadius: 2, bgcolor: '#e0f2fe', color: '#0284c7' }}>
+                  <StorageIcon />
+                </Box>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>
+                    STOCKWHISK REG DB
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                    {sysStatus?.reg_db.indexed_shops ? `${sysStatus.reg_db.indexed_shops} Shops Indexed` : 'PostgreSQL DB'}
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={sysStatus?.reg_db.status === 'connected' ? 'success' : 'error'}
+                  label={sysStatus?.reg_db.status === 'connected' ? 'Connected' : 'Offline'}
+                  sx={{ fontWeight: 700, fontSize: 10, height: 20 }}
+                />
+              </Stack>
+              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 1 }}>
+                Read-only customer registration & plan tier lookup
+              </Typography>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
 
       {/* Quick Launchpad Buttons */}
       <Card sx={{ mb: 3.5 }}>
