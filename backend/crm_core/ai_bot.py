@@ -1,3 +1,4 @@
+from crm_core.qa_rules_manager import format_qa_rules_for_prompt
 import os
 import json
 import logging
@@ -242,6 +243,13 @@ async def generate_bot_reply(
     else:
         customer_context = "গ্রাহক নতুন সম্ভাব্য ক্রেতা (New Prospect/Lead)। এখনও সফটওয়্যারে রেজিস্ট্রেশন করেননি।"
 
+    try:
+        from crm_core.qa_rules_manager import format_qa_rules_for_prompt
+        qa_rules_text = format_qa_rules_for_prompt()
+    except Exception as e:
+        logger.warning(f"Error loading QA rules: {e}")
+        qa_rules_text = "কোনো বিশেষ কাস্টম প্রশ্নোত্তর সেট করা নেই। সাধারণ নলেজবেস অনুসরণ করুন।"
+
     system_prompt = f"""
 আপনি হলেন StockWhisk (স্টকহুইস্ক)-এর আন্তরিক, স্মার্ট ও প্রফেশনাল এআই সেলস এবং কাস্টমার সাপোর্ট এক্সিকিউটিভ।
 আপনার দায়িত্ব গ্রাহকের সাথে অত্যন্ত অমায়িক, প্রফেশনাল ও মিষ্টি বাংলায় কথা বলা।
@@ -251,6 +259,9 @@ async def generate_bot_reply(
 
 StockWhisk সফটওয়্যার সম্পর্কিত সঠিক তথ্য ভাণ্ডার:
 {STOCKWHISK_KNOWLEDGE}
+
+গ্রাহকের নির্দিষ্ট প্রশ্ন ও উত্তরের কাস্টম নির্দেশিকা (কী প্রশ্ন করলে কী উত্তর দেবেন - FAQ Rules):
+{qa_rules_text}
 
 আপনার কথোপকথনের নিয়মাবলী:
 1. গ্রাহক যদি সালাম বা কুশল বিনিময় করে, সুন্দর করে সালামের উত্তর দিন (যেমন: "আসসালামু আলাইকুম ভাই/ম্যাম")।

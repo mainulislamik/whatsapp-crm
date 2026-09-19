@@ -423,6 +423,15 @@ export const SystemService = {
 };
 
 
+export interface QARule {
+  id: string;
+  question: string;
+  keywords: string[];
+  answer: string;
+  category: string;
+  is_active: boolean;
+}
+
 export interface RegShop {
   id: number | string;
   name: string;
@@ -463,6 +472,9 @@ export interface RegDbListResponse {
 }
 
 export const RegDbService = {
+    getQARules: () => api.get<QARule[]>('/reg-db/qa-rules'),
+  saveQARule: (rule: Partial<QARule>) => api.post<QARule>('/reg-db/qa-rules', rule),
+  deleteQARule: (ruleId: string) => api.delete<{ success: boolean }>(`/reg-db/qa-rules/${encodeURIComponent(ruleId)}`),
   getShops: (params?: { search?: string; plan?: string; status?: string }) =>
     api.get<RegDbListResponse>('/reg-db/shops', { params }),
   getPending: () => api.get<RegPending[]>('/reg-db/pending'),

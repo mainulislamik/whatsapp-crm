@@ -1958,6 +1958,34 @@ async def delete_manual_shop_api(manual_id: str):
     success = delete_manual_shop(manual_id)
     return {"success": success}
 
+
+class QARuleRequest(BaseModel):
+    id: Optional[str] = None
+    question: str
+    keywords: Any = []
+    answer: str
+    category: Optional[str] = "General"
+    is_active: Optional[bool] = True
+
+@app.get("/api/reg-db/qa-rules")
+@app.get("/api/reg-db/qa-rules/")
+async def get_qa_rules_api():
+    from crm_core.qa_rules_manager import load_qa_rules
+    return load_qa_rules()
+
+@app.post("/api/reg-db/qa-rules")
+@app.post("/api/reg-db/qa-rules/")
+async def save_qa_rule_api(req: QARuleRequest):
+    from crm_core.qa_rules_manager import add_or_update_qa_rule
+    return add_or_update_qa_rule(req.dict())
+
+@app.delete("/api/reg-db/qa-rules/{rule_id}")
+@app.delete("/api/reg-db/qa-rules/{rule_id}/")
+async def delete_qa_rule_api(rule_id: str):
+    from crm_core.qa_rules_manager import delete_qa_rule
+    success = delete_qa_rule(rule_id)
+    return {"success": success}
+
 @app.post("/api/chats/{phone}/bot-toggle")
 async def toggle_chat_bot_status(phone: str, req: BotToggleRequest):
     from crm_core.ai_bot import load_bot_config, OMNIROUTE_URL, OMNIROUTE_KEY, save_bot_config
