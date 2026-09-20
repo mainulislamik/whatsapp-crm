@@ -1706,6 +1706,11 @@ class ChatListItem(BaseModel):
     lead_shop_name: str | None = None
     lead_category: str | None = None
     lead_status: str | None = None
+    has_replied: bool = False
+    inbound_count: int = 0
+    outbound_count: int = 0
+    conversation_stage: str = "outreached"
+    last_message_from_me: bool = True
 
 class ChatMessageOut(BaseModel):
     id: int
@@ -1853,6 +1858,20 @@ async def get_chat_list():
                 .annotate(c=Count('id'))
         }
 
+        inbound_counts = {
+            row['phone']: row['c']
+            for row in ChatMessage.objects.filter(is_from_me=False)
+                .values('phone')
+                .annotate(c=Count('id'))
+        }
+
+        outbound_counts = {
+            row['phone']: row['c']
+            for row in ChatMessage.objects.filter(is_from_me=True)
+                .values('phone')
+                .annotate(c=Count('id'))
+        }
+
         # Optimized: Indexed query only for active chat phones (Zero full-table scans)
         from django.db.models import Q
         lead_query = Q()
@@ -1893,6 +1912,25 @@ async def get_chat_list():
             else:
                 chat_name = p
 
+            inb = inbound_counts.get(p, 0)
+            if not inb:
+                clean_d = re.sub(r'\D', '', p)
+                if clean_d.startswith('8801'):
+                    inb = inbound_counts.get('0' + clean_d[2:], 0)
+                elif clean_d.startswith('01'):
+                    inb = inbound_counts.get('88' + clean_d, 0)
+
+            outb = outbound_counts.get(p, 0)
+            if not outb:
+                clean_d = re.sub(r'\D', '', p)
+                if clean_d.startswith('8801'):
+                    outb = outbound_counts.get('0' + clean_d[2:], 0)
+                elif clean_d.startswith('01'):
+                    outb = outbound_counts.get('88' + clean_d, 0)
+
+            has_rep = inb > 0
+            stage = 'replied' if has_rep else ('outreached' if outb > 0 else 'new')
+
             results.append({
                 'phone': p,
                 'name': chat_name,
@@ -1906,7 +1944,12 @@ async def get_chat_list():
                 'lead_id': lead.id if lead else None,
                 'lead_shop_name': lead.shop_name if (lead and lead.shop_name and not lead.shop_name.startswith('Lead ')) else None,
                 'lead_category': lead.category if (lead and lead.category and lead.category != 'General') else None,
-                'lead_status': lead.status if lead else None
+                'lead_status': lead.status if lead else None,
+                'has_replied': has_rep,
+                'inbound_count': inb,
+                'outbound_count': outb,
+                'conversation_stage': stage,
+                'last_message_from_me': latest.is_from_me
             })
         return results
 
@@ -1976,7 +2019,12 @@ async def get_chat_list():
             'lead_id': c.get('lead_id'),
             'lead_shop_name': c.get('lead_shop_name'),
             'lead_category': c.get('lead_category'),
-            'lead_status': c.get('lead_status')
+            'lead_status': c.get('lead_status'),
+            'has_replied': c.get('has_replied', False),
+            'inbound_count': c.get('inbound_count', 0),
+            'outbound_count': c.get('outbound_count', 0),
+            'conversation_stage': c.get('conversation_stage', 'outreached'),
+            'last_message_from_me': c.get('last_message_from_me', True)
         })
 
     final_chats.sort(key=lambda x: x['last_message_time'], reverse=True)

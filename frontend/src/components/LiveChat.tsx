@@ -80,7 +80,7 @@ export default function LiveChat({ onBack }: LiveChatProps) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [tabFilter, setTabFilter] = useState<'all' | 'unread' | 'direct' | 'groups'>('all');
+  const [tabFilter, setTabFilter] = useState<'all' | 'replied' | 'outreached' | 'unread' | 'groups'>('all');
   const [waConnected, setWaConnected] = useState(true);
   const [isBotActive, setIsBotActive] = useState<boolean>(true);
   const [botToggling, setBotToggling] = useState<boolean>(false);
@@ -359,18 +359,27 @@ export default function LiveChat({ onBack }: LiveChatProps) {
     }
   };
 
+  // Counts for tabs & summary metrics
+  const countReplied = chats.filter((c) => !c.phone.includes('@g.us') && !c.jid?.includes('@g.us') && (c.has_replied || (c.inbound_count && c.inbound_count > 0))).length;
+  const countOutreached = chats.filter((c) => !c.phone.includes('@g.us') && !c.jid?.includes('@g.us') && !c.has_replied && (!c.inbound_count || c.inbound_count === 0)).length;
+  const countUnread = chats.filter((c) => (c.unread_count || 0) > 0).length;
+
   // Filtered chats based on search and tabs
   const filteredChats = chats.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.phone.includes(searchQuery) ||
+      (c.lead_shop_name && c.lead_shop_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
       c.last_message.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (!matchesSearch) return false;
 
     const isGroup = c.phone.includes('@g.us') || c.jid?.includes('@g.us');
+    const hasReplied = Boolean(c.has_replied || (c.inbound_count && c.inbound_count > 0));
+
+    if (tabFilter === 'replied') return !isGroup && hasReplied;
+    if (tabFilter === 'outreached') return !isGroup && !hasReplied;
     if (tabFilter === 'unread') return c.unread_count > 0;
-    if (tabFilter === 'direct') return !isGroup;
     if (tabFilter === 'groups') return isGroup;
     return true;
   });
@@ -564,6 +573,86 @@ export default function LiveChat({ onBack }: LiveChatProps) {
           />
         </Box>
 
+        {/* Quick Metrics KPI Strip */}
+        <Box sx={{ px: 1.5, py: 1, bgcolor: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+          <Stack direction="row" spacing={1}>
+            <Box
+              onClick={() => setTabFilter(tabFilter === 'replied' ? 'all' : 'replied')}
+              sx={{
+                flex: 1,
+                py: 0.6,
+                px: 0.8,
+                borderRadius: 2,
+                bgcolor: tabFilter === 'replied' ? '#dcfce7' : '#ffffff',
+                border: '1px solid',
+                borderColor: tabFilter === 'replied' ? '#22c55e' : '#e2e8f0',
+                cursor: 'pointer',
+                textAlign: 'center',
+                boxShadow: tabFilter === 'replied' ? '0 2px 4px rgba(34,197,94,0.15)' : 'none',
+                transition: 'all 0.15s ease',
+                '&:hover': { borderColor: '#22c55e', bgcolor: '#f0fdf4' },
+              }}
+            >
+              <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 700, color: '#15803d', display: 'block' }}>
+                🔥 কথা হয়েছে
+              </Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#166534', lineHeight: 1.1 }}>
+                {countReplied}
+              </Typography>
+            </Box>
+
+            <Box
+              onClick={() => setTabFilter(tabFilter === 'outreached' ? 'all' : 'outreached')}
+              sx={{
+                flex: 1,
+                py: 0.6,
+                px: 0.8,
+                borderRadius: 2,
+                bgcolor: tabFilter === 'outreached' ? '#eff6ff' : '#ffffff',
+                border: '1px solid',
+                borderColor: tabFilter === 'outreached' ? '#3b82f6' : '#e2e8f0',
+                cursor: 'pointer',
+                textAlign: 'center',
+                boxShadow: tabFilter === 'outreached' ? '0 2px 4px rgba(59,130,246,0.15)' : 'none',
+                transition: 'all 0.15s ease',
+                '&:hover': { borderColor: '#3b82f6', bgcolor: '#f0f9ff' },
+              }}
+            >
+              <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 700, color: '#1d4ed8', display: 'block' }}>
+                ⏳ অপেক্ষমাণ
+              </Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e40af', lineHeight: 1.1 }}>
+                {countOutreached}
+              </Typography>
+            </Box>
+
+            <Box
+              onClick={() => setTabFilter(tabFilter === 'unread' ? 'all' : 'unread')}
+              sx={{
+                flex: 1,
+                py: 0.6,
+                px: 0.8,
+                borderRadius: 2,
+                bgcolor: tabFilter === 'unread' ? '#fef2f2' : '#ffffff',
+                border: '1px solid',
+                borderColor: tabFilter === 'unread' ? '#ef4444' : '#e2e8f0',
+                cursor: 'pointer',
+                textAlign: 'center',
+                boxShadow: tabFilter === 'unread' ? '0 2px 4px rgba(239,68,68,0.15)' : 'none',
+                transition: 'all 0.15s ease',
+                '&:hover': { borderColor: '#ef4444', bgcolor: '#fff5f5' },
+              }}
+            >
+              <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 700, color: '#b91c1c', display: 'block' }}>
+                🔴 অপঠিত
+              </Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#991b1b', lineHeight: 1.1 }}>
+                {countUnread}
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
+
         {/* Chat Category Filter Tabs */}
         <Box sx={{ px: 1, pt: 0.5, bgcolor: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
           <Tabs
@@ -574,15 +663,15 @@ export default function LiveChat({ onBack }: LiveChatProps) {
             sx={{
               minHeight: 36,
               '& .MuiTab-root': {
-                minHeight: 32,
-                py: 0.5,
-                px: 1.5,
-                fontSize: '0.78rem',
-                fontWeight: 600,
+                minHeight: 30,
+                py: 0.4,
+                px: 1.2,
+                fontSize: '0.75rem',
+                fontWeight: 700,
                 textTransform: 'none',
                 borderRadius: 4,
-                mr: 0.8,
-                mb: 0.8,
+                mr: 0.6,
+                mb: 0.6,
                 bgcolor: '#f1f5f9',
                 color: '#64748b',
                 '&.Mui-selected': {
@@ -593,20 +682,66 @@ export default function LiveChat({ onBack }: LiveChatProps) {
               '& .MuiTabs-indicator': { display: 'none' },
             }}
           >
-            <Tab label="All" value="all" />
+            <Tab label={`All (${chats.length})`} value="all" />
             <Tab
               label={
-                <Badge
-                  badgeContent={chats.reduce((acc, c) => acc + (c.unread_count || 0), 0)}
-                  color="success"
-                  sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 16, minWidth: 16 } }}
-                >
-                  Unread
-                </Badge>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <span>🔥 কথা হয়েছে</span>
+                  <Chip
+                    size="small"
+                    label={countReplied}
+                    sx={{
+                      height: 16,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      bgcolor: tabFilter === 'replied' ? '#166534' : '#e2e8f0',
+                      color: tabFilter === 'replied' ? '#ffffff' : '#475569',
+                    }}
+                  />
+                </Stack>
+              }
+              value="replied"
+            />
+            <Tab
+              label={
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <span>⏳ অপেক্ষমাণ</span>
+                  <Chip
+                    size="small"
+                    label={countOutreached}
+                    sx={{
+                      height: 16,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      bgcolor: tabFilter === 'outreached' ? '#1e40af' : '#e2e8f0',
+                      color: tabFilter === 'outreached' ? '#ffffff' : '#475569',
+                    }}
+                  />
+                </Stack>
+              }
+              value="outreached"
+            />
+            <Tab
+              label={
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <span>🔴 অপঠিত</span>
+                  {countUnread > 0 && (
+                    <Chip
+                      size="small"
+                      label={countUnread}
+                      sx={{
+                        height: 16,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        bgcolor: '#ef4444',
+                        color: '#ffffff',
+                      }}
+                    />
+                  )}
+                </Stack>
               }
               value="unread"
             />
-            <Tab label="Direct" value="direct" />
             <Tab label="Groups" value="groups" />
           </Tabs>
         </Box>
@@ -715,11 +850,40 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                             )}
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mt: 0.4, flexWrap: 'wrap' }}>
+                            {/* Modern Conversation Stage Badge */}
+                            {(chat.has_replied || (chat.inbound_count && chat.inbound_count > 0)) ? (
+                              <Chip
+                                size="small"
+                                label="💬 কথা হয়েছে"
+                                sx={{
+                                  height: 17,
+                                  fontSize: 9.5,
+                                  fontWeight: 800,
+                                  bgcolor: '#dcfce7',
+                                  color: '#15803d',
+                                  border: '1px solid #86efac'
+                                }}
+                              />
+                            ) : (
+                              <Chip
+                                size="small"
+                                label="📤 অপেক্ষমাণ"
+                                sx={{
+                                  height: 17,
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  bgcolor: '#f1f5f9',
+                                  color: '#475569',
+                                  border: '1px solid #e2e8f0'
+                                }}
+                              />
+                            )}
+
                             {chat.lead_category && (
                               <Chip
                                 size="small"
                                 label={chat.lead_category}
-                                sx={{ height: 16, fontSize: 9.5, fontWeight: 700, bgcolor: '#f1f5f9', color: '#334155' }}
+                                sx={{ height: 16, fontSize: 9, fontWeight: 600, bgcolor: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0' }}
                               />
                             )}
                             {chat.lead_status && chat.lead_status !== 'NEW' && (
@@ -733,9 +897,9 @@ export default function LiveChat({ onBack }: LiveChatProps) {
                             {chat.is_bot_active && (
                               <Chip
                                 size="small"
-                                icon={<SmartToyIcon sx={{ fontSize: '10px !important' }} />}
+                                icon={<SmartToyIcon sx={{ fontSize: '10px !important', color: '#7c3aed' }} />}
                                 label="AI"
-                                sx={{ height: 16, fontSize: 9, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', pl: 0.3 }}
+                                sx={{ height: 16, fontSize: 9, fontWeight: 700, bgcolor: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', pl: 0.3 }}
                               />
                             )}
                           </Box>

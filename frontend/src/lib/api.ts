@@ -133,6 +133,11 @@ export interface ChatListItem {
   lead_shop_name?: string | null;
   lead_category?: string | null;
   lead_status?: string | null;
+  has_replied?: boolean;
+  inbound_count?: number;
+  outbound_count?: number;
+  conversation_stage?: 'replied' | 'outreached' | 'new';
+  last_message_from_me?: boolean;
 }
 
 export interface ChatMessage {
