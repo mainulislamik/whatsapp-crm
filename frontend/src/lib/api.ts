@@ -573,3 +573,32 @@ export const AutopilotService = {
   updateSettings: (settings: { interval_minutes?: number; batch_size?: number }) =>
     api.post<{ success: boolean; status: AutopilotStatus }>('/leads/autopilot/settings', settings),
 };
+
+
+export interface OutreachStatus {
+  enabled: boolean;
+  interval_minutes: number;
+  batch_size: number;
+  min_delay_seconds: number;
+  max_delay_seconds: number;
+  is_running: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  total_sent: number;
+  total_replied: number;
+  last_batch_count: number;
+  last_log: string;
+  history?: Array<{
+    timestamp: string;
+    sent_count: number;
+    log: string;
+  }>;
+}
+
+export const OutreachService = {
+  getStatus: () => api.get<OutreachStatus>('/leads/outreach/status'),
+  toggle: (enabled: boolean) => api.post<{ success: boolean; status: OutreachStatus }>('/leads/outreach/toggle', { enabled }),
+  runNow: () => api.post<{ success: boolean; message: string }>('/leads/outreach/run-now'),
+  updateSettings: (settings: { interval_minutes?: number; batch_size?: number; min_delay_seconds?: number; max_delay_seconds?: number }) =>
+    api.post<{ success: boolean; status: OutreachStatus }>('/leads/outreach/settings', settings),
+};

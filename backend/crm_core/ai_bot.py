@@ -524,6 +524,14 @@ Required JSON Schema:
                 if district and not lead.address:
                     lead.address = district
                     changed = True
+                if lead.is_contacted and lead.status == "CONTACTED":
+                    lead.status = "INTERESTED"
+                    changed = True
+                    try:
+                        from crm_core.auto_outreach import auto_outreach
+                        auto_outreach.record_lead_reply(phone)
+                    except Exception:
+                        pass
                 if changed:
                     lead.save()
             return {

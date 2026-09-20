@@ -155,6 +155,42 @@ async def autonomous_lead_harvester_loop():
         except Exception as e:
             print("Error in autonomous_lead_harvester_loop:", e)
 
+
+# --- 24/7 AUTONOMOUS AI OUTREACH WORKER ---
+async def autonomous_outreach_loop():
+    """
+    Background autonomous worker that runs periodically.
+    When enabled, sends 15 AI-customized messages every 30 minutes.
+    """
+    from crm_core.auto_outreach import auto_outreach
+    while True:
+        try:
+            await asyncio.sleep(25)
+            cfg = auto_outreach.ensure_config()
+            if not cfg.get("enabled"):
+                continue
+            if cfg.get("is_running"):
+                continue
+
+            next_run_str = cfg.get("next_run_at")
+            now = datetime.now(timezone.utc)
+            should_run = False
+
+            if not next_run_str:
+                should_run = True
+            else:
+                try:
+                    next_run_dt = datetime.fromisoformat(next_run_str)
+                    if now >= next_run_dt:
+                        should_run = True
+                except Exception:
+                    should_run = True
+
+            if should_run:
+                asyncio.create_task(auto_outreach.run_outreach_cycle(manual=False))
+        except Exception as e:
+            print("Error in autonomous_outreach_loop:", e)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     def _setup_db_wal():
@@ -188,9 +224,11 @@ async def lifespan(app: FastAPI):
 
     task = asyncio.create_task(scheduled_campaign_checker())
     harvester_task = asyncio.create_task(autonomous_lead_harvester_loop())
+    outreach_task = asyncio.create_task(autonomous_outreach_loop())
     yield
     task.cancel()
     harvester_task.cancel()
+    outreach_task.cancel()
 
 app = FastAPI(title="WhatsApp CRM Backend API", version="2.0.0", lifespan=lifespan)
 
@@ -1125,6 +1163,52 @@ async def trigger_harvester_now(background_tasks: BackgroundTasks):
         return {"success": False, "message": "Harvest cycle is already in progress"}
     background_tasks.add_task(auto_harvester.run_harvest_cycle, manual=True)
     return {"success": True, "message": "Harvest cycle triggered in background"}
+
+
+# --- AI OUTREACH ENDPOINTS ---
+class OutreachToggleRequest(BaseModel):
+    enabled: bool
+
+class OutreachSettingsRequest(BaseModel):
+    interval_minutes: Optional[int] = 30
+    batch_size: Optional[int] = 15
+    min_delay_seconds: Optional[int] = 15
+    max_delay_seconds: Optional[int] = 22
+
+@app.get("/api/leads/outreach/status")
+async def get_outreach_status():
+    from crm_core.auto_outreach import auto_outreach
+    return auto_outreach.get_status()
+
+@app.post("/api/leads/outreach/toggle")
+async def toggle_outreach(payload: OutreachToggleRequest):
+    from crm_core.auto_outreach import auto_outreach
+    status = auto_outreach.set_enabled(payload.enabled)
+    return {"success": True, "status": status}
+
+@app.post("/api/leads/outreach/run-now")
+async def trigger_outreach_now(background_tasks: BackgroundTasks):
+    from crm_core.auto_outreach import auto_outreach
+    cfg = auto_outreach.ensure_config()
+    if cfg.get("is_running"):
+        return {"success": False, "message": "Outreach batch is already currently running"}
+    background_tasks.add_task(auto_outreach.run_outreach_cycle, manual=True)
+    return {"success": True, "message": "AI outreach cycle triggered in background"}
+
+@app.post("/api/leads/outreach/settings")
+async def update_outreach_settings(payload: OutreachSettingsRequest):
+    from crm_core.auto_outreach import auto_outreach
+    cfg = auto_outreach.ensure_config()
+    if payload.interval_minutes is not None:
+        cfg["interval_minutes"] = max(5, payload.interval_minutes)
+    if payload.batch_size is not None:
+        cfg["batch_size"] = max(1, min(50, payload.batch_size))
+    if payload.min_delay_seconds is not None:
+        cfg["min_delay_seconds"] = max(5, payload.min_delay_seconds)
+    if payload.max_delay_seconds is not None:
+        cfg["max_delay_seconds"] = max(cfg.get("min_delay_seconds", 15), payload.max_delay_seconds)
+    auto_outreach.save_config(cfg)
+    return {"success": True, "status": cfg}
 
 @app.post("/api/leads/autopilot/settings")
 async def update_harvester_settings(payload: HarvesterSettingsRequest):

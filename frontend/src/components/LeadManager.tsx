@@ -80,8 +80,9 @@ import BuildIcon from '@mui/icons-material/Build';
 import BatteryChargingFullIcon from '@mui/icons-material/BatteryChargingFull';
 import DevicesIcon from '@mui/icons-material/Devices';
 import ScienceIcon from '@mui/icons-material/Science';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
-import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead, AutopilotStatus, AutopilotService } from '@/lib/api';
+import { Lead, LeadCategory, LeadService, ChatService, GeneratedLead, AutopilotStatus, AutopilotService, OutreachStatus, OutreachService } from '@/lib/api';
 
 // Supported Target Countries for Worldwide Lead Discovery
 const DISCOVERY_COUNTRIES = [
@@ -224,6 +225,53 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   const [isTogglingAutopilot, setIsTogglingAutopilot] = useState<boolean>(false);
   const [isRunningAutopilotNow, setIsRunningAutopilotNow] = useState<boolean>(false);
 
+  // 🚀 24/7 Autonomous AI Cold-Outreach State
+  const [outreachStatus, setOutreachStatus] = useState<OutreachStatus | null>(null);
+  const [isTogglingOutreach, setIsTogglingOutreach] = useState<boolean>(false);
+  const [isRunningOutreachNow, setIsRunningOutreachNow] = useState<boolean>(false);
+
+  const fetchOutreachStatus = async () => {
+    try {
+      const res = await OutreachService.getStatus();
+      setOutreachStatus(res.data);
+    } catch (e) {
+      console.error('Failed to fetch outreach status:', e);
+    }
+  };
+
+  const handleToggleOutreach = async (newVal: boolean) => {
+    setIsTogglingOutreach(true);
+    try {
+      const res = await OutreachService.toggle(newVal);
+      setOutreachStatus(res.data.status);
+      if (newVal) {
+        showNotification('🚀 Autonomous AI Category Outreach ACTIVATED! 15 personalized pitches will be sent every 30 minutes to uncontacted leads.', 'success');
+      } else {
+        showNotification('⏸️ Autonomous AI Category Outreach PAUSED.', 'info');
+      }
+      fetchLeadsAndCategories();
+    } catch (e: any) {
+      showNotification(e?.response?.data?.detail || 'Failed to update outreach status', 'error');
+    } finally {
+      setIsTogglingOutreach(false);
+    }
+  };
+
+  const handleTriggerOutreachNow = async () => {
+    setIsRunningOutreachNow(true);
+    try {
+      await OutreachService.runNow();
+      showNotification('⚡ Immediate 15-message AI Outreach batch triggered in background! Category-tailored pitches are being sent.', 'success');
+      setTimeout(fetchOutreachStatus, 3000);
+      setTimeout(fetchLeadsAndCategories, 6000);
+    } catch (e: any) {
+      showNotification(e?.response?.data?.detail || 'Failed to trigger outreach cycle', 'error');
+    } finally {
+      setIsRunningOutreachNow(false);
+    }
+  };
+
+
   const fetchAutopilotStatus = async () => {
     try {
       const res = await AutopilotService.getStatus();
@@ -347,8 +395,10 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
   
   useEffect(() => {
     fetchAutopilotStatus();
+    fetchOutreachStatus();
     const interval = setInterval(() => {
       fetchAutopilotStatus();
+      fetchOutreachStatus();
     }, 15000);
     return () => clearInterval(interval);
   }, []);
@@ -980,6 +1030,140 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
             </Button>
           </Stack>
         </Stack>
+
+                {/* ========================================================================= */}
+        {/* 🌟 24/7 AI AUTONOMOUS COLD-OUTREACH & CATEGORY PITCH CONTROL BAR */}
+        {/* ========================================================================= */}
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 2,
+            p: 1.5,
+            borderRadius: 3,
+            bgcolor: outreachStatus?.enabled ? '#f0fdf4' : '#ffffff',
+            border: '1.5px solid',
+            borderColor: outreachStatus?.enabled ? '#86efac' : '#e2e8f0',
+            boxShadow: outreachStatus?.enabled ? '0 4px 20px rgba(34, 197, 94, 0.12)' : '0 1px 3px rgba(0,0,0,0.05)',
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: { xs: 'flex-start', md: 'center' },
+            justifyContent: 'space-between',
+            gap: 2,
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {/* Left info & badges */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.5} sx={{ flex: 1 }}>
+            <Box
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: 2.5,
+                bgcolor: outreachStatus?.enabled ? '#dcfce7' : '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: outreachStatus?.enabled ? '#16a34a' : '#64748b',
+                flexShrink: 0,
+              }}
+            >
+              <SendIcon sx={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: outreachStatus?.enabled ? '#16a34a' : '#94a3b8',
+                    boxShadow: outreachStatus?.enabled ? '0 0 8px #22c55e' : 'none',
+                    animation: outreachStatus?.enabled ? 'pulseDot 1.6s infinite' : 'none',
+                  }}
+                />
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: outreachStatus?.enabled ? '#15803d' : '#1e293b' }}>
+                  {outreachStatus?.enabled ? '24/7 AI Cold-Outreach Active' : '24/7 AI Cold-Outreach Paused'}
+                </Typography>
+                <Chip
+                  size="small"
+                  label="15 Msg / 30m"
+                  sx={{
+                    height: 20,
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    bgcolor: outreachStatus?.enabled ? '#bbf7d0' : '#e2e8f0',
+                    color: outreachStatus?.enabled ? '#14532d' : '#475569',
+                  }}
+                />
+              </Stack>
+              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 500, display: 'block', mt: 0.3 }}>
+                {outreachStatus?.enabled
+                  ? `Automated 1-to-1 AI pitches for Battery, Electronics & Servicing shops • Total Sent: ${outreachStatus?.total_sent || 0} • Uncontacted Queue: ${counts.uncontacted}`
+                  : `Sends 15 category-customized AI pitches every 30m to uncontacted leads • Ready in Queue: ${counts.uncontacted} leads`}
+              </Typography>
+              {/* Linked category template pills */}
+              <Stack direction="row" spacing={0.8} sx={{ mt: 0.8, flexWrap: 'wrap', gap: 0.5 }}>
+                <Chip
+                  size="small"
+                  icon={<BatteryChargingFullIcon sx={{ fontSize: '13px !important', color: '#16a34a' }} />}
+                  label="Battery Template Active"
+                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}
+                />
+                <Chip
+                  size="small"
+                  icon={<DevicesIcon sx={{ fontSize: '13px !important', color: '#2563eb' }} />}
+                  label="Electronics Template Active"
+                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8' }}
+                />
+                <Chip
+                  size="small"
+                  icon={<AutoAwesomeIcon sx={{ fontSize: '13px !important', color: '#7c3aed' }} />}
+                  label="AI Shop-wise Customization"
+                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#faf5ff', border: '1px solid #ddd6fe', color: '#6d28d9' }}
+                />
+              </Stack>
+            </Box>
+          </Stack>
+
+          {/* Right toggle switch & run now trigger */}
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ alignSelf: { xs: 'flex-end', md: 'center' } }}>
+            {outreachStatus?.enabled && (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleTriggerOutreachNow}
+                disabled={outreachStatus?.is_running || isRunningOutreachNow}
+                startIcon={<PlayArrowIcon sx={{ fontSize: '14px !important' }} />}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  py: 0.6,
+                  px: 1.5,
+                  bgcolor: '#16a34a',
+                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+                  '&:hover': { bgcolor: '#15803d' },
+                }}
+              >
+                {outreachStatus?.is_running || isRunningOutreachNow ? 'Sending Batch...' : 'Send 15 Now'}
+              </Button>
+            )}
+
+            <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f8fafc', px: 1.2, py: 0.4, borderRadius: 2, border: '1px solid #cbd5e1' }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: outreachStatus?.enabled ? '#15803d' : '#64748b', mr: 0.5 }}>
+                {outreachStatus?.enabled ? 'ON' : 'OFF'}
+              </Typography>
+              <Switch
+                checked={!!outreachStatus?.enabled}
+                onChange={(e) => handleToggleOutreach(e.target.checked)}
+                disabled={isTogglingOutreach}
+                color="success"
+                size="small"
+              />
+            </Box>
+          </Stack>
+        </Paper>
 
         {/* ========================================================================= */}
         {/* 🌟 MODERN OUTREACH & LIFECYCLE SEPARATION TABS */}
