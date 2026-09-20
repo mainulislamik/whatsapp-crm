@@ -4,9 +4,8 @@ import json
 import re
 import asyncio
 import logging
-import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 
 import httpx
 from asgiref.sync import sync_to_async
@@ -16,61 +15,80 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = "/app/data/auto_harvester_config.json" if os.path.exists("/app/data") else "/root/whatsapp-crm/wa_backend_data/auto_harvester_config.json"
 DATA_DIR = "/app/data" if os.path.exists("/app/data") else "/root/whatsapp-crm/wa_backend_data"
 
+# All 64 Districts of Bangladesh across 8 Divisions
+ALL_BANGLADESH_DISTRICTS = [
+    # Dhaka Division (13)
+    "Dhaka", "Gazipur", "Narayanganj", "Tangail", "Narsingdi", 
+    "Faridpur", "Manikganj", "Munshiganj", "Madaripur", "Gopalganj", 
+    "Rajbari", "Shariatpur", "Kishoreganj",
+    # Chittagong Division (11)
+    "Chittagong", "Cox's Bazar", "Comilla", "Feni", "Brahmanbaria", 
+    "Noakhali", "Chandpur", "Lakshmipur", "Rangamati", "Khagrachhari", "Bandarban",
+    # Sylhet Division (4)
+    "Sylhet", "Moulvibazar", "Habiganj", "Sunamganj",
+    # Rajshahi Division (8)
+    "Rajshahi", "Bogura", "Pabna", "Sirajganj", "Naogaon", 
+    "Natore", "Chapainawabganj", "Joypurhat",
+    # Khulna Division (10)
+    "Khulna", "Jessore", "Kushtia", "Jhenaidah", "Satkhira", 
+    "Bagerhat", "Chuadanga", "Meherpur", "Narail", "Magura",
+    # Barisal Division (6)
+    "Barisal", "Patuakhali", "Bhola", "Pirojpur", "Barguna", "Jhalokati",
+    # Rangpur Division (8)
+    "Rangpur", "Dinajpur", "Kurigram", "Gaibandha", "Nilphamari", 
+    "Lalmonirhat", "Thakurgaon", "Panchagarh",
+    # Mymensingh Division (4)
+    "Mymensingh", "Jamalpur", "Netrokona", "Sherpur"
+]
+
 ROTATION_PRESETS = [
     {
         "category": "Mobile Repair Shop",
-        "query": "mobile phone repair servicing center contact",
-        "cities": ["Dhaka", "Chittagong", "Sylhet", "Bogura", "Khulna", "Rajshahi", "Comilla"]
+        "query": "mobile phone repair servicing center contact whatsapp",
     },
     {
         "category": "Battery Shop",
-        "query": "battery ips solar showroom dealer contact phone",
-        "cities": ["Dhaka", "Chittagong", "Comilla", "Bogura", "Mymensingh", "Khulna", "Sylhet"]
+        "query": "battery ips solar showroom dealer contact whatsapp phone",
     },
     {
         "category": "Electronics",
-        "query": "electronics gadget mobile showroom store contact phone",
-        "cities": ["Dhaka", "Chittagong", "Sylhet", "Rajshahi", "Khulna", "Barisal", "Bogura"]
+        "query": "electronics gadget mobile showroom store contact whatsapp phone",
     },
     {
         "category": "Clothing & Fashion",
         "query": "clothing fashion wear boutique store showroom whatsapp phone",
-        "cities": ["Dhaka", "Chittagong", "Sylhet", "Comilla", "Bogura", "Narayanganj"]
+    },
+    {
+        "category": "Computer & IT",
+        "query": "computer laptop it accessories showroom store phone whatsapp",
+    },
+    {
+        "category": "Grocery & Superstore",
+        "query": "grocery supershop departmental store contact whatsapp phone",
     },
     {
         "category": "Pharmacy",
         "query": "pharmacy medicine drug house chemist store phone whatsapp",
-        "cities": ["Dhaka", "Chittagong", "Rajshahi", "Sylhet", "Khulna", "Rangpur", "Bogura"]
     },
     {
         "category": "Cosmetics & Beauty",
         "query": "cosmetics beauty care parlor product store phone whatsapp",
-        "cities": ["Dhaka", "Chittagong", "Sylhet", "Rajshahi", "Khulna", "Dhaka"]
-    },
-    {
-        "category": "Grocery & Superstore",
-        "query": "grocery supershop departmental store contact phone",
-        "cities": ["Dhaka", "Chittagong", "Sylhet", "Bogura", "Khulna", "Dhaka"]
-    },
-    {
-        "category": "Chemical",
-        "query": "industrial textile chemical supplier trading phone contact",
-        "cities": ["Dhaka", "Chittagong", "Narayanganj", "Gazipur"]
     },
     {
         "category": "Hardware & Sanitary",
-        "query": "hardware sanitary pipe fittings electric store contact phone",
-        "cities": ["Dhaka", "Chittagong", "Sylhet", "Bogura", "Mymensingh"]
+        "query": "hardware sanitary pipe fittings electric store contact phone whatsapp",
     },
     {
-        "category": "Computer & IT",
-        "query": "computer laptop it accessories showroom store phone contact",
-        "cities": ["Dhaka", "Chittagong", "Rajshahi", "Sylhet", "Khulna"]
+        "category": "Chemical",
+        "query": "industrial textile chemical supplier trading phone whatsapp",
     },
     {
         "category": "Wholesale & Distribution",
         "query": "wholesale dealer distributor merchant phone whatsapp",
-        "cities": ["Dhaka", "Chittagong", "Bogura", "Narayanganj", "Khatunganj"]
+    },
+    {
+        "category": "General Retail",
+        "query": "retail store shop showroom dealer contact whatsapp phone",
     }
 ]
 
@@ -82,8 +100,8 @@ DEFAULT_CONFIG = {
     "last_run_at": None,
     "next_run_at": None,
     "total_harvested": 0,
-    "last_log": "24/7 AI Autonomous Lead Harvester is standing by.",
-    "current_category": "Mobile Repair Shop",
+    "last_log": "24/7 AI Autonomous Lead Harvester is standing by across all 64 districts.",
+    "current_category": "Clothing & Fashion",
     "current_city": "Dhaka",
     "rotation_preset_index": 0,
     "rotation_city_index": 0,
@@ -126,6 +144,8 @@ class AutonomousHarvesterManager:
 
     def get_status(self) -> Dict[str, Any]:
         cfg = self.ensure_config()
+        cfg["total_districts"] = len(ALL_BANGLADESH_DISTRICTS)
+        cfg["total_categories"] = len(ROTATION_PRESETS)
         return cfg
 
     def set_enabled(self, enabled: bool) -> Dict[str, Any]:
@@ -133,14 +153,14 @@ class AutonomousHarvesterManager:
         cfg["enabled"] = enabled
         now = datetime.now(timezone.utc)
         if enabled:
-            cfg["last_log"] = f"Harvester enabled at {now.strftime('%I:%M %p')}. Scheduled to run every {cfg.get('interval_minutes', 30)} minutes."
+            cfg["last_log"] = f"Harvester enabled at {now.strftime('%I:%M %p')}. Mining 64 districts across {len(ROTATION_PRESETS)} business categories."
             if not cfg.get("next_run_at"):
                 cfg["next_run_at"] = now.isoformat()
         else:
             cfg["last_log"] = f"Harvester paused at {now.strftime('%I:%M %p')}."
             cfg["next_run_at"] = None
         self.save_config(cfg)
-        return cfg
+        return self.get_status()
 
     async def evaluate_candidate_with_ai(
         self,
@@ -150,10 +170,6 @@ class AutonomousHarvesterManager:
         city: str,
         target_cat: str
     ) -> Optional[Dict[str, Any]]:
-        """
-        Uses Gemini 3.8 Flash via call_llm to verify if the scraped candidate is a genuine business,
-        cleans the shop name, and assigns exact category.
-        """
         from crm_core.ai_bot import call_llm
 
         allowed_categories = [
@@ -167,24 +183,24 @@ Evaluate this prospective retail/wholesale business candidate found via web sear
 
 Scraped Business Name: {name}
 Phone Number: {phone}
-Region / City: {city}
-Target Intent Category: {target_cat}
+District / Region: {city} (Bangladesh)
+Target Category: {target_cat}
 Scraped Web Details: {snippet[:400]}
 
 Your Mission:
-1. "is_genuine": boolean (Is this a genuine physical/online retail shop, repair center, pharmacy, showroom or wholesale supplier in Bangladesh? Reject job ads, blog posts, news, generic listing sites, spam, and non-businesses).
+1. "is_genuine": boolean (Is this a genuine physical/online retail shop, boutique, electronics/battery dealer, repair center, pharmacy, or wholesale supplier in Bangladesh? Reject job ads, blog posts, news, generic listing sites, and non-businesses).
 2. "clean_shop_name": string (Return the clean, official business name in Bengali or English. Remove suffixes like "- Home | Facebook", phone numbers, SEO spam keywords).
 3. "category": string (Must match exactly one from: {allowed_categories}).
-4. "detected_area": string (Market or neighborhood area like "Stadium Market, Mirpur", "Agrabad", "GEC Circle", or at least "{city}").
+4. "detected_area": string (Market or neighborhood area like "New Market, {city}", "Chawkbazar", or at least "{city}").
 5. "shop_type": string ("Retail" or "Wholesale").
 6. "confidence": float between 0.0 and 1.0 (Rate confidence that this is a real business).
 
 Return strictly JSON format:
 {{
   "is_genuine": true,
-  "clean_shop_name": "Al-Madina Mobile Servicing",
+  "clean_shop_name": "Al-Madina Fashion House",
   "category": "{target_cat}",
-  "detected_area": "Mirpur, {city}",
+  "detected_area": "Station Road, {city}",
   "shop_type": "Retail",
   "confidence": 0.95
 }}
@@ -204,22 +220,12 @@ Return strictly JSON format:
         return None
 
     async def run_harvest_cycle(self, manual: bool = False) -> Dict[str, Any]:
-        """
-        Executes a 20-lead harvest cycle:
-        1. Selects next rotation preset & city.
-        2. Scrapes candidate businesses concurrently.
-        3. Filters duplicates against existing CRM leads.
-        4. Verifies active WhatsApp via Baileys engine.
-        5. Audits genuineness and categorizes via Gemini 3.8 Flash.
-        6. Inserts verified leads directly into CRM Lead table.
-        """
         async with self.lock:
             cfg = self.ensure_config()
             if cfg.get("is_running") and not manual:
                 return {"status": "busy", "message": "Harvest cycle already running."}
-
             cfg["is_running"] = True
-            cfg["last_log"] = "Harvest cycle started: Searching candidates across Bangladesh..."
+            cfg["last_log"] = "Harvest cycle started: Searching candidates across all 64 districts..."
             self.save_config(cfg)
 
         try:
@@ -230,16 +236,16 @@ Return strictly JSON format:
             p_idx = cfg.get("rotation_preset_index", 0) % len(ROTATION_PRESETS)
             preset = ROTATION_PRESETS[p_idx]
             category = preset["category"]
-            cities = preset["cities"]
-            c_idx = cfg.get("rotation_city_index", 0) % len(cities)
-            city = cities[c_idx]
+
+            c_idx = cfg.get("rotation_city_index", 0) % len(ALL_BANGLADESH_DISTRICTS)
+            city = ALL_BANGLADESH_DISTRICTS[c_idx]
 
             query_text = f"{preset['query']} in {city}"
             batch_limit = cfg.get("batch_size", 20)
 
             cfg["current_category"] = category
             cfg["current_city"] = city
-            cfg["last_log"] = f"Searching up to {batch_limit} leads for '{category}' in {city}..."
+            cfg["last_log"] = f"Searching up to {batch_limit} leads for '{category}' in {city} (District {c_idx+1}/64)..."
             self.save_config(cfg)
 
             scraper = LeadScraperEngine(wa_engine_url="http://wa-engine:5001")
@@ -321,7 +327,7 @@ Return strictly JSON format:
                     pitch_tpl = matched_profile["pitch_template"] if matched_profile else (
                         "আসসালামু আলাইকুম স্যার!\n\n"
                         f"আপনার প্রতিষ্ঠান **{clean_name}**-এর বিক্রয়, ইনভেন্টরি ও বাকির নিখুঁত ডিজিটাল হিসাবের জন্য StockWhisk ERP এখন মাত্র ৪৯৯ টাকায়!\n"
-                        "ফ্রি লাইভ ডেমো দেখতে ভিজিট করুন: https://app.stockwhisk.com অথবা আমাদের ইনবক্স করুন স্যার।"
+                        "ফ্রি লাইভ ডেমো দেখতে ভিজিট করুন: https://app.stockwhisk.com অথবা আমাদের জানাতে পারেন স্যার।"
                     )
                     pitch = pitch_tpl.format(shop_name=clean_name, owner_or_sir="স্যার")
 
@@ -343,7 +349,7 @@ Return strictly JSON format:
                             whatsapp_profile_pic=wa_pic or "",
                             whatsapp_name=clean_name,
                             status="NEW",
-                            notes=f"🤖 AI Autonomous Harvester ({datetime.now().strftime('%d %b, %I:%M %p')}) | Verified WhatsApp | Quality Score: High | Scraped from {city}",
+                            notes=f"🤖 AI Autonomous Harvester ({datetime.now().strftime('%d %b, %I:%M %p')}) | Verified WhatsApp | Quality Score: High | Scraped from {city} ({c_idx+1}/64)",
                         )
                         return lead_obj.id
 
@@ -359,51 +365,61 @@ Return strictly JSON format:
                             "address": detected_area
                         })
 
-            # Advance rotation indexes
+            # Advance rotation indexes:
+            # Shift category by 1, and shift district by 1
+            # When category cycle completes, add an extra shift to visit all 768 category-district permutations!
             now = datetime.now(timezone.utc)
-            next_c_idx = (c_idx + 1) % len(cities)
-            next_p_idx = p_idx
-            if next_c_idx == 0:
-                next_p_idx = (p_idx + 1) % len(ROTATION_PRESETS)
+            next_p_idx = (p_idx + 1) % len(ROTATION_PRESETS)
+            next_c_idx = (c_idx + 1) % len(ALL_BANGLADESH_DISTRICTS)
+            if next_p_idx == 0:
+                next_c_idx = (next_c_idx + 1) % len(ALL_BANGLADESH_DISTRICTS)
 
             cfg["rotation_city_index"] = next_c_idx
             cfg["rotation_preset_index"] = next_p_idx
+            cfg["current_category"] = ROTATION_PRESETS[next_p_idx]["category"]
+            cfg["current_city"] = ALL_BANGLADESH_DISTRICTS[next_c_idx]
             cfg["last_run_at"] = now.isoformat()
             
             interval_mins = cfg.get("interval_minutes", 30)
             cfg["next_run_at"] = (now + timedelta(minutes=interval_mins)).isoformat() if cfg.get("enabled") else None
             cfg["total_harvested"] = cfg.get("total_harvested", 0) + len(verified_new_leads)
-            cfg["is_running"] = False
 
-            log_msg = f"Harvest complete! Verified & added {len(verified_new_leads)} new leads for '{category}' in {city}."
+            log_msg = f"Harvest complete! Verified & added {len(verified_new_leads)} new leads for '{category}' in {city} ({c_idx+1}/64 districts)."
             cfg["last_log"] = log_msg
 
-            history = cfg.get("history", [])
-            history.insert(0, {
-                "timestamp": now.isoformat(),
-                "category": category,
-                "city": city,
-                "leads_added": len(verified_new_leads),
-                "leads": verified_new_leads[:5]
-            })
-            cfg["history"] = history[:15]
-            self.save_config(cfg)
+            if verified_new_leads:
+                history_entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "category": category,
+                    "city": city,
+                    "district_num": c_idx + 1,
+                    "count": len(verified_new_leads),
+                    "manual": manual,
+                    "sample": [l["shop_name"] for l in verified_new_leads[:3]]
+                }
+                history = cfg.get("history", [])
+                history.insert(0, history_entry)
+                cfg["history"] = history[:20]
 
+            self.save_config(cfg)
             return {
                 "success": True,
-                "leads_added": len(verified_new_leads),
+                "harvested_count": len(verified_new_leads),
                 "category": category,
                 "city": city,
-                "leads": verified_new_leads,
-                "next_run_at": cfg["next_run_at"]
+                "leads": verified_new_leads
             }
 
         except Exception as e:
-            logger.error(f"Error in harvest cycle: {e}", exc_info=True)
+            logger.error(f"Error in run_harvest_cycle: {e}")
             cfg = self.ensure_config()
-            cfg["is_running"] = False
-            cfg["last_log"] = f"Harvest cycle error: {str(e)[:100]}"
+            cfg["last_log"] = f"Harvest error at {datetime.now().strftime('%I:%M %p')}: {str(e)[:120]}"
             self.save_config(cfg)
             return {"success": False, "error": str(e)}
+
+        finally:
+            cfg = self.ensure_config()
+            cfg["is_running"] = False
+            self.save_config(cfg)
 
 auto_harvester = AutonomousHarvesterManager()

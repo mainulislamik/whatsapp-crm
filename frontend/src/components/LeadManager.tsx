@@ -125,6 +125,17 @@ interface LeadManagerProps {
   onSelectForBroadcast?: (leadIds: number[]) => void;
 }
 
+const ALL_64_DISTRICTS = [
+  "Dhaka", "Gazipur", "Narayanganj", "Tangail", "Narsingdi", "Faridpur", "Manikganj", "Munshiganj", "Madaripur", "Gopalganj", "Rajbari", "Shariatpur", "Kishoreganj",
+  "Chittagong", "Cox's Bazar", "Comilla", "Feni", "Brahmanbaria", "Noakhali", "Chandpur", "Lakshmipur", "Rangamati", "Khagrachhari", "Bandarban",
+  "Sylhet", "Moulvibazar", "Habiganj", "Sunamganj",
+  "Rajshahi", "Bogura", "Pabna", "Sirajganj", "Naogaon", "Natore", "Chapainawabganj", "Joypurhat",
+  "Khulna", "Jessore", "Kushtia", "Jhenaidah", "Satkhira", "Bagerhat", "Chuadanga", "Meherpur", "Narail", "Magura",
+  "Barisal", "Patuakhali", "Bhola", "Pirojpur", "Barguna", "Jhalokati",
+  "Rangpur", "Dinajpur", "Kurigram", "Gaibandha", "Nilphamari", "Lalmonirhat", "Thakurgaon", "Panchagarh",
+  "Mymensingh", "Jamalpur", "Netrokona", "Sherpur"
+];
+
 const SHOP_TYPES = ['Retail', 'Wholesale', 'Distributor', 'Online Store', 'Service Center', 'Corporate'];
 const LEAD_STATUSES = [
   { value: 'NEW', label: 'New Lead', bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' },
@@ -3118,9 +3129,16 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography sx={{ fontSize: '0.76rem', color: '#166534', fontWeight: 700 }}>
-                      🎯 <strong>Current Target:</strong> {autopilotStatus.current_category} in {autopilotStatus.current_city}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography sx={{ fontSize: '0.76rem', color: '#166534', fontWeight: 700 }}>
+                        🎯 <strong>Current Target:</strong> {autopilotStatus.current_category} in {autopilotStatus.current_city}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label="🇧🇩 64 Districts Rotation Active"
+                        sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800, bgcolor: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                      />
+                    </Box>
                     {autopilotStatus.is_running && (
                       <Chip size="small" label="Scraping & Verifying..." color="success" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }} />
                     )}
@@ -3139,7 +3157,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                 <Chip
                   icon={<BuildIcon fontSize="small" style={{ color: '#7c3aed' }} />}
                   label="📱 Mobile Repair & Servicing"
-                  onClick={() => handleApplyPreset("Mobile Repair Shop", "mobile repair shop in dhaka")}
+                  onClick={() => handleApplyPreset("Mobile Repair Shop", "mobile repair servicing in dhaka")}
                   clickable
                   sx={{
                     bgcolor: genCategory === "Mobile Repair Shop" ? '#ede9fe' : '#ffffff',
@@ -3153,7 +3171,7 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                 <Chip
                   icon={<BatteryChargingFullIcon fontSize="small" style={{ color: '#ea580c' }} />}
                   label="🔋 Battery, IPS & Solar"
-                  onClick={() => handleApplyPreset("Battery Shop", "battery ips shop in dhaka")}
+                  onClick={() => handleApplyPreset("Battery Shop", "battery ips showroom in dhaka")}
                   clickable
                   sx={{
                     bgcolor: genCategory === "Battery Shop" ? '#ffedd5' : '#ffffff',
@@ -3179,9 +3197,65 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                   }}
                 />
                 <Chip
+                  icon={<StorefrontIcon fontSize="small" style={{ color: '#db2777' }} />}
+                  label="👗 Clothing & Fashion"
+                  onClick={() => handleApplyPreset("Clothing & Fashion", "clothing fashion boutique showroom in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Clothing & Fashion" ? '#fdf2f8' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Clothing & Fashion" ? '#db2777' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#be185d',
+                    '&:hover': { bgcolor: '#fdf2f8' }
+                  }}
+                />
+                <Chip
+                  icon={<DevicesIcon fontSize="small" style={{ color: '#4f46e5' }} />}
+                  label="🖥️ Computer & IT"
+                  onClick={() => handleApplyPreset("Computer & IT", "computer laptop accessories showroom in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Computer & IT" ? '#eef2ff' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Computer & IT" ? '#4f46e5' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#4338ca',
+                    '&:hover': { bgcolor: '#eef2ff' }
+                  }}
+                />
+                <Chip
+                  icon={<StorefrontIcon fontSize="small" style={{ color: '#16a34a' }} />}
+                  label="🛒 Grocery & Superstore"
+                  onClick={() => handleApplyPreset("Grocery & Superstore", "grocery supershop departmental store in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Grocery & Superstore" ? '#f0fdf4' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Grocery & Superstore" ? '#16a34a' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#15803d',
+                    '&:hover': { bgcolor: '#f0fdf4' }
+                  }}
+                />
+                <Chip
+                  icon={<ScienceIcon fontSize="small" style={{ color: '#0d9488' }} />}
+                  label="💊 Pharmacy & Medicine"
+                  onClick={() => handleApplyPreset("Pharmacy", "pharmacy drug house medicine store in dhaka")}
+                  clickable
+                  sx={{
+                    bgcolor: genCategory === "Pharmacy" ? '#ccfbf1' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: genCategory === "Pharmacy" ? '#0d9488' : '#cbd5e1',
+                    fontWeight: 700,
+                    color: '#0f766e',
+                    '&:hover': { bgcolor: '#ccfbf1' }
+                  }}
+                />
+                <Chip
                   icon={<ScienceIcon fontSize="small" style={{ color: '#059669' }} />}
                   label="🧪 Chemical & Industrial"
-                  onClick={() => handleApplyPreset("Chemical", "industrial chemical store in dhaka")}
+                  onClick={() => handleApplyPreset("Chemical", "industrial textile chemical supplier in dhaka")}
                   clickable
                   sx={{
                     bgcolor: genCategory === "Chemical" ? '#d1fae5' : '#ffffff',
@@ -3196,10 +3270,10 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
 
               {/* Quick City Filters */}
               <Stack direction="row" spacing={0.8} sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', mr: 0.5 }}>
-                  City Filter:
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#0f172a', mr: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  🇧🇩 64 Districts (জেলা):
                 </Typography>
-                {["Dhaka", "Chittagong", "Sylhet", "Bogura", "Rajshahi", "Khulna"].map((city) => (
+                {["Dhaka", "Chittagong", "Sylhet", "Rajshahi", "Khulna", "Barisal", "Rangpur", "Mymensingh", "Comilla", "Gazipur", "Narayanganj", "Bogura", "Jessore", "Tangail", "Cox's Bazar"].map((city) => (
                   <Chip
                     key={city}
                     label={city}
@@ -3216,6 +3290,23 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                     }}
                   />
                 ))}
+                <FormControl size="small" sx={{ minWidth: 150, height: 26 }}>
+                  <Select
+                    displayEmpty
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) handleApplyCity(e.target.value as string);
+                    }}
+                    sx={{ height: 26, fontSize: '0.72rem', fontWeight: 700, bgcolor: '#ffffff' }}
+                    renderValue={() => "📍 All 64 Districts..."}
+                  >
+                    {ALL_64_DISTRICTS.map((d) => (
+                      <MenuItem key={d} value={d} sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                        {d}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Stack>
             </Box>
 
