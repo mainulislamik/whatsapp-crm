@@ -36,20 +36,32 @@ DEFAULT_CONFIG = {
 FALLBACK_TEMPLATES = {
     "battery": """আসসালামু আলাইকুম 🌟
 
-আপনার ব্যাটারি ও আইপিএস পাইকারি/খুচরা ব্যবসার বিক্রি, স্টক, লাভ, কাস্টমার ও বাকি—সবকিছু একসাথে স্মার্টলি ম্যানেজ করতে চান? 🔋
+আপনার ব্যাটারি পাইকারি ও খুচরা ব্যবসার বিক্রি, স্টক, লাভ, কাস্টমার ও বাকি—সবকিছু একসাথে ম্যানেজ করতে চান? 🔋
 
-📱 StockWhisk — ব্যাটারি ব্যবসার জন্য আধুনিক POS & Inventory ERP Software।
+📱 StockWhisk — ব্যাটারি ব্যবসার জন্য স্মার্ট POS & Inventory Software।
 
-🔹 পাইকারি ও খুচরা বিক্রয় এবং ডিজিটাল ইনভয়েস
-🔹 ব্যাটারির মডেল ও ইউনিক সিরিয়াল নম্বর ট্র্যাকিং (ওয়ারেন্টি ক্লেইম ভেরিফিকেশন)
-🔹 স্ক্র্যাপ ব্যাটারি ট্রেড-ইন ও মূল্য সমন্বয় (Scrap Battery Adjustment)
-🔹 স্মার্ট বাকির খাতা ও সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন
+🔹 পাইকারি ও খুচরা বিক্রয় এবং ডিজিটাল ইনভয়েস
 🔹 স্টক ম্যানেজমেন্ট ও Low Stock Alert
-🔹 দৈনিক, সাপ্তাহিক ও মাসিক লাভ-ক্ষতির স্পষ্ট রিপোর্ট
+🔹 ব্যাটারিভিত্তিক লাভের হিসাব
+🔹 ব্যাটারির মডেল ও সিরিয়াল ট্র্যাকিং
+🔹 কাস্টমার ও বাকি হিসাব ম্যানেজমেন্ট (সরাসরি হোয়াটসঅ্যাপ রিমাইন্ডার)
+🔹 বিক্রি, স্টক ও লাভের বিস্তারিত রিপোর্ট
+🔹 Purchase & Supplier Management
+🔹 Excel/CSV Export সুবিধা
+🔹 Cash Flow & Business Dashboard
 
-💼 কম্পিউটার, ল্যাপটপ বা মোবাইল—যেকোনো ডিভাইসে চোখের পলকে চালান আপনার ব্যবসা!
+💼 আপনার ব্যাটারি ব্যবসার প্রতিটি লেনদেন রাখুন হাতের মুঠোয়!
 
-🎉 সীমিত সময়ের স্পেশাল অফার: মাত্র ৳499/মাস প্রমোশনাল রেট!
+StockWhisk-এর মাধ্যমে সহজেই ম্যানেজ করুন—
+✅ কোন ব্যাটারি কতটি স্টকে আছে
+✅ কোন ব্যাটারিতে কত লাভ হচ্ছে
+✅ কোন কাস্টমারের কত টাকা বাকি
+✅ কোন সাপ্লায়ারের কাছ থেকে কত টাকার পণ্য কিনেছেন
+✅ আপনার ব্যবসার দৈনিক বিক্রি ও লাভের হিসাব
+
+📊 খাতাপত্রের ঝামেলা কমিয়ে আপনার ব্যাটারি ব্যবসাকে করুন আরও সংগঠিত, দ্রুত ও স্মার্ট।
+
+✨ সীমিত সময়ের অফার: মাত্র ৳৪৯৯/মাস (প্রতিদিন মাত্র ~৳১৬)!
 
 🌐 Website: stockwhisk.com
 📞 Call / WhatsApp: 01613511887
@@ -201,7 +213,7 @@ class AutoLeadOutreachManager:
         from crm_core.ai_bot import call_llm
 
         prompt = f"""You are an elite B2B sales copywriter for StockWhisk ERP (stockwhisk.com) in Bangladesh.
-Your task is to take a base category marketing template and enhance/customize it specifically for this targeted retail shop.
+Your task is to take the authentic base marketing template and personalize it for this targeted shop.
 
 Target Shop Details:
 - Shop Name: {shop_name}
@@ -209,22 +221,30 @@ Target Shop Details:
 - Address / City: {address or 'Bangladesh'}
 - Owner / Contact Name: {owner_name or 'Sir'}
 
-Base Category Template:
+Base Template:
 {base_template}
 
-Strict Rules for AI Enhancement:
-1. GREETING & RESPECT: Address the recipient strictly with high-respect corporate etiquette: "স্যার" (Sir) or "{owner_name} স্যার". NEVER use "ভাই", "ভাইয়া", or informal terms.
-2. PERSONALIZATION: Personally and warmly mention their shop name "{shop_name}" and their location/market in the opening lines so it feels 100% handcrafted for their specific business.
-3. NICHE PAIN POINTS: Seamlessly adapt the bullet points to their exact business type:
-   - If Battery/IPS: Highlight battery model & serial tracking, warranty verification, scrap battery exchange adjustment, due ledger.
-   - If Mobile/Electronics: Highlight IMEI & warranty tracking, barcode POS, repair job sheets, profit per item.
-   - If Clothing/Fashion/Footwear: Highlight color/size variations, barcode labels, fast cashier billing.
-   - If Pharmacy: Highlight batch & expiry alerts, supplier bills.
-   - If General Retail/Wholesale: Highlight digital due ledger with direct WhatsApp reminders, profit analytics.
-4. PROMO & CONTACT: Keep the promotional price of ৳499/মাস (~৳16/দিন), Website: stockwhisk.com, and Official Helpline/WhatsApp: 01613511887.
-5. CHANNELS: Only mention direct WhatsApp and digital memos. NEVER mention regular SMS.
-6. FORMATTING: Use clean bullet points, appealing emojis (🔹, 🔋, 📱, ✨, 💼), clear readable spacing.
-7. OUTPUT: Output ONLY the final Bengali message text. Do NOT include markdown code blocks, conversational comments, or explanations."""
+STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
+1. ABSOLUTELY DO NOT INVENT, FABRICATE, OR ADD ANY FEATURE THAT OUR SOFTWARE DOES NOT HAVE!
+   - Under NO circumstances mention "পুরাতন ব্যাটারি স্ক্র্যাপ এক্সচেঞ্জ / ট্রেড-ইন" (StockWhisk does NOT have scrap battery exchange!).
+   - Under NO circumstances mention "অফলাইন মোড" (StockWhisk is strictly cloud-based and requires internet/mobile data!).
+   - Under NO circumstances mention "মোবাইল এসএমএস" (StockWhisk sends digital cash memos and due reminders directly via WhatsApp!).
+   - Under NO circumstances mention GPS tracking or any other imaginary feature.
+2. PRESERVE ONLY REAL, VERIFIED FEATURES FROM THE BASE TEMPLATE:
+   - Barcode POS & Fast Digital Invoicing / Cash Memo
+   - Stock Management & Low Stock Alerts
+   - Battery Model & Serial Number Tracking / IMEI Tracking & Warranty Management
+   - Customer Digital Due Ledger (বাকির খাতা) with Direct WhatsApp Reminders
+   - Product-wise Profit & Loss Calculation
+   - Supplier Purchase Management
+   - Accessible from any PC, Laptop, Tablet, or Mobile browser
+   - Sales & Profit Reports, Cash Flow
+3. RESPECTFUL SHOP-SPECIFIC PERSONALIZATION:
+   - Address the recipient with high corporate respect: "স্যার" (Sir) or "{owner_name} স্যার". NEVER use "ভাই" or informal terms.
+   - Naturally mention their shop name "{shop_name}" and city/location "{address}" warmly in the opening greeting so it feels 100% genuine and customized for their business.
+4. PROMO & CONTACT: Keep the promotional price of ৳499/মাস (~৳16/দিন), Website: stockwhisk.com, and Official Call/WhatsApp: 01613511887.
+5. FORMATTING: Clean bullet points, appealing emojis (🔹, 🔋, 📱, ✨, 💼), clear readable spacing.
+6. OUTPUT: Output ONLY the final Bengali message text. Do NOT include markdown code fences or explanatory meta comments."""
 
         try:
             enhanced = await call_llm([{"role": "user", "content": prompt}])
