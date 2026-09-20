@@ -1098,8 +1098,8 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
               </Stack>
               <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 500, display: 'block', mt: 0.3 }}>
                 {outreachStatus?.enabled
-                  ? `Automated 1-to-1 AI pitches for Battery, Electronics & Servicing shops • Total Sent: ${outreachStatus?.total_sent || 0} • Uncontacted Queue: ${counts.uncontacted}`
-                  : `Sends 15 category-customized AI pitches every 30m to uncontacted leads • Ready in Queue: ${counts.uncontacted} leads`}
+                  ? `Balanced 1-to-1 AI pitches distributed evenly across Battery, Electronics, Fashion & Retail • Total Sent: ${outreachStatus?.total_sent || 0} • Queue: ${counts.uncontacted}`
+                  : `Sends 15 category-customized AI pitches every 30m balanced across all active categories • Ready in Queue: ${counts.uncontacted} leads`}
               </Typography>
               {/* Linked category template pills */}
               <Stack direction="row" spacing={0.8} sx={{ mt: 0.8, flexWrap: 'wrap', gap: 0.5 }}>
@@ -1117,9 +1117,20 @@ export default function LeadManager({ onDirectMessage, onSelectForBroadcast }: L
                 />
                 <Chip
                   size="small"
+                  icon={<StorefrontIcon sx={{ fontSize: '13px !important', color: '#db2777' }} />}
+                  label="Fashion Template Active"
+                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#fdf2f8', border: '1px solid #fbcfe8', color: '#be185d' }}
+                />
+                <Chip
+                  size="small"
                   icon={<AutoAwesomeIcon sx={{ fontSize: '13px !important', color: '#7c3aed' }} />}
                   label="AI Shop-wise Customization"
                   sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#faf5ff', border: '1px solid #ddd6fe', color: '#6d28d9' }}
+                />
+                <Chip
+                  size="small"
+                  label="⚖️ Balanced Rotation (All Categories)"
+                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155' }}
                 />
               </Stack>
             </Box>

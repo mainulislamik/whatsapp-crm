@@ -88,6 +88,40 @@ StockWhisk-এর মাধ্যমে সহজেই ম্যানেজ �
 
 🚀 StockWhisk — স্মার্ট দোকান, সফল ব্যবসা।""",
 
+    "fashion": """আসসালামু আলাইকুম 🌟
+
+আপনার পোশাক ও ফ্যাশন দোকানের বিক্রি, স্টক, সাইজ-কালার ভ্যারিয়েন্ট, লাভ, কাস্টমার ও বাকি—সবকিছু একসাথে ম্যানেজ করতে চান? 👗
+
+📱 StockWhisk — পোশাক, গার্মেন্টস ও ফ্যাশন ব্যবসার জন্য স্মার্ট POS & Inventory Software।
+
+🔹 Barcode POS & দ্রুত ডিজিটাল ক্যাশ মেমো
+🔹 সাইজ, রঙ ও ভ্যারিয়েন্টভিত্তিক স্টক ম্যানেজমেন্ট (Size/Color Variants)
+🔹 Low Stock Alert (কোন সাইজ বা ডিজাইনের স্টক শেষ হচ্ছে)
+🔹 পোশাকভিত্তিক ও দৈনিক লাভের হিসাব (Profit Report)
+🔹 কাস্টমার ও বাকি হিসাব ম্যানেজমেন্ট (সরাসরি হোয়াটসঅ্যাপ রিমাইন্ডার)
+🔹 বিক্রি, স্টক ও ক্যাশ ফ্লোর বিস্তারিত রিপোর্ট
+🔹 পাইকারি সাপ্লায়ার ও পারচেজ (ক্রয়) ম্যানেজমেন্ট
+🔹 Excel/CSV Export সুবিধা
+🔹 যেকোনো কম্পিউটার, ল্যাপটপ, ট্যাবলেট বা মোবাইল ব্রাউজারে ব্যবহারের সুবিধা
+
+💼 আপনার ফ্যাশন ব্যবসার প্রতিটি লেনদেন ও স্টক রাখুন হাতের মুঠোয়!
+
+StockWhisk-এর মাধ্যমে সহজেই ম্যানেজ করুন—
+✅ কোন পোশাক বা সাইজের কতটি স্টকে আছে
+✅ কোন আইটেমে কত টাকা লাভ হচ্ছে
+✅ কোন কাস্টমারের কত টাকা বাকি
+✅ কোন সাপ্লায়ারের কাছ থেকে কত টাকার মাল কিনেছেন
+✅ আপনার দোকানের দৈনিক বিক্রি ও নিখুঁত লাভের হিসাব
+
+📊 সনাতন খাতা-কলমের ঝামেলা কমিয়ে আপনার ফ্যাশন ব্যবসাকে করুন আরও সুসংগঠিত, দ্রুত ও স্মার্ট।
+
+✨ সীমিত সময়ের অফার: মাত্র ৳৪৯৯/মাস (প্রতিদিন মাত্র ~৳১৬)!
+
+🌐 Website: stockwhisk.com
+📞 Call / WhatsApp: 01613511887
+
+🚀 StockWhisk — স্মার্ট দোকান, সফল ব্যবসা।""",
+
     "general": """আসসালামু আলাইকুম 🌟
 
 আপনার ব্যবসা প্রতিষ্ঠানের দৈনিক বিক্রি, গোডাউন স্টক, লাভ-ক্ষতি এবং কাস্টমারের বাকির খাতা একসাথে আধুনিক উপায়ে পরিচালনা করতে চান? 💼
@@ -178,20 +212,29 @@ class AutoLeadOutreachManager:
         cat_lower = (category or "").lower()
 
         def _fetch_from_db():
+            # 1. Fashion, Clothing & Boutiques
+            if any(kw in cat_lower for kw in ["fashion", "clothing", "cloth", "garment", "boutique", "apparel"]):
+                t = MessageTemplate.objects.filter(name__icontains="FASHION").first() or MessageTemplate.objects.filter(category__icontains="Fashion").first()
+                if t and t.content and len(t.content.strip()) > 50:
+                    return t.content
+                return FALLBACK_TEMPLATES.get("fashion", FALLBACK_TEMPLATES["general"])
+
+            # 2. Battery, IPS & Solar
             if any(kw in cat_lower for kw in ["battery", "ips", "solar"]):
-                t = MessageTemplate.objects.filter(name__icontains="BATTERY").first()
+                t = MessageTemplate.objects.filter(name__icontains="BATTERY").first() or MessageTemplate.objects.filter(category__icontains="battery").first()
                 if t and t.content and len(t.content.strip()) > 50:
                     return t.content
                 return FALLBACK_TEMPLATES["battery"]
 
-            if any(kw in cat_lower for kw in ["electronic", "mobile", "gadget", "repair", "computer", "servicing"]):
-                t = MessageTemplate.objects.filter(name__icontains="ELECTRONICS").first()
+            # 3. Electronics, Mobile, IT & Gadget Servicing
+            if any(kw in cat_lower for kw in ["electronic", "mobile", "gadget", "repair", "computer", "servicing", "tech"]):
+                t = MessageTemplate.objects.filter(name__icontains="ELECTRONICS").first() or MessageTemplate.objects.filter(category__icontains="electronics").first()
                 if t and t.content and len(t.content.strip()) > 50:
                     return t.content
                 return FALLBACK_TEMPLATES["electronics"]
 
-            # Other categories (Clothing, Pharmacy, General, etc.)
-            t = MessageTemplate.objects.filter(category__icontains=category).first()
+            # 4. Other categories (Pharmacy, Wholesale, General Retail)
+            t = MessageTemplate.objects.filter(category__icontains=category).first() or MessageTemplate.objects.filter(name__icontains=category).first()
             if t and t.content and len(t.content.strip()) > 50:
                 return t.content
             return FALLBACK_TEMPLATES["general"]
@@ -287,14 +330,53 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
             from crm_core.models import Lead, ChatMessage
 
             def _fetch_candidate_leads():
-                # 1. First priority: uncontacted and verified on WhatsApp
-                qs1 = list(Lead.objects.filter(is_contacted=False, is_on_whatsapp=True).order_by('id')[:batch_size])
-                # 2. If fewer than batch_size, fill with other uncontacted leads
-                if len(qs1) < batch_size:
-                    rem = batch_size - len(qs1)
-                    existing_ids = [l.id for l in qs1]
-                    qs2 = list(Lead.objects.filter(is_contacted=False).exclude(id__in=existing_ids).order_by('id')[:rem])
-                    qs1.extend(qs2)
+                # Balanced Multi-Category Round-Robin Selection
+                # Distributes the 15-message batch evenly across all categories with uncontacted leads
+                raw_cats = Lead.objects.filter(is_contacted=False).values_list('category', flat=True)
+                unique_cats = sorted(list(set([c for c in raw_cats if c and c.strip()])))
+
+                if not unique_cats:
+                    qs = list(Lead.objects.filter(is_contacted=False, is_on_whatsapp=True).order_by('id')[:batch_size])
+                    if len(qs) < batch_size:
+                        rem = batch_size - len(qs)
+                        ex = [x.id for x in qs]
+                        qs.extend(list(Lead.objects.filter(is_contacted=False).exclude(id__in=ex).order_by('id')[:rem]))
+                    return [
+                        {
+                            "id": l.id,
+                            "phone": l.phone,
+                            "shop_name": l.shop_name,
+                            "owner_name": l.owner_name,
+                            "category": l.category,
+                            "address": l.address,
+                            "whatsapp_jid": l.whatsapp_jid,
+                        }
+                        for l in qs
+                    ]
+
+                cat_pools = {}
+                for c in unique_cats:
+                    # Prefer verified WhatsApp leads
+                    l1 = list(Lead.objects.filter(is_contacted=False, category=c, is_on_whatsapp=True).order_by('id')[:batch_size])
+                    if len(l1) < batch_size:
+                        rem = batch_size - len(l1)
+                        ex = [x.id for x in l1]
+                        l2 = list(Lead.objects.filter(is_contacted=False, category=c).exclude(id__in=ex).order_by('id')[:rem])
+                        l1.extend(l2)
+                    cat_pools[c] = l1
+
+                # Interleave leads evenly from all categories in round-robin fashion
+                selected = []
+                while len(selected) < batch_size:
+                    added_in_round = False
+                    for c in unique_cats:
+                        if cat_pools[c]:
+                            selected.append(cat_pools[c].pop(0))
+                            added_in_round = True
+                            if len(selected) >= batch_size:
+                                break
+                    if not added_in_round:
+                        break
 
                 return [
                     {
@@ -306,7 +388,7 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
                         "address": l.address,
                         "whatsapp_jid": l.whatsapp_jid,
                     }
-                    for l in qs1
+                    for l in selected
                 ]
 
             candidate_leads = await sync_to_async(_fetch_candidate_leads)()
