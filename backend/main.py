@@ -193,6 +193,15 @@ async def autonomous_outreach_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Reset stuck background worker states on startup
+    try:
+        from crm_core.auto_outreach import auto_outreach
+        c = auto_outreach.ensure_config()
+        if c.get("is_running"):
+            c["is_running"] = False
+            auto_outreach.save_config(c)
+    except Exception:
+        pass
     def _setup_db_wal():
         from django.db import connection
         with connection.cursor() as cursor:
@@ -1178,12 +1187,18 @@ class OutreachSettingsRequest(BaseModel):
 @app.get("/api/leads/outreach/status")
 async def get_outreach_status():
     from crm_core.auto_outreach import auto_outreach
-    return auto_outreach.get_status()
+    from asgiref.sync import sync_to_async
+    return await sync_to_async(auto_outreach.get_status)()
 
 @app.post("/api/leads/outreach/toggle")
-async def toggle_outreach(payload: OutreachToggleRequest):
+async def toggle_outreach(payload: OutreachToggleRequest, background_tasks: BackgroundTasks):
     from crm_core.auto_outreach import auto_outreach
-    status = auto_outreach.set_enabled(payload.enabled)
+    from asgiref.sync import sync_to_async
+    status = await sync_to_async(auto_outreach.set_enabled)(payload.enabled)
+    if payload.enabled:
+        cfg = auto_outreach.ensure_config()
+        if not cfg.get("is_running"):
+            background_tasks.add_task(auto_outreach.run_outreach_cycle, manual=False)
     return {"success": True, "status": status}
 
 @app.post("/api/leads/outreach/run-now")

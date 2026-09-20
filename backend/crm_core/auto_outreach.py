@@ -365,7 +365,7 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
 
                         payload = {
                             "phone": norm_phone,
-                            "directJid": dest_jid,
+                            "jid": dest_jid, "directJid": dest_jid,
                             "text": enhanced_message
                         }
 
@@ -418,6 +418,15 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
                                 "category": category
                             })
                             logger.info(f"Auto-Outreach sent message to {shop_name} ({norm_phone})")
+
+                            # 🌟 Immediate live stats update after each single message dispatch
+                            try:
+                                live_cfg = self.ensure_config()
+                                live_cfg["total_sent"] = live_cfg.get("total_sent", 0) + 1
+                                live_cfg["last_log"] = f"Sent personalized pitch to {shop_name} ({sent_count}/{len(candidate_leads)})"
+                                self.save_config(live_cfg)
+                            except Exception as ex_cfg:
+                                logger.warning(f"Failed to update real-time config: {ex_cfg}")
                         else:
                             failed_count += 1
                             logger.warning(f"Failed sending outreach message to {shop_name} ({phone})")
@@ -434,7 +443,6 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
             # Update final status & history
             cfg = self.ensure_config()
             cfg["is_running"] = False
-            cfg["total_sent"] = cfg.get("total_sent", 0) + sent_count
             cfg["last_batch_count"] = sent_count
             cfg["last_log"] = f"Completed batch of {sent_count} personalized messages ({failed_count} failed) at {datetime.now().strftime('%I:%M %p')}."
 
