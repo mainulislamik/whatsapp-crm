@@ -18,13 +18,13 @@ services:
     ports:
       - "127.0.0.1:${WA_PORT:-5001}:5001"
     environment:
-      - BACKEND_URL=http://backend:8000
+      - BACKEND_URL=http://wa-backend:8000
     volumes:
       - ./wa_auth_data:/app/auth_info_baileys
       - ./wa_media_data:/app/media
       - ./whatsapp-engine/server.js:/app/server.js
 
-  backend:
+  wa-backend:
     build: ./backend
     container_name: wa-backend
     restart: unless-stopped
@@ -58,8 +58,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3050}:3000"
     environment:
-      - BACKEND_INTERNAL_URL=http://backend:8000
-    depends_on: [backend]
+      - BACKEND_INTERNAL_URL=http://wa-backend:8000
+    depends_on: [wa-backend]
 
 networks:
   default:
