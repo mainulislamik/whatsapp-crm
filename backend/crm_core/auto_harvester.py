@@ -12,6 +12,29 @@ from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
 
+# --- STRICT UNSUPPORTED BUSINESS BLACKLIST ---
+UNSUPPORTED_BUSINESS_PATTERNS = [
+    r'\brestaurant\b', r'\brestora\b', r'\bgrill\b', r'\bcafe\b', r'\bcoffee\b', r'pizza',
+    r'burger', r'\bkitchen\b', r'\bbiryani\b', r'fast\s*food', r'bakery', r'sweets?',
+    r'\bbistro\b', r'\bdine\b', r'\bdining\b', r'cater(?:ing)?', r'food\s*court',
+    r'\bhotel\b', r'\bresort\b', r'guest\s*house', r'\bhostel\b',
+    r'\bhospital\b', r'\bclinic\b', r'\bdiagnostic\b', r'\bdoctor\b', r'\bdental\b',
+    r'\bschool\b', r'\bcollege\b', r'\buniversity\b', r'coaching', r'\bmadrasa\b', r'\bielts\b',
+    r'\bsalon\b', r'parlou?r', r'\bspa\b',
+    r'real\s*estate', r'\bdeveloper\b', r'\bhousing\b',
+    r'law\s*firm', r'\badvocate\b', r'travels?', r'tours?', r'\bhajj\b', r'\bumrah\b',
+    r'\bcourier\b', r'\bparcel\b', r'\blogistics\b', r'rent\s*a\s*car', r'car\s*wash',
+    r'motorcycle', r'\bbajaj\b', r'\byamaha\b', r'\bhonda\b', r'\btvs\b', r'\blifan\b',
+    r'\bgym\b', r'\bfitness\b'
+]
+COMPILED_UNSUPPORTED = [re.compile(p, re.IGNORECASE) for p in UNSUPPORTED_BUSINESS_PATTERNS]
+
+def is_unsupported_business(text: str) -> bool:
+    if not text:
+        return False
+    return any(p.search(text) for p in COMPILED_UNSUPPORTED)
+
+
 CONFIG_PATH = "/app/data/auto_harvester_config.json" if os.path.exists("/app/data") else "/root/whatsapp-crm/wa_backend_data/auto_harvester_config.json"
 DATA_DIR = "/app/data" if os.path.exists("/app/data") else "/root/whatsapp-crm/wa_backend_data"
 
@@ -44,7 +67,7 @@ ALL_BANGLADESH_DISTRICTS = [
 ROTATION_PRESETS = [
     {
         "category": "Mobile Repair Shop",
-        "query": "mobile phone repair servicing center contact whatsapp",
+        "query": "mobile phone servicing repair center contact whatsapp phone",
     },
     {
         "category": "Battery Shop",
@@ -63,32 +86,20 @@ ROTATION_PRESETS = [
         "query": "computer laptop it accessories showroom store phone whatsapp",
     },
     {
-        "category": "Grocery & Superstore",
-        "query": "grocery supershop departmental store contact whatsapp phone",
-    },
-    {
         "category": "Pharmacy",
         "query": "pharmacy medicine drug house chemist store phone whatsapp",
     },
     {
+        "category": "Grocery & Superstore",
+        "query": "grocery supershop departmental store contact whatsapp phone",
+    },
+    {
         "category": "Cosmetics & Beauty",
-        "query": "cosmetics beauty care parlor product store phone whatsapp",
+        "query": "cosmetics beauty skincare product retail store phone whatsapp",
     },
     {
         "category": "Hardware & Sanitary",
         "query": "hardware sanitary pipe fittings electric store contact phone whatsapp",
-    },
-    {
-        "category": "Chemical",
-        "query": "industrial textile chemical supplier trading phone whatsapp",
-    },
-    {
-        "category": "Wholesale & Distribution",
-        "query": "wholesale dealer distributor merchant phone whatsapp",
-    },
-    {
-        "category": "General Retail",
-        "query": "retail store shop showroom dealer contact whatsapp phone",
     }
 ]
 
@@ -172,13 +183,22 @@ class AutonomousHarvesterManager:
     ) -> Optional[Dict[str, Any]]:
         from crm_core.ai_bot import call_llm
 
+        # Immediate hard pre-check
+        check_text = f"{name} {snippet}"
+        if is_unsupported_business(check_text):
+            logger.info(f"AI Audit pre-rejected unsupported business: {name}")
+            return None
+
         allowed_categories = [
-            "Mobile Repair Shop", "Battery Shop", "Electronics", "Chemical",
-            "Clothing & Fashion", "Grocery & Superstore", "Pharmacy", "Cosmetics & Beauty",
-            "Wholesale & Distribution", "Hardware & Sanitary", "Computer & IT", "General Retail"
+            "Mobile Repair Shop", "Battery Shop", "Electronics",
+            "Clothing & Fashion", "Grocery & Superstore", "Pharmacy", 
+            "Cosmetics & Beauty", "Hardware & Sanitary", "Computer & IT"
         ]
 
         prompt = f"""You are an expert AI Lead Auditor for StockWhisk ERP in Bangladesh.
+StockWhisk ERP is strictly designed for physical retail/wholesale product inventory stores.
+CRITICAL NEGATIVE GUARD: StockWhisk DOES NOT SUPPORT restaurants, cafes, grills, food courts, bakeries, fast food, hotels, hospitals, clinics, diagnostic centers, schools, colleges, coaching centers, salons, parlors, gyms, real estate, travel agencies, car washes, or motorcycle dealers.
+If this candidate is a restaurant, food joint, clinic, school, salon, or non-inventory service business, you MUST return "is_genuine": false immediately!
 Evaluate this prospective retail/wholesale business candidate found via web search:
 
 Scraped Business Name: {name}
@@ -292,6 +312,12 @@ Return strictly JSON format:
                         norm_phone = "0" + digits
                     else:
                         norm_phone = "0" + last10
+
+                    # Pre-filter: Instantly drop unsupported business categories (restaurants, food, clinics, schools, etc.)
+                    cand_text = f"{cand.get('shop_name', '')} {cand.get('title', '')} {cand.get('content', '')} {cand.get('url', '')}"
+                    if is_unsupported_business(cand_text):
+                        logger.info(f"Candidate dropped by blacklist filter: {cand.get('shop_name') or cand.get('title')}")
+                        continue
 
                     # 1. WhatsApp Verification Check
                     is_wa = False

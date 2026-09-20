@@ -12,6 +12,29 @@ from phonenumbers import PhoneNumberMatcher, PhoneNumberType
 
 logger = logging.getLogger(__name__)
 
+# --- STRICT UNSUPPORTED BUSINESS BLACKLIST ---
+UNSUPPORTED_BUSINESS_PATTERNS = [
+    r'\brestaurant\b', r'\brestora\b', r'\bgrill\b', r'\bcafe\b', r'\bcoffee\b', r'pizza',
+    r'burger', r'\bkitchen\b', r'\bbiryani\b', r'fast\s*food', r'bakery', r'sweets?',
+    r'\bbistro\b', r'\bdine\b', r'\bdining\b', r'cater(?:ing)?', r'food\s*court',
+    r'\bhotel\b', r'\bresort\b', r'guest\s*house', r'\bhostel\b',
+    r'\bhospital\b', r'\bclinic\b', r'\bdiagnostic\b', r'\bdoctor\b', r'\bdental\b',
+    r'\bschool\b', r'\bcollege\b', r'\buniversity\b', r'coaching', r'\bmadrasa\b', r'\bielts\b',
+    r'\bsalon\b', r'parlou?r', r'\bspa\b',
+    r'real\s*estate', r'\bdeveloper\b', r'\bhousing\b',
+    r'law\s*firm', r'\badvocate\b', r'travels?', r'tours?', r'\bhajj\b', r'\bumrah\b',
+    r'\bcourier\b', r'\bparcel\b', r'\blogistics\b', r'rent\s*a\s*car', r'car\s*wash',
+    r'motorcycle', r'\bbajaj\b', r'\byamaha\b', r'\bhonda\b', r'\btvs\b', r'\blifan\b',
+    r'\bgym\b', r'\bfitness\b'
+]
+COMPILED_UNSUPPORTED = [re.compile(p, re.IGNORECASE) for p in UNSUPPORTED_BUSINESS_PATTERNS]
+
+def is_unsupported_business(text: str) -> bool:
+    if not text:
+        return False
+    return any(p.search(text) for p in COMPILED_UNSUPPORTED)
+
+
 SEARXNG_ENGINES = "bing,qwant,yep,privacywall,google,brave"
 
 COUNTRY_METADATA = {
@@ -750,6 +773,12 @@ class LeadScraperEngine:
                 shop_name = self.clean_business_name(title)
                 if not shop_name or shop_name.lower() in seen_names:
                     continue
+
+                # Strict rejection of unsupported non-retail businesses (restaurants, clinics, schools, etc.)
+                check_text = f"{shop_name} {title} {content} {url}"
+                if is_unsupported_business(check_text):
+                    continue
+
                 seen_names.add(shop_name.lower())
 
                 has_wa_link = bool(re.search(r'wa\.me/|whatsapp\.com|api\.whatsapp', combined_text, re.I))

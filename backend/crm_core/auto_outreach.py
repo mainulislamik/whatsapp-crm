@@ -14,6 +14,35 @@ from django.utils import timezone as django_tz
 
 logger = logging.getLogger(__name__)
 
+# --- STRICT UNSUPPORTED BUSINESS BLACKLIST ---
+UNSUPPORTED_BUSINESS_PATTERNS = [
+    r'\brestaurant\b', r'\brestora\b', r'\bgrill\b', r'\bcafe\b', r'\bcoffee\b', r'pizza',
+    r'burger', r'\bkitchen\b', r'\bbiryani\b', r'fast\s*food', r'bakery', r'sweets?',
+    r'\bbistro\b', r'\bdine\b', r'\bdining\b', r'cater(?:ing)?', r'food\s*court',
+    r'\bhotel\b', r'\bresort\b', r'guest\s*house', r'\bhostel\b',
+    r'\bhospital\b', r'\bclinic\b', r'\bdiagnostic\b', r'\bdoctor\b', r'\bdental\b',
+    r'\bschool\b', r'\bcollege\b', r'\buniversity\b', r'coaching', r'\bmadrasa\b', r'\bielts\b',
+    r'\bsalon\b', r'parlou?r', r'\bspa\b',
+    r'real\s*estate', r'\bdeveloper\b', r'\bhousing\b',
+    r'law\s*firm', r'\badvocate\b', r'travels?', r'tours?', r'\bhajj\b', r'\bumrah\b',
+    r'\bcourier\b', r'\bparcel\b', r'\blogistics\b', r'rent\s*a\s*car', r'car\s*wash',
+    r'motorcycle', r'\bbajaj\b', r'\byamaha\b', r'\bhonda\b', r'\btvs\b', r'\blifan\b',
+    r'\bgym\b', r'\bfitness\b'
+]
+COMPILED_UNSUPPORTED = [re.compile(p, re.IGNORECASE) for p in UNSUPPORTED_BUSINESS_PATTERNS]
+
+SUPPORTED_CATEGORIES_WHITELIST = [
+    "clothing & fashion", "fashion", "battery shop", "battery",
+    "electronics", "mobile repair shop", "computer & it",
+    "grocery & superstore", "pharmacy", "hardware & sanitary", "cosmetics & beauty"
+]
+
+def is_unsupported_business(text: str) -> bool:
+    if not text:
+        return False
+    return any(p.search(text) for p in COMPILED_UNSUPPORTED)
+
+
 CONFIG_PATH = "/app/data/auto_outreach_config.json" if os.path.exists("/app/data") else "/root/whatsapp-crm/wa_backend_data/auto_outreach_config.json"
 DATA_DIR = "/app/data" if os.path.exists("/app/data") else "/root/whatsapp-crm/wa_backend_data"
 
@@ -333,7 +362,9 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
                 # Balanced Multi-Category Round-Robin Selection
                 # Distributes the 15-message batch evenly across all categories with uncontacted leads
                 raw_cats = Lead.objects.filter(is_contacted=False).values_list('category', flat=True)
-                unique_cats = sorted(list(set([c for c in raw_cats if c and c.strip()])))
+                all_cats = sorted(list(set([c for c in raw_cats if c and c.strip()])))
+                # Whitelist: ONLY query verified supported retail categories
+                unique_cats = [c for c in all_cats if any(w in c.lower() for w in SUPPORTED_CATEGORIES_WHITELIST)]
 
                 if not unique_cats:
                     qs = list(Lead.objects.filter(is_contacted=False, is_on_whatsapp=True).order_by('id')[:batch_size])
@@ -363,7 +394,8 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
                         ex = [x.id for x in l1]
                         l2 = list(Lead.objects.filter(is_contacted=False, category=c).exclude(id__in=ex).order_by('id')[:rem])
                         l1.extend(l2)
-                    cat_pools[c] = l1
+                    # Filter out any candidate whose shop name matches blacklisted terms
+                    cat_pools[c] = [l for l in l1 if not is_unsupported_business(l.shop_name)]
 
                 # Interleave leads evenly from all categories in round-robin fashion
                 selected = []
@@ -418,6 +450,20 @@ STRICT MANDATORY CONSTRAINTS (ZERO TOLERANCE FOR INVENTED/FAKE FEATURES):
                     category = lead_info["category"] or "General"
                     address = lead_info["address"] or ""
                     jid = lead_info["whatsapp_jid"]
+
+                    # Hard Safety Guard: Never message unsupported businesses (restaurants, food, clinics, schools, etc.)
+                    check_text = f"{shop_name} {category}"
+                    if is_unsupported_business(check_text):
+                        logger.warning(f"Blocking outreach to unsupported business candidate: {shop_name} ({category})")
+                        def _reject_unsupported(lid):
+                            from crm_core.models import Lead
+                            Lead.objects.filter(id=lid).update(
+                                is_contacted=True,
+                                status="REJECTED",
+                                notes="[Skipped by Auto-Outreach: Unsupported Category]"
+                            )
+                        await sync_to_async(_reject_unsupported)(lead_id)
+                        continue
 
                     try:
                         # 1. Get Base Category Template
