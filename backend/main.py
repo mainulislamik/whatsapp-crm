@@ -2130,20 +2130,32 @@ async def get_system_status():
     except Exception:
         pass
 
-    # 3. OmniRoute LLM check
+    # 3. OmniRoute LLM check (Ultra-fast non-blocking gateway health verification)
     ai_ok = False
     ai_model = load_bot_config().get("model", "agy/gemini-3.8-flash-high")
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                OMNIROUTE_URL if OMNIROUTE_URL.endswith("/chat/completions") else f"{OMNIROUTE_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"},
-                json={"model": ai_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+        base_url = OMNIROUTE_URL.replace("/chat/completions", "").rstrip("/")
+        async with httpx.AsyncClient(timeout=3.5) as client:
+            resp = await client.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"}
             )
             if resp.status_code == 200:
                 ai_ok = True
     except Exception:
-        pass
+        # Fallback to chat completions ping if /models is unavailable
+        try:
+            chat_endpoint = OMNIROUTE_URL if OMNIROUTE_URL.endswith("/chat/completions") else f"{OMNIROUTE_URL}/chat/completions"
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                resp = await client.post(
+                    chat_endpoint,
+                    headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"},
+                    json={"model": ai_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+                )
+                if resp.status_code == 200:
+                    ai_ok = True
+        except Exception:
+            pass
 
     result = {
         "whatsapp": {
