@@ -6,6 +6,7 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
   downloadMediaMessage,
+  Browsers,
   proto
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
@@ -26,6 +27,20 @@ app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 // Shared media directory
 const MEDIA_DIR = process.env.MEDIA_DIR || '/app/media';
 const AUTH_DIR = process.env.AUTH_DIR || '/app/auth_info_baileys';
+function clearAuthDir() {
+  try {
+    if (fs.existsSync(AUTH_DIR)) {
+      for (const file of fs.readdirSync(AUTH_DIR)) {
+        try {
+          fs.rmSync(path.join(AUTH_DIR, file), { recursive: true, force: true });
+        } catch (err) {}
+      }
+    }
+  } catch (e) {
+    console.error('Error clearing auth directory:', e.message);
+  }
+}
+
 
 // In-memory message store for E2E retry handshake
 const messageStore = new Map();
@@ -46,7 +61,7 @@ if (!fs.existsSync(MEDIA_DIR)) {
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
 }
 if (!fs.existsSync(AUTH_DIR)) {
-  fs.mkdirSync(AUTH_DIR, { recursive: true });
+  
 }
 
 app.use('/media', express.static(MEDIA_DIR));
@@ -359,7 +374,7 @@ async function connectToWhatsApp() {
     syncFullHistory: false,
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: true,
-    browser: ['Ubuntu', 'Chrome', '124.0.0.0'],
+    browser: Browsers.macOS('Desktop'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
     keepAliveIntervalMs: 25000,
@@ -409,7 +424,7 @@ async function connectToWhatsApp() {
       if (isLoggedOut) {
         console.log('[WhatsApp Engine] Session logged out by WhatsApp server. Resetting auth credentials...');
         try {
-          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+          clearAuthDir();
         } catch (e) {}
         contactsStore.clear();
         lidToPhoneMap.clear();
@@ -633,31 +648,113 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+function isSessionAuthenticated() {
+  try {
+    const credsPath = path.join(AUTH_DIR, 'creds.json');
+    if (fs.existsSync(credsPath)) {
+      const data = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+      return Boolean(data.registered || data.me);
+    }
+  } catch (e) {}
+  return false;
+}
+
 // Status check
 app.get('/status', (req, res) => {
+  const isAuth = isSessionAuthenticated();
   res.json({
     status: connectionStatus,
+    connected: connectionStatus === 'CONNECTED' && isAuth,
     user: connectedUser,
     hasQr: Boolean(lastQrDataUrl)
   });
 });
 
-// QR Code endpoint
-app.get('/qr', (req, res) => {
-  if (!sock || connectionStatus === 'QR_TIMEOUT' || connectionStatus === 'DISCONNECTED') {
-    const hasCreds = fs.existsSync(path.join(AUTH_DIR, 'creds.json'));
-    if (!hasCreds) {
-      console.log('[WhatsApp Engine] User requested /qr while inactive. Initializing QR generation...');
+// QR Code endpoint (active self-healing QR generator)
+app.get('/qr', async (req, res) => {
+  const isAuth = isSessionAuthenticated();
+  if (connectionStatus === 'CONNECTED' && isAuth) {
+    return res.json({
+      status: 'CONNECTED',
+      connected: true,
+      user: connectedUser,
+      hasQr: false,
+      qrDataUrl: null,
+      rawQr: null
+    });
+  }
+
+  // If not authenticated and (no QR or timeout or disconnected or no socket)
+  if (!lastQrDataUrl || connectionStatus === 'QR_TIMEOUT' || connectionStatus === 'DISCONNECTED' || !sock) {
+    if (!isAuth) {
+      console.log('[WhatsApp Engine] /qr requested while unauthenticated. Initializing clean QR generation...');
+      try {
+        if (sock) {
+          try { sock.end(); } catch (e) {}
+          sock = null;
+        }
+        clearAuthDir();
+      } catch (e) {}
       reconnectAttempts = 0;
+      connectionStatus = 'CONNECTING';
       connectToWhatsApp();
     }
   }
+
+  // Await up to 3.5s for newly triggered QR so caller receives it in the first response
+  if (!lastQrDataUrl && !isAuth) {
+    for (let i = 0; i < 35; i++) {
+      if (lastQrDataUrl) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
   res.json({
     status: connectionStatus,
+    connected: connectionStatus === 'CONNECTED' && isAuth,
     hasQr: Boolean(lastQrDataUrl),
     qrDataUrl: lastQrDataUrl,
     rawQr: lastQr
   });
+});
+
+
+// Pairing Code endpoint (8-digit code without camera)
+app.post('/pairing-code', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Phone number is required.' });
+    }
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    
+    // Always ensure a fresh socket if not already CONNECTED
+    if (!sock || connectionStatus !== 'CONNECTED') {
+      console.log('[WhatsApp Engine] Preparing clean connection for pairing code request to:', cleanPhone);
+      try {
+        if (sock) {
+          try { sock.end(); } catch (e) {}
+          sock = null;
+        }
+        clearAuthDir();
+        
+      } catch (e) {}
+      reconnectAttempts = 0;
+      await connectToWhatsApp();
+      await new Promise(r => setTimeout(r, 3000));
+    }
+
+    if (!sock) {
+      return res.status(500).json({ success: false, error: 'Socket initialization failed.' });
+    }
+
+    const code = await sock.requestPairingCode(cleanPhone);
+    console.log('[WhatsApp Engine] Generated fresh pairing code for', cleanPhone, ':', code);
+    res.json({ success: true, pairingCode: code });
+  } catch (err) {
+    console.error('[WhatsApp Engine] Pairing code error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Logout endpoint
@@ -668,7 +765,7 @@ app.post('/logout', async (req, res) => {
     }
   } catch (e) {}
   try {
-    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    clearAuthDir();
   } catch (e) {}
   contactsStore.clear();
   lidToPhoneMap.clear();
